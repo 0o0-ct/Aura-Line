@@ -638,30 +638,40 @@ fun AuraKnob(
  * Fila deslizadora táctil con estética Apple / Neumorphic:
  * Canal empotrado, cursor de cápsula con sombra física y brillo de luz superior.
  */
-/** Barras del analizador de espectro. */
+/** Una barra por banda, alineada con la curva de respuesta (mismo eje logarítmico). */
 @Composable
 fun SpectrumBars(
     levels: FloatArray,
+    edges: List<Float>,
     modifier: Modifier = Modifier,
     height: Dp = 56.dp
 ) {
     val colors = AuraTheme.colors
     val accent = controlAccent()
     Canvas(modifier = modifier.fillMaxWidth().height(height)) {
-        if (levels.isEmpty()) return@Canvas
-        val gap = 2.dp.toPx()
-        val barWidth = ((size.width - gap * (levels.size - 1)) / levels.size).coerceAtLeast(1f)
-        levels.forEachIndexed { index, level ->
+        if (levels.isEmpty() || edges.isEmpty()) return@Canvas
+        val minF = 20f
+        val maxF = 20000f
+        val span = log10(maxF / minF)
+        fun xOf(hz: Float): Float =
+            ((log10(hz.coerceIn(minF, maxF) / minF)) / span) * size.width
+
+        val gap = 1.5.dp.toPx()
+        for (index in levels.indices) {
+            val left = xOf(if (index == 0) minF else edges[index - 1])
+            val right = xOf(edges[index])
+            val width = (right - left - gap).coerceAtLeast(1f)
+            val level = levels[index].coerceIn(0f, 1f)
             val barHeight = (level * size.height).coerceAtLeast(1.5.dp.toPx())
             drawRoundRect(
-                color = accent.copy(alpha = 0.25f + 0.75f * level),
-                topLeft = Offset(index * (barWidth + gap), size.height - barHeight),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+                color = accent.copy(alpha = 0.22f + 0.78f * level),
+                topLeft = Offset(left, size.height - barHeight),
+                size = Size(width, barHeight),
+                cornerRadius = CornerRadius(width / 3f, width / 3f)
             )
         }
         drawLine(
-            color = colors.outline.copy(alpha = 0.4f),
+            color = colors.outline.copy(alpha = 0.35f),
             start = Offset(0f, size.height),
             end = Offset(size.width, size.height),
             strokeWidth = 1.dp.toPx()

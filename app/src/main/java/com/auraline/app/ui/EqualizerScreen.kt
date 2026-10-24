@@ -115,7 +115,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             Spacer(modifier = Modifier.height(6.dp))
             ResponseCurve(bands = bands, gainRangeDb = range)
             Spacer(modifier = Modifier.height(8.dp))
-            SpectrumBars(levels = spectrum)
+            SpectrumBars(levels = spectrum, edges = bands.map { it.frequencyHz })
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {

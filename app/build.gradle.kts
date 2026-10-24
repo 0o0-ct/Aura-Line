@@ -13,8 +13,8 @@ android {
         applicationId = "com.auraline.app"
         minSdk = 28
         targetSdk = 35
-        versionCode = 14
-        versionName = "3.1.0"
+        versionCode = 16
+        versionName = "3.1.2"
 
         vectorDrawables.useSupportLibrary = true
 

@@ -297,6 +297,7 @@ object AuraLineEngine {
         val bandCount = state.numBands.coerceIn(20, 25)
         val frequencies = bandFrequencies(state, bandCount)
         val bandGains = bandGains(state, bandCount)
+        AuraLineSpectrum.setBandEdges(frequencies)
         val centers = bandCenters(frequencies)
 
         // Preamp automático: si la curva sube, se baja la entrada lo mismo para no
