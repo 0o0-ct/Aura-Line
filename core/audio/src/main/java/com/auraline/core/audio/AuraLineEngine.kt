@@ -57,6 +57,7 @@ object AuraLineEngine {
     private val sessionEq = LinkedHashMap<Int, Equalizer>()
 
     private var lastError: String? = null
+    private val DEBUG_LOG_BANDS = false
     private var builtBandCount = 0
     private val scheduled = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -242,15 +243,27 @@ object AuraLineEngine {
         dp.setInputGainbyChannel(0, leftGain)
         dp.setInputGainbyChannel(1, rightGain)
 
+        val centers = bandCenters(frequencies)
         for (band in 0 until bandCount) {
-            val frequency = frequencies[band]
-            val toneShelf = when {
-                frequency <= state.tone.bassFrequencyHz -> state.tone.bassDb
-                frequency >= state.tone.trebleFrequencyHz -> state.tone.trebleDb
-                else -> 0f
+            val gain = if (state.bypass) {
+                0f
+            } else {
+                (bandGains[band] + toneOffset(state, centers[band])).coerceIn(-24f, 24f)
             }
-            val gain = (bandGains[band] + toneShelf).coerceIn(-24f, 24f)
-            dp.setPreEqBandAllChannelsTo(band, DynamicsProcessing.EqBand(true, frequency, gain))
+            dp.setPreEqBandAllChannelsTo(
+                band,
+                DynamicsProcessing.EqBand(true, frequencies[band], gain)
+            )
+        }
+
+        if (DEBUG_LOG_BANDS) {
+            val active = (0 until bandCount).filter { kotlin.math.abs(bandGains[it]) > 0.5f || state.bypass }
+            Log.i(
+                TAG,
+                "preEq: " + active.joinToString(", ") {
+                    "b$it@${frequencies[it].toInt()}Hz=${"%.1f".format(bandGains[it])}dB"
+                } + if (state.bypass) " (bypass)" else ""
+            )
         }
 
         if (state.effectsEnabled) {
@@ -275,12 +288,12 @@ object AuraLineEngine {
             val centerHz = try { eq.getCenterFreq(band.toShort()) / 1000f } catch (_: Throwable) { 1000f }
             val nearest = frequencies.indices.minByOrNull { kotlin.math.abs(frequencies[it] - centerHz) }
             val base = if (nearest != null) gains[nearest] else 0f
-            val shelf = when {
-                centerHz <= state.tone.bassFrequencyHz -> state.tone.bassDb
-                centerHz >= state.tone.trebleFrequencyHz -> state.tone.trebleDb
-                else -> 0f
+            val shelf = toneOffset(state, centerHz)
+            val millibels = if (state.bypass) {
+                (state.preampDb * 100f).toInt()
+            } else {
+                ((base + shelf + state.preampDb) * 100f).toInt()
             }
-            val millibels = ((base + shelf + state.preampDb) * 100f).toInt()
                 .coerceIn(min.toInt(), max.toInt())
             runCatching { eq.setBandLevel(band.toShort(), millibels.toShort()) }
         }
@@ -356,6 +369,19 @@ object AuraLineEngine {
             val band = state.bands.getOrNull(index)
             band?.frequencyHz?.takeIf { it > 0f } ?: defaults[index].frequencyHz
         }
+    }
+
+    /** Centro audible de cada banda, para decidir a qué región del tono pertenece. */
+    private fun bandCenters(cutoffs: FloatArray): FloatArray =
+        FloatArray(cutoffs.size) { index ->
+            if (index == 0) cutoffs[0] / 2f else kotlin.math.sqrt(cutoffs[index - 1] * cutoffs[index])
+        }
+
+    /** Graves / medios / agudos: tres regiones contiguas sobre la rejilla de bandas. */
+    private fun toneOffset(state: EqualizerState, centerHz: Float): Float = when {
+        centerHz <= state.tone.bassFrequencyHz -> state.tone.bassDb
+        centerHz >= state.tone.trebleFrequencyHz -> state.tone.trebleDb
+        else -> state.tone.midDb
     }
 
     private fun bandGains(state: EqualizerState, count: Int): FloatArray {

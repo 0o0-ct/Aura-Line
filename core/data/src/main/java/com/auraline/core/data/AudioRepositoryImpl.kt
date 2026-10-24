@@ -11,6 +11,7 @@ import com.auraline.core.domain.AudioRepository
 import com.auraline.core.domain.AppSettings
 import com.auraline.core.domain.AppTheme
 import com.auraline.core.domain.CompressorParams
+import com.auraline.core.domain.FactoryPresets
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqualizerState
 import com.auraline.core.domain.ReverbParams
@@ -18,6 +19,7 @@ import com.auraline.core.domain.StereoControls
 import com.auraline.core.domain.ToneControls
 import com.auraline.core.domain.VolumeControls
 import com.auraline.core.domain.bandCenterHz
+import com.auraline.core.domain.bandProbeHz
 import com.auraline.core.domain.generateEqualizerBands
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +142,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putString("state_preset", state.presetName)
             .putFloat("state_bass", state.tone.bassDb)
             .putFloat("state_treble", state.tone.trebleDb)
+            .putFloat("state_mid", state.tone.midDb)
             .putFloat("state_balance", state.stereo.balance)
             .putFloat("state_expansion", state.stereo.expansion)
             .putFloat("state_volume", state.volume.percent)
@@ -200,7 +203,8 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             presetName = p.getString("state_preset", "Plano") ?: "Plano",
             tone = ToneControls(
                 bassDb = p.getFloat("state_bass", 0f),
-                trebleDb = p.getFloat("state_treble", 0f)
+                trebleDb = p.getFloat("state_treble", 0f),
+                midDb = p.getFloat("state_mid", 0f)
             ),
             stereo = StereoControls(
                 balance = p.getFloat("state_balance", 0f),
@@ -251,8 +255,49 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         saveState(current.copy(bands = bands, presetName = "Personalizado"))
     }
 
-    override fun setTone(bassDb: Float, trebleDb: Float) =
-        saveState(_state.value.copy(tone = ToneControls(bassDb, trebleDb)))
+    override fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) {
+        val tone = _state.value.tone
+        saveState(_state.value.copy(tone = tone.copy(bassDb = bassDb, midDb = midDb, trebleDb = trebleDb)))
+    }
+
+    override fun setToneFrequencies(bassHz: Float, trebleHz: Float) {
+        val tone = _state.value.tone
+        saveState(
+            _state.value.copy(
+                tone = tone.copy(
+                    bassFrequencyHz = bassHz.coerceIn(40f, 400f),
+                    trebleFrequencyHz = trebleHz.coerceIn(2000f, 16000f)
+                )
+            )
+        )
+    }
+
+    override fun setBypass(enabled: Boolean) = saveState(_state.value.copy(bypass = enabled))
+
+    override fun setGainRange(db: Float) {
+        val range = db.coerceIn(6f, 24f)
+        saveSettings(_settings.value.copy(gainRangeDb = range))
+        val current = _state.value
+        val clamped = current.bands.map { it.copy(gainDb = it.gainDb.coerceIn(-range, range)) }
+        saveState(current.copy(gainRangeDb = range, bands = clamped))
+    }
+
+    override fun applyFactoryPreset(name: String): Boolean {
+        val preset = FactoryPresets.firstOrNull { it.name == name } ?: return false
+        val current = _state.value
+        val bands = current.bands.ifEmpty { generateEqualizerBands(current.numBands) }
+        val centers = bands.indices.map { bandCenterHz(bands, it) }
+        val gains = FloatArray(bands.size)
+
+        preset.gains.forEach { (frequency, gain) ->
+            val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
+            gains[index] = (gains[index] + gain).coerceIn(-current.gainRangeDb, current.gainRangeDb)
+        }
+
+        val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
+        saveState(current.copy(bands = tuned, presetName = preset.name))
+        return true
+    }
 
     override fun setBalance(balance: Float) =
         saveState(_state.value.copy(stereo = _state.value.stereo.copy(balance = balance)))
@@ -429,7 +474,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     // --- comprobación acústica --------------------------------------------
 
 
-    override suspend fun runSelectivityCheck(): AudioCheckResult {
+    override suspend fun runAudioCheck(): AudioCheckResult {
         val route = AuraLineEngine.status.value.route
         if (route != AudioRoute.SPEAKER) {
             return AudioCheckResult(
@@ -442,8 +487,8 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         // Frecuencias donde el altavoz y el micrófono del móvil rinden bien.
         val target = bands.indices.minByOrNull { abs(bandCenterHz(bands, it) - 1600f) } ?: bands.lastIndex
         val lowIndex = bands.indices.minByOrNull { abs(bandCenterHz(bands, it) - 400f) } ?: 0
-        val highTone = bandCenterHz(bands, target).toDouble().coerceIn(1200.0, 3000.0)
-        val lowTone = bandCenterHz(bands, lowIndex).toDouble().coerceIn(300.0, 700.0)
+        val highTone = bandProbeHz(bands, target).toDouble().coerceIn(1200.0, 3000.0)
+        val lowTone = bandProbeHz(bands, lowIndex).toDouble().coerceIn(300.0, 700.0)
 
         val testBands = bands.mapIndexed { index, band ->
             band.copy(gainDb = if (index == target) 18f else 0f)
@@ -454,7 +499,21 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             preampDb = 0f,
             tone = ToneControls(),
             stereo = StereoControls(),
+            bypass = false,
             bands = testBands
+        )
+
+        Log.i(
+            "AuraLine",
+            "Check: banda $target centro ${bandCenterHz(bands, target).toInt()} " +
+                "corte ${bands[target].frequencyHz.toInt()} Hz · bypass original=${original.bypass} " +
+                "motor original=${original.motorEnabled}"
+        )
+
+        Log.i(
+            "AuraLine",
+            "Atenuación: banda $target corte ${bands[target].frequencyHz.toInt()} Hz, " +
+                "sondas ${lowTone.toInt()}/${highTone.toInt()} Hz, motor previo=${original.motorEnabled}"
         )
 
         return try {
@@ -505,59 +564,4 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         const val PROBE_DURATION = 2.2
     }
 
-    override suspend fun runAudioCheck(): AudioCheckResult {
-        val route = AuraLineEngine.status.value.route
-        if (route != AudioRoute.SPEAKER) {
-            return AudioCheckResult(
-                message = "Cambia la salida al altavoz para medir (ahora: ${route.label})."
-            )
-        }
-
-        val original = _state.value
-        val bands = original.bands.ifEmpty { generateEqualizerBands(original.numBands) }
-        val target = bands.indices.minByOrNull {
-            abs(bandCenterHz(bands, it) - AudioCheckRunner.TONE_HZ.toFloat())
-        } ?: 0
-        val testBands = bands.mapIndexed { index, band ->
-            band.copy(gainDb = if (index == target) -20f else 0f)
-        }
-        val testState = original.copy(
-            motorEnabled = true,
-            effectsEnabled = false,
-            preampDb = 0f,
-            tone = ToneControls(),
-            stereo = StereoControls(),
-            bands = testBands
-        )
-
-        return try {
-            applyRuntime(original.copy(motorEnabled = false))
-            AuraLineEngine.flush()
-            val reference = runner.measure()
-
-            applyRuntime(testState)
-            AuraLineEngine.flush()
-            val processed = runner.measure()
-
-            val delta = processed - reference
-            val passed = delta <= -6f
-            AudioCheckResult(
-                referenceDb = reference,
-                processedDb = processed,
-                deltaDb = delta,
-                passed = passed,
-                message = if (passed) {
-                    "El motor atenúa ${"%.1f".format(-delta)} dB en el tono de prueba."
-                } else {
-                    "Sin cambio apreciable (${"%.1f".format(delta)} dB). Revisa el volumen y que no haya otra app usando el audio."
-                }
-            )
-        } catch (error: Throwable) {
-            Log.w("AuraLine", "Medición fallida", error)
-            AudioCheckResult(message = "No se pudo medir: ${error.message}")
-        } finally {
-            applyRuntime(original)
-            AuraLineEngine.flush()
-        }
-    }
 }

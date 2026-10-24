@@ -18,10 +18,14 @@ interface AudioRepository {
     fun setEffectsEnabled(enabled: Boolean)
     fun setPreamp(db: Float)
     fun setBandGain(bandId: Int, gainDb: Float)
-    fun setTone(bassDb: Float, trebleDb: Float)
+    fun setTone(bassDb: Float, midDb: Float, trebleDb: Float)
+    fun setToneFrequencies(bassHz: Float, trebleHz: Float)
     fun setBalance(balance: Float)
     fun setExpansion(expansion: Float)
     fun setVolume(percent: Float)
+    fun setBypass(enabled: Boolean)
+    fun setGainRange(db: Float)
+    fun applyFactoryPreset(name: String): Boolean
     fun setReverb(params: ReverbParams)
     fun setCompressor(params: CompressorParams)
 
@@ -38,9 +42,10 @@ interface AudioRepository {
     fun setAutoStart(enabled: Boolean)
     fun setHapticFeedback(enabled: Boolean)
 
-    /** Comprueba con el micrófono que el motor altera de verdad la señal de salida. */
+    /**
+     * Comprueba con el micrófono que una banda concreta se mueve y que las lejanas no.
+     * Se mide como cociente entre dos tonos simultáneos: el procesado espectral del
+     * micrófono del teléfono invalida las medidas absolutas de atenuación.
+     */
     suspend fun runAudioCheck(): AudioCheckResult
-
-    /** Comprueba que una sola banda se mueve y que las lejanas no: selectividad real. */
-    suspend fun runSelectivityCheck(): AudioCheckResult
 }

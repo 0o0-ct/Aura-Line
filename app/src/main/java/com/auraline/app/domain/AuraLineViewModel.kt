@@ -33,7 +33,11 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setEffectsEnabled(enabled: Boolean) = repository.setEffectsEnabled(enabled)
     fun setPreamp(db: Float) = repository.setPreamp(db)
     fun setBandGain(bandId: Int, gainDb: Float) = repository.setBandGain(bandId, gainDb)
-    fun setTone(bassDb: Float, trebleDb: Float) = repository.setTone(bassDb, trebleDb)
+    fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) = repository.setTone(bassDb, midDb, trebleDb)
+    fun setToneFrequencies(bassHz: Float, trebleHz: Float) = repository.setToneFrequencies(bassHz, trebleHz)
+    fun setBypass(enabled: Boolean) = repository.setBypass(enabled)
+    fun setGainRange(db: Float) = repository.setGainRange(db)
+    fun applyFactoryPreset(name: String) = repository.applyFactoryPreset(name)
     fun setBalance(balance: Float) = repository.setBalance(balance)
     fun setExpansion(expansion: Float) = repository.setExpansion(expansion)
     fun setVolume(percent: Float) = repository.setVolume(percent)
@@ -69,15 +73,6 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
         viewModelScope.launch {
             _checking.value = true
             _checkResult.value = repository.runAudioCheck()
-            _checking.value = false
-        }
-    }
-
-    fun runSelectivityCheck() {
-        if (_checking.value) return
-        viewModelScope.launch {
-            _checking.value = true
-            _checkResult.value = repository.runSelectivityCheck()
             _checking.value = false
         }
     }

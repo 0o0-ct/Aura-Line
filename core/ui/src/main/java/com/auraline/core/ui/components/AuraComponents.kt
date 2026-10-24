@@ -5,7 +5,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -158,14 +161,14 @@ fun BandFader(
     height: Dp = 150.dp,
     label: String = "",
     valueText: String = "",
-    highlighted: Boolean = false
+    highlighted: Boolean = false,
+    faderWidth: Dp = 34.dp
 ) {
     val colors = AuraTheme.colors
     val haptic = hapticFeedback()
     val currentValue by rememberUpdatedState(value)
     val currentRange by rememberUpdatedState(valueRange)
     val currentOnChange by rememberUpdatedState(onValueChange)
-    var accumulated by remember { mutableFloatStateOf(0f) }
 
     val span = (currentRange.endInclusive - currentRange.start).takeIf { it > 0f } ?: 1f
     val normalized = ((value - currentRange.start) / span).coerceIn(0f, 1f)
@@ -175,7 +178,7 @@ fun BandFader(
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .width(34.dp)
+                .width(faderWidth)
                 .height(height)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
@@ -184,16 +187,50 @@ fun BandFader(
                     })
                 }
                 .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { accumulated = 0f },
-                        onDrag = { change, drag ->
-                            change.consume()
-                            accumulated -= drag.y
-                            val delta = (accumulated / (size.height.toFloat())) * span
-                            currentOnChange((currentValue + delta).coerceIn(currentRange.start, currentRange.endInclusive))
-                            accumulated = 0f
+                    // Solo se arrastra desde el pulsador y solo si el gesto es vertical:
+                    // así el scroll de la pantalla y el pager horizontal siguen funcionando.
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val paddingPx = 10.dp.toPx()
+                        val usablePx = size.height - paddingPx * 2f
+                        if (usablePx <= 0f) return@awaitEachGesture
+
+                        val current = currentValue.coerceIn(currentRange.start, currentRange.endInclusive)
+                        val fraction = ((current - currentRange.start) / span).coerceIn(0f, 1f)
+                        val thumbY = paddingPx + usablePx * (1f - fraction)
+                        if (kotlin.math.abs(down.position.y - thumbY) > 44.dp.toPx()) {
+                            return@awaitEachGesture
                         }
-                    )
+
+                        val startX = down.position.x
+                        val startY = down.position.y
+                        var vertical = false
+                        while (!vertical) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id }
+                                ?: return@awaitEachGesture
+                            if (!change.pressed) return@awaitEachGesture
+                            val dx = kotlin.math.abs(change.position.x - startX)
+                            val dy = kotlin.math.abs(change.position.y - startY)
+                            val slop = viewConfiguration.touchSlop
+                            if (dy > slop || dx > slop) {
+                                if (dy <= dx) return@awaitEachGesture
+                                change.consume()
+                                vertical = true
+                            }
+                        }
+
+                        var previousY = startY
+                        drag(down.id) { change ->
+                            change.consume()
+                            val deltaPx = previousY - change.position.y
+                            previousY = change.position.y
+                            val delta = (deltaPx / usablePx) * span
+                            currentOnChange(
+                                (currentValue + delta).coerceIn(currentRange.start, currentRange.endInclusive)
+                            )
+                        }
+                    }
                 }
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {

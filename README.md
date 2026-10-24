@@ -6,12 +6,12 @@ está actuando sobre la señal, no solo que se haya podido instanciar.
 
 | | |
 |---|---|
-| Versión | 2.1.0 (versionCode 3) |
+| Versión | 2.2.0 (versionCode 4) |
 | minSdk / targetSdk | 28 / 35 |
 | Lenguaje | Kotlin 2.0.20 · Jetpack Compose (Material 3) |
 | APK release | ~3,4 MB con R8 habilitado |
 
-Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.1.0.apk`](dist/AuraLine-2.1.0.apk).
+Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.2.0.apk`](dist/AuraLine-2.2.0.apk).
 
 ## Módulos
 
@@ -50,29 +50,48 @@ porque cada llamada es una IPC síncrona con el servidor de audio.
 **descarta en silencio toda banda cuyo rango quede vacío**. Con una rejilla logarítmica de 20 Hz
 a 20 kHz, 11 bandas compartían bin y 4 no hacían absolutamente nada.
 
-La rejilla actual es lineal hasta 1 kHz (pasos de 100 Hz, dos bins por banda) y logarítmica por
-encima. Resultado verificado en el dispositivo: **0 bandas muertas y un mínimo de 2 bins por
+La rejilla actual es lineal hasta 1 kHz (pasos de 100 Hz) y logarítmica por encima. El bloque
+real del efecto es de 960 muestras (50 Hz por bin), así que los cortes se cuantizan a múltiplos
+de 50 Hz: el borde efectivo de una banda puede desplazarse medio bin respecto a su corte
+nominal, y por eso la verificación sondea **dentro** de la banda y no en su centro geométrico. Resultado verificado en el dispositivo: **0 bandas muertas y un mínimo de 2 bins por
 banda** para 20 y para 25 bandas. La UI etiqueta cada fader con el **centro** de su banda, no con
 el corte.
 
 Cambiar el número de bandas reconstruye la cadena: el recuento de bandas de un
 `DynamicsProcessing` no se puede modificar en caliente.
 
+
+## Preajustes, ventana de bandas y tono
+
+La app está construida sobre documentación real de ecualización
+(tablas de electrofante.com, apuntes de Cetear y el manual del PreSonus DEQ624):
+
+- **Ventana de bandas**: 8, 12 o todas, con paginación horizontal. A 360 dp de ancho, 25 faders
+  en una sola fila eran inmanejables.
+- **Rango ±6 / ±12 / ±24 dB**, como el interruptor Range del DEQ624.
+- **A/B**: compara la curva con la señal plana sin apagar el motor.
+- **Preajustes de fábrica** por instrumento (voz, bombo, bajo, guitarras, piano, platillos,
+  metales, batería), derivados de las tablas de frecuencias por instrumento.
+- **Guía de frecuencias** dentro de la app: qué hace cada zona del espectro.
+- **Tono de tres regiones** (graves / medios / agudos) con frecuencias de cruce ajustables,
+  en lugar de dos shelves fijos, con vista previa de la curva.
+
+No se implementan HPF/LPF ni el modo HI-Q del DEQ624: `DynamicsProcessing` no expone filtros
+paso-alto/paso-bajo ni control de Q por banda.
+
 ## Verificación (prueba objetiva)
 
-Ajustes → **Comprobar el motor** reproduce un tono de 1 kHz, lo captura con el micrófono
-(`AudioRecord`) y compara el nivel con el motor apagado y con una atenuación de −20 dB en la
-banda cercana a 1 kHz. Mide con Goertzel y muestra la diferencia en dB.
+Ajustes → **Comprobar el motor** emite **dos tonos simultáneos** (≈485 Hz y ≈1771 Hz), sube
+sólo la banda del tono agudo y compara el cociente entre ambas frecuencias antes y después.
+El cociente cancela el procesado espectral del micrófono, que en este teléfono compensa los
+cortes y hace inservibles las medidas absolutas.
 
-Y **Comprobar selectividad** emite dos tonos a la vez (447 Hz y 1647 Hz), sube sólo la banda de
-1647 Hz y compara el cociente entre ambas frecuencias, lo que cancela el AGC del micrófono.
-
-Resultados en un Samsung SM-G998U1 / Android 15 (sin root, salida por altavoz):
+Resultado en un Samsung SM-G998U1 / Android 15 (sin root, salida por altavoz):
 
 ```
-Atenuación:  referencia -43,1 dBFS · procesado -59,5 dBFS · Δ -16,5 dB   → VERIFICADO
-Selectividad: 447 Hz -48,9 → -49,3 dBFS (−0,4 dB)
-              1647 Hz -32,5 → -21,4 dBFS (+11,1 dB)                    → +11,5 dB VERIFICADO
+485 Hz:  -44,2 → -47,5 dBFS
+1771 Hz: -27,8 → -20,5 dBFS
+Selectividad: +10,5 dB   → VERIFICADO
 ```
 
 La comprobación exige que la salida sea el altavoz: con Bluetooth o auriculares el micrófono no

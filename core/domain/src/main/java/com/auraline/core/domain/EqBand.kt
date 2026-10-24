@@ -11,7 +11,11 @@ data class EqBand(
 data class ToneControls(
     val bassDb: Float = 0f,
     val trebleDb: Float = 0f,
+    /** Medios: cuerpo (200-400 Hz) y presencia (2,5 kHz). */
+    val midDb: Float = 0f,
+    /** Frontera graves/medios. */
     val bassFrequencyHz: Float = 100f,
+    /** Frontera medios/agudos. */
     val trebleFrequencyHz: Float = 8000f
 )
 
@@ -59,6 +63,8 @@ data class EqualizerState(
     val compressor: CompressorParams = CompressorParams(),
     val motorEnabled: Boolean = false,
     val effectsEnabled: Boolean = false,
+    /** Comparación A/B: procesa la cadena pero con la curva plana. */
+    val bypass: Boolean = false,
     val autoPreamp: Boolean = true,
     val selectedRoute: Int = 0, // 0=speaker, 1=headphones, 2=bluetooth, 3=usb
     val presetName: String = "Plano"
@@ -119,6 +125,20 @@ fun generateEqualizerBands(count: Int, gainRangeDb: Float = 12f): List<EqBand> {
     return cutoffs.mapIndexed { index, cutoff ->
         EqBand(id = index, frequencyHz = cutoff.coerceIn(20f, 20000f), gainDb = 0f)
     }
+}
+
+/**
+ * Frecuencia de sondeo dentro de la parte alta de la banda.
+ *
+ * El DSP cuantiza los cortes a bins (~50 Hz con bloque de 960), así que el borde real de una
+ * banda no coincide exactamente con su corte nominal. Sondeando cerca del corte pero dentro
+ * de la banda, la medida cae siempre en el rango que de verdad se procesa.
+ */
+fun bandProbeHz(bands: List<EqBand>, index: Int): Float {
+    val cutoff = bands.getOrNull(index)?.frequencyHz ?: return 0f
+    val previous = if (index == 0) 0f else bands.getOrNull(index - 1)?.frequencyHz ?: 0f
+    val width = (cutoff - previous).coerceAtLeast(cutoff * 0.1f)
+    return cutoff - width * 0.15f
 }
 
 /** Centro audible de la banda, el valor que tiene sentido mostrar al usuario. */

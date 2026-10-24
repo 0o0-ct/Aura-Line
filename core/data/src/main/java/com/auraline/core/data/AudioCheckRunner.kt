@@ -30,7 +30,7 @@ class AudioCheckRunner(private val context: Context) {
         toneHz: Double = TONE_HZ,
         durationSeconds: Double = DEFAULT_DURATION
     ): Float = withContext(Dispatchers.IO) {
-        level(playAndCapture(doubleArrayOf(toneHz), durationSeconds, TONE_AMPLITUDE)[0])
+        level(playAndCapture(doubleArrayOf(toneHz), durationSeconds, SINGLE_AMPLITUDE)[0])
     }
 
     /** Nivel de cada frecuencia en dBFS, medidos en la misma captura. */
@@ -39,10 +39,11 @@ class AudioCheckRunner(private val context: Context) {
         secondHz: Double,
         durationSeconds: Double = DEFAULT_DURATION
     ): Pair<Float, Float> = withContext(Dispatchers.IO) {
+        // Cada tono del par queda a la mitad, así que se compensa con el doble de amplitud.
         val levels = playAndCapture(
             doubleArrayOf(firstHz, secondHz),
             durationSeconds,
-            TONE_AMPLITUDE / 2.0
+            SINGLE_AMPLITUDE * 2.0
         )
         level(levels[0]) to level(levels[1])
     }
@@ -173,6 +174,7 @@ class AudioCheckRunner(private val context: Context) {
     companion object {
         const val TONE_HZ = 1000.0
         private const val DEFAULT_DURATION = 2.4
-        private const val TONE_AMPLITUDE = 20_000.0
+        // Un tono fuerte mete al micrófono en su AGC y comprime las diferencias medidas.
+        private const val SINGLE_AMPLITUDE = 10_000.0
     }
 }
