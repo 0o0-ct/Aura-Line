@@ -32,6 +32,7 @@ interface AudioRepository {
     fun setCompressor(params: CompressorParams)
     fun setGate(params: GateParams)
     fun setModules(modules: ModuleState)
+    fun applyUsageProfile(key: String)
 
     fun resetAll()
     fun resetControls()

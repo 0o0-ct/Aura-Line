@@ -115,3 +115,66 @@ val ReverbPresets: List<ReverbPreset> = listOf(
     ReverbPreset("Estadio", ReverbParams(damping = 0.2f, filter = 0.8f, decay = 0.95f, preDelay = 0.12f, predelayMix = 0.7f, size = 0.95f, mix = 0.7f)),
     ReverbPreset("Eco", ReverbParams(damping = 0.1f, filter = 0.2f, decay = 0.9f, preDelay = 0.15f, predelayMix = 0.8f, size = 0.6f, mix = 0.75f))
 )
+
+/**
+ * Perfiles de uso: cada equipo necesita compromisos distintos de rango, margen y efectos.
+ * Al elegir uno se ajustan de golpe el rango, la protección de nivel, los efectos y la curva base.
+ */
+data class UsageProfile(
+    val key: String,
+    val name: String,
+    val description: String,
+    val gainRangeDb: Float,
+    val levelProtection: Boolean,
+    val effectsEnabled: Boolean,
+    val basePreset: String,
+    val modules: ModuleState = ModuleState()
+)
+
+val UsageProfiles: List<UsageProfile> = listOf(
+    UsageProfile(
+        key = "mobile",
+        name = "Altavoz del móvil",
+        description = "Graves limitados por el propio altavoz. Protección activa y efectos apagados.",
+        gainRangeDb = 12f,
+        levelProtection = true,
+        effectsEnabled = false,
+        basePreset = "Plano"
+    ),
+    UsageProfile(
+        key = "wired",
+        name = "Auriculares con cable",
+        description = "Sin códec de por medio: margen completo y curva de referencia Harman.",
+        gainRangeDb = 12f,
+        levelProtection = false,
+        effectsEnabled = false,
+        basePreset = "Harman"
+    ),
+    UsageProfile(
+        key = "bluetooth",
+        name = "Auriculares Bluetooth",
+        description = "El códec recorta: protección activa y curva Harman suavizada.",
+        gainRangeDb = 12f,
+        levelProtection = true,
+        effectsEnabled = false,
+        basePreset = "Harman"
+    ),
+    UsageProfile(
+        key = "external",
+        name = "Altavoces externos",
+        description = "Equipo con amplificador propio. Curva plana y margen moderado.",
+        gainRangeDb = 12f,
+        levelProtection = true,
+        effectsEnabled = false,
+        basePreset = "Plano"
+    ),
+    UsageProfile(
+        key = "surround",
+        name = "Barra o sistema 5.1",
+        description = "El equipo aplica su propio procesado: rango ±6 dB y protección desactivada.",
+        gainRangeDb = 6f,
+        levelProtection = false,
+        effectsEnabled = false,
+        basePreset = "Plano"
+    )
+)

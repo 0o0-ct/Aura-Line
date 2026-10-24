@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,9 +47,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.auraline.app.domain.AuraLineViewModel
+import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSwitch
+import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.theme.AuraPalettes
@@ -87,6 +90,37 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Perfil de uso: ajusta rango, protección, efectos y curva base de golpe
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(
+                text = "Perfil de uso",
+                trailing = UsageProfiles.firstOrNull { it.key == settings.usageProfile }?.name ?: "sin elegir"
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                UsageProfiles.forEach { profile ->
+                    SelectableChip(
+                        text = profile.name,
+                        selected = settings.usageProfile == profile.key,
+                        onClick = { viewModel.applyUsageProfile(profile.key) }
+                    )
+                }
+            }
+            UsageProfiles.firstOrNull { it.key == settings.usageProfile }?.let { profile ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = profile.description,
+                    color = colors.textSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
         // Paleta de colores con discos táctiles Neumórficos
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Paleta", trailing = settings.theme.paletteKey)

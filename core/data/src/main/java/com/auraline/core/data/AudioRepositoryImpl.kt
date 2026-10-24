@@ -20,6 +20,7 @@ import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqualizerState
 import com.auraline.core.domain.GateParams
 import com.auraline.core.domain.ModuleState
+import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.domain.ReverbParams
 import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.domain.StereoControls
@@ -144,6 +145,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putString("spectrum", settings.spectrumAnalyzer)
             .putBoolean("profiles", settings.profilesByOutput)
             .putBoolean("auto_check", settings.autoCheck)
+            .putString("usage_profile", settings.usageProfile)
             .putString("language", settings.language)
             .putString("palette_key", settings.theme.paletteKey)
             .putInt("accent_color", settings.theme.accentColor)
@@ -207,6 +209,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             spectrumAnalyzer = p.getString("spectrum", "off") ?: "off",
             profilesByOutput = p.getBoolean("profiles", true),
             autoCheck = p.getBoolean("auto_check", false),
+            usageProfile = p.getString("usage_profile", "") ?: "",
             language = p.getString("language", "system") ?: "system",
             theme = AppTheme(
                 paletteKey = p.getString("palette_key", "aura") ?: "aura",
@@ -402,6 +405,28 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     override fun setModules(modules: ModuleState) = saveState(_state.value.copy(modules = modules))
 
+    override fun applyUsageProfile(key: String) {
+        val profile = UsageProfiles.firstOrNull { it.key == key } ?: return
+        saveSettings(
+            _settings.value.copy(usageProfile = key, gainRangeDb = profile.gainRangeDb)
+        )
+        val current = _state.value
+        val clamped = current.bands.map {
+            it.copy(gainDb = it.gainDb.coerceIn(-profile.gainRangeDb, profile.gainRangeDb))
+        }
+        saveState(
+            current.copy(
+                gainRangeDb = profile.gainRangeDb,
+                autoPreamp = profile.levelProtection,
+                effectsEnabled = profile.effectsEnabled,
+                modules = profile.modules,
+                bands = clamped,
+                bypass = false
+            )
+        )
+        if (profile.basePreset != "Plano") applyFactoryPreset(profile.basePreset)
+    }
+
     override fun resetControls() {
         val current = _state.value
         saveState(
@@ -567,10 +592,17 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
 
     override suspend fun runAudioCheck(): AudioCheckResult {
-        val route = AuraLineEngine.status.value.route
-        if (route != AudioRoute.SPEAKER) {
+        val status = AuraLineEngine.status.value
+        if (status.route == AudioRoute.WIRED_HEADSET) {
+            // El micrófono del teléfono no puede captar el sonido dentro del oído: se comprueba
+            // que la cadena esté aplicando el procesado en vez de inventar una medición.
             return AudioCheckResult(
-                message = "Cambia la salida al altavoz para medir (ahora: ${route.label})."
+                passed = status.running,
+                message = if (status.running) {
+                    "Auriculares con cable: la medición acústica no es posible, pero la cadena está activa (${status.activeStages}/${status.stages.size} etapas)."
+                } else {
+                    "Auriculares con cable: activa el motor para procesarlos."
+                }
             )
         }
 

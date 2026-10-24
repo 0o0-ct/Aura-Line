@@ -118,6 +118,8 @@ data class AppSettings(
     val excludedApps: List<String> = emptyList(),
     /** Si está activo, la app verifica el motor al encenderlo. */
     val autoCheck: Boolean = false,
+    /** Perfil de uso elegido por el usuario (ver [UsageProfiles]). */
+    val usageProfile: String = "",
     val language: String = "system",
     val theme: AppTheme = AppTheme()
 )

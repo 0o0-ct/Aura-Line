@@ -49,6 +49,7 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setCompressor(params: CompressorParams) = repository.setCompressor(params)
     fun setGate(params: GateParams) = repository.setGate(params)
     fun setModules(modules: ModuleState) = repository.setModules(modules)
+    fun applyUsageProfile(key: String) = repository.applyUsageProfile(key)
 
     fun setAutoPreamp(enabled: Boolean) =
         repository.saveState(repository.getState().copy(autoPreamp = enabled))
