@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
@@ -27,7 +28,9 @@ import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SectionTitle
+import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.StatusPill
+import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.ui.theme.AuraTheme
 import java.util.Locale
 
@@ -134,15 +137,30 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                 enabled = effectsOn
             )
             Text(
-                text = "Umbral más bajo = comprime antes. Para que se note en música suave, baja el umbral a −30 dB y sube la compensación 3 dB.",
+                text = "Umbral más bajo = comprime antes. Los valores por defecto (−28 dB, 4:1 y +6 dB de compensación) ya se notan en música normal.",
                 color = colors.textSecondary,
                 fontSize = 11.sp
             )
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(text = "Reverb")
-            Spacer(modifier = Modifier.height(4.dp))
+            SectionTitle(text = "Reverb", trailing = "elige una sala")
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ReverbPresets.forEach { preset ->
+                    SelectableChip(
+                        text = preset.name,
+                        selected = state.reverb == preset.params && state.effectsEnabled,
+                        onClick = { viewModel.applyReverbPreset(preset.name) }
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             AuraSliderRow(
                 label = "Tamaño",
                 valueText = percent(reverb.size),
@@ -203,11 +221,11 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                 )
                 viewModel.setCompressor(
                     com.auraline.core.domain.CompressorParams(
-                        threshold = -30f,
+                        threshold = -28f,
                         ratio = 4f,
-                        attackMs = 12f,
-                        releaseMs = 180f,
-                        makeupGain = 3f
+                        attackMs = 10f,
+                        releaseMs = 200f,
+                        makeupGain = 6f
                     )
                 )
             }) {

@@ -28,6 +28,7 @@ interface AudioRepository {
     fun setGainRange(db: Float)
     fun applyFactoryPreset(name: String): Boolean
     fun setReverb(params: ReverbParams)
+    fun applyReverbPreset(name: String)
     fun setCompressor(params: CompressorParams)
 
     fun resetAll()

@@ -98,3 +98,20 @@ val FrequencyGuides: List<FrequencyGuide> = listOf(
     FrequencyGuide("10 kHz", "Voces y guitarras brillantes. Baja para atenuar sibilantes."),
     FrequencyGuide("15 kHz", "Aire y brillo en voces, platillos y cuerdas.")
 )
+
+/** Preajustes de sala para la reverb (los mismos espacios del ecualizador original). */
+data class ReverbPreset(
+    val name: String,
+    val params: ReverbParams
+)
+
+val ReverbPresets: List<ReverbPreset> = listOf(
+    ReverbPreset("Ligera reverberación", ReverbParams(damping = 0.7f, filter = 0.4f, decay = 0.2f, preDelay = 0.01f, predelayMix = 0.2f, size = 0.2f, mix = 0.2f)),
+    ReverbPreset("Sala pequeña", ReverbParams(damping = 0.6f, filter = 0.35f, decay = 0.3f, preDelay = 0.02f, predelayMix = 0.25f, size = 0.3f, mix = 0.3f)),
+    ReverbPreset("Estudio", ReverbParams(damping = 0.5f, filter = 0.5f, decay = 0.35f, preDelay = 0.02f, predelayMix = 0.3f, size = 0.35f, mix = 0.35f)),
+    ReverbPreset("Auditorio", ReverbParams(damping = 0.35f, filter = 0.7f, decay = 0.75f, preDelay = 0.06f, predelayMix = 0.55f, size = 0.8f, mix = 0.55f)),
+    ReverbPreset("Escenario", ReverbParams(damping = 0.4f, filter = 0.6f, decay = 0.6f, preDelay = 0.05f, predelayMix = 0.5f, size = 0.7f, mix = 0.5f)),
+    ReverbPreset("Gran salón", ReverbParams(damping = 0.35f, filter = 0.65f, decay = 0.8f, preDelay = 0.07f, predelayMix = 0.6f, size = 0.85f, mix = 0.6f)),
+    ReverbPreset("Estadio", ReverbParams(damping = 0.2f, filter = 0.8f, decay = 0.95f, preDelay = 0.12f, predelayMix = 0.7f, size = 0.95f, mix = 0.7f)),
+    ReverbPreset("Eco", ReverbParams(damping = 0.1f, filter = 0.2f, decay = 0.9f, preDelay = 0.15f, predelayMix = 0.8f, size = 0.6f, mix = 0.75f))
+)

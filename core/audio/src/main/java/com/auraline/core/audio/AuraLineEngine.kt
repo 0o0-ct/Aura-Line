@@ -398,10 +398,15 @@ object AuraLineEngine {
         reverb?.let { effect ->
             runCatching {
                 effect.roomLevel = (params.size * 2000f - 1000f).toInt().toShort()
-                effect.decayTime = (params.decay * 8000f).toInt().coerceIn(100, 10000)
+                effect.decayTime = (params.decay * 9000f).toInt().coerceIn(200, 10000)
                 effect.decayHFRatio = ((1f - params.damping) * 1000f).toInt().toShort()
+                // Reflexiones tempranas: es lo que hace distinguible una sala de otra.
+                effect.reflectionsLevel = ((params.predelayMix * 1000f) - 300f).toInt().toShort()
+                effect.reflectionsDelay = (params.preDelay * 150f).toInt().coerceIn(0, 300)
+                effect.reverbDelay = (params.preDelay * 300f).toInt().coerceIn(0, 500)
                 effect.reverbLevel = (params.mix * 2000f).toInt().toShort()
                 effect.diffusion = (params.filter * 1000f).toInt().toShort()
+                effect.density = 1000
                 effect.enabled = true
             }
         }

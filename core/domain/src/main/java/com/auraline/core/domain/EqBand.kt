@@ -45,11 +45,11 @@ data class ReverbParams(
 )
 
 data class CompressorParams(
-    val threshold: Float = -18f,
-    val ratio: Float = 3f,
+    val threshold: Float = -28f,
+    val ratio: Float = 4f,
     val attackMs: Float = 10f,
-    val releaseMs: Float = 120f,
-    val makeupGain: Float = 0f,
+    val releaseMs: Float = 200f,
+    val makeupGain: Float = 6f,
     val limiterCeiling: Float = -0.1f
 )
 

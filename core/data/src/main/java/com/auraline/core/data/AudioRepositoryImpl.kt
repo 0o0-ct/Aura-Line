@@ -15,6 +15,7 @@ import com.auraline.core.domain.FactoryPresets
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqualizerState
 import com.auraline.core.domain.ReverbParams
+import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.domain.StereoControls
 import com.auraline.core.domain.ToneControls
 import com.auraline.core.domain.VolumeControls
@@ -331,6 +332,11 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     }
 
     override fun setReverb(params: ReverbParams) = saveState(_state.value.copy(reverb = params))
+
+    override fun applyReverbPreset(name: String) {
+        val preset = ReverbPresets.firstOrNull { it.name == name } ?: return
+        saveState(_state.value.copy(reverb = preset.params, effectsEnabled = true))
+    }
 
     override fun setCompressor(params: CompressorParams) = saveState(_state.value.copy(compressor = params))
 
