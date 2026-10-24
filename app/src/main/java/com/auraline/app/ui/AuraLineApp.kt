@@ -31,14 +31,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +51,7 @@ import androidx.activity.compose.BackHandler
 import com.auraline.app.audio.AudioForegroundService
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.LocalHapticsEnabled
+import com.auraline.core.ui.components.LocalPowered
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.components.hapticFeedback
 import com.auraline.core.ui.theme.AuraTheme
@@ -67,6 +73,7 @@ private val destinations = listOf(
 fun AuraLineApp(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
     val state by viewModel.state.collectAsState()
+    val accent = if (state.motorEnabled) colors.accent else colors.textSecondary
     val settings by viewModel.settings.collectAsState()
     val engine by viewModel.engine.collectAsState()
     val presets by viewModel.presets.collectAsState()
@@ -75,6 +82,7 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
     val haptic = hapticFeedback()
     val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    var autoChecked by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.motorEnabled) {
         if (state.motorEnabled) {
@@ -84,10 +92,22 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
         }
     }
 
+    // Comprobación opcional al encender el motor: sólo si el permiso ya está concedido.
+    LaunchedEffect(state.motorEnabled, settings.autoCheck) {
+        if (!state.motorEnabled || !settings.autoCheck || autoChecked) return@LaunchedEffect
+        autoChecked = true
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) viewModel.runAudioCheck()
+    }
+
     BackHandler(enabled = tab != 0) { tab = 0 }
 
     androidx.compose.runtime.CompositionLocalProvider(
-        LocalHapticsEnabled provides settings.hapticFeedback
+        LocalHapticsEnabled provides settings.hapticFeedback,
+        LocalPowered provides state.motorEnabled
     ) {
 
     Scaffold(
@@ -164,9 +184,9 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
                         label = { Text(destination.label, fontSize = 10.sp) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = colors.accent,
-                            selectedTextColor = colors.accent,
-                            indicatorColor = colors.accent.copy(alpha = 0.14f),
+                            selectedIconColor = accent,
+                            selectedTextColor = accent,
+                            indicatorColor = accent.copy(alpha = 0.14f),
                             unselectedIconColor = colors.textSecondary,
                             unselectedTextColor = colors.textSecondary
                         )

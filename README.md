@@ -6,12 +6,12 @@ está actuando sobre la señal, no solo que se haya podido instanciar.
 
 | | |
 |---|---|
-| Versión | 2.3.0 (versionCode 5) |
+| Versión | 2.4.0 (versionCode 6) |
 | minSdk / targetSdk | 28 / 35 |
 | Lenguaje | Kotlin 2.0.20 · Jetpack Compose (Material 3) |
 | APK release | ~3,4 MB con R8 habilitado |
 
-Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.3.0.apk`](dist/AuraLine-2.3.0.apk).
+Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.4.0.apk`](dist/AuraLine-2.4.0.apk).
 
 ## Módulos
 
@@ -66,8 +66,8 @@ Cambiar el número de bandas reconstruye la cadena: el recuento de bandas de un
 La app está construida sobre documentación real de ecualización
 (tablas de electrofante.com, apuntes de Cetear y el manual del PreSonus DEQ624):
 
-- **Ventana de bandas**: 8, 12 o todas, con paginación horizontal. A 360 dp de ancho, 25 faders
-  en una sola fila eran inmanejables.
+- **Ventana de bandas**: 8, 12 o todas, con paginación horizontal. El ancho de cada fader se
+  reparte según cuántas bandas se muestran, así que con 12 no se solapan las etiquetas.
 - **Rango ±6 / ±12 / ±24 dB**, como el interruptor Range del DEQ624.
 - **A/B**: compara la curva con la señal plana sin apagar el motor.
 - **Preajustes de fábrica** por instrumento (voz, bombo, bajo, guitarras, piano, platillos,
@@ -96,6 +96,14 @@ El motor está pensado para no caerse solo:
   eximir a AuraLine de la optimización de batería, que es lo que mata apps en segundo plano en
   One UI.
 
+## Estados visuales y navegación
+
+- Con el **motor apagado** la app pierde el color de acento: faders, curva, deslizadores,
+  chips y navegación pasan a gris. Con el motor encendido vuelve el color.
+- Los controles de **Tono y Efectos son deslizadores horizontales**, no mandos circulares:
+  antes, al desplazar la pantalla, se agarraba una perilla sin querer.
+- **A/B** compara la cadena completa (curva + compresor + reverb), no sólo la curva.
+
 ## Verificación (prueba objetiva)
 
 Ajustes → **Comprobar el motor** emite **dos tonos simultáneos** (≈485 Hz y ≈1771 Hz), sube
@@ -113,6 +121,10 @@ Selectividad: +10,5 dB   → VERIFICADO
 
 La comprobación exige que la salida sea el altavoz: con Bluetooth o auriculares el micrófono no
 captura el tono y la app lo avisa en lugar de dar un resultado falso.
+
+Es **opcional**: Ajustes → *Comprobar al encender el motor* la ejecuta sola cada vez que activas
+el motor, y la tarjeta incluye las instrucciones (sin auriculares, volumen a la mitad o más,
+teléfono apoyado y sin hablar durante la prueba).
 
 ## Integración con el dispositivo
 

@@ -55,6 +55,9 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
 
     fun setAutoStart(enabled: Boolean) = repository.setAutoStart(enabled)
 
+    fun setAutoCheck(enabled: Boolean) =
+        repository.saveSettings(repository.getSettings().copy(autoCheck = enabled))
+
     fun savePreset(name: String) {
         val clean = name.trim().ifEmpty { "Preajuste" }
         repository.savePreset(clean)

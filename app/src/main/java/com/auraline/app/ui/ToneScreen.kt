@@ -1,7 +1,6 @@
 package com.auraline.app.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,10 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,8 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.AuraCard
-import com.auraline.core.ui.components.AuraKnob
+import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.SectionTitle
+import com.auraline.core.ui.components.controlAccent
 import com.auraline.core.ui.theme.AuraTheme
 import java.util.Locale
 import kotlin.math.log10
@@ -42,6 +39,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
     val state by viewModel.state.collectAsState()
     val tone = state.tone
+    val powered = state.motorEnabled
 
     Column(
         modifier = Modifier
@@ -54,7 +52,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(
                 text = "Tono",
-                trailing = "graves ${tone.bassFrequencyHz.toInt()} · agudos ${(tone.trebleFrequencyHz / 1000f).formatK()}k"
+                trailing = "graves ${tone.bassFrequencyHz.toInt()} · agudos ${kilo(tone.trebleFrequencyHz)}"
             )
             Spacer(modifier = Modifier.height(8.dp))
             ToneCurve(
@@ -64,59 +62,56 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 bassHz = tone.bassFrequencyHz,
                 trebleHz = tone.trebleFrequencyHz
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                AuraKnob(
-                    value = tone.bassDb,
-                    onValueChange = { viewModel.setTone(it, tone.midDb, tone.trebleDb) },
-                    valueRange = -12f..12f,
-                    diameter = 88.dp,
-                    label = "Graves",
-                    valueText = formatDb(tone.bassDb)
-                )
-                AuraKnob(
-                    value = tone.midDb,
-                    onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) },
-                    valueRange = -12f..12f,
-                    diameter = 88.dp,
-                    label = "Medios",
-                    valueText = formatDb(tone.midDb)
-                )
-                AuraKnob(
-                    value = tone.trebleDb,
-                    onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) },
-                    valueRange = -12f..12f,
-                    diameter = 88.dp,
-                    label = "Agudos",
-                    valueText = formatDb(tone.trebleDb)
-                )
-            }
+            Spacer(modifier = Modifier.height(8.dp))
+            AuraSliderRow(
+                label = "Graves",
+                valueText = db(tone.bassDb),
+                value = tone.bassDb,
+                valueRange = -12f..12f,
+                onValueChange = { viewModel.setTone(it, tone.midDb, tone.trebleDb) },
+                enabled = powered
+            )
+            AuraSliderRow(
+                label = "Medios",
+                valueText = db(tone.midDb),
+                value = tone.midDb,
+                valueRange = -12f..12f,
+                onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) },
+                enabled = powered
+            )
+            AuraSliderRow(
+                label = "Agudos",
+                valueText = db(tone.trebleDb),
+                value = tone.trebleDb,
+                valueRange = -12f..12f,
+                onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) },
+                enabled = powered
+            )
+            Text(
+                text = "Graves hasta ${tone.bassFrequencyHz.toInt()} Hz · medios hasta ${kilo(tone.trebleFrequencyHz)}",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Frecuencias de cruce")
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Graves hasta ${tone.bassFrequencyHz.toInt()} Hz · medios hasta ${(tone.trebleFrequencyHz / 1000f).formatK()} kHz",
-                color = colors.textSecondary,
-                fontSize = 12.sp
-            )
-            Slider(
+            Spacer(modifier = Modifier.height(4.dp))
+            AuraSliderRow(
+                label = "Graves / medios",
+                valueText = "${tone.bassFrequencyHz.toInt()} Hz",
                 value = tone.bassFrequencyHz,
-                onValueChange = { viewModel.setToneFrequencies(it, tone.trebleFrequencyHz) },
                 valueRange = 40f..400f,
-                colors = accentSlider()
+                onValueChange = { viewModel.setToneFrequencies(it, tone.trebleFrequencyHz) },
+                enabled = powered
             )
-            Slider(
+            AuraSliderRow(
+                label = "Medios / agudos",
+                valueText = kilo(tone.trebleFrequencyHz),
                 value = tone.trebleFrequencyHz,
-                onValueChange = { viewModel.setToneFrequencies(tone.bassFrequencyHz, it) },
                 valueRange = 2000f..16000f,
-                colors = accentSlider()
+                onValueChange = { viewModel.setToneFrequencies(tone.bassFrequencyHz, it) },
+                enabled = powered
             )
             Text(
                 text = "Cuerpo de voces y caja en 200–400 Hz · presencia en 2,5–5 kHz · aire por encima de 10 kHz",
@@ -126,56 +121,45 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(text = "Imagen estéreo", trailing = "balance y anchura")
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                AuraKnob(
-                    value = state.stereo.balance,
-                    onValueChange = { viewModel.setBalance(it) },
-                    valueRange = -100f..100f,
-                    diameter = 96.dp,
-                    label = "Balance",
-                    valueText = when {
-                        state.stereo.balance > 1f -> "R ${state.stereo.balance.toInt()}%"
-                        state.stereo.balance < -1f -> "L ${(-state.stereo.balance).toInt()}%"
-                        else -> "Centro"
-                    }
-                )
-                AuraKnob(
-                    value = state.stereo.expansion,
-                    onValueChange = { viewModel.setExpansion(it) },
-                    valueRange = 1f..2f,
-                    diameter = 96.dp,
-                    label = "Anchura",
-                    valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%"
-                )
-            }
+            SectionTitle(text = "Imagen estéreo")
+            Spacer(modifier = Modifier.height(4.dp))
+            AuraSliderRow(
+                label = "Balance",
+                valueText = when {
+                    state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
+                    state.stereo.balance < -1f -> "I ${(-state.stereo.balance).toInt()}%"
+                    else -> "Centro"
+                },
+                value = state.stereo.balance,
+                valueRange = -100f..100f,
+                onValueChange = { viewModel.setBalance(it) },
+                enabled = powered
+            )
+            AuraSliderRow(
+                label = "Anchura estéreo",
+                valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
+                value = state.stereo.expansion,
+                valueRange = 1f..2f,
+                onValueChange = { viewModel.setExpansion(it) },
+                enabled = powered
+            )
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Volumen", trailing = "${state.volume.percent.toInt()}%")
-            Spacer(modifier = Modifier.height(4.dp))
-            Slider(
+            AuraSliderRow(
+                label = "Volumen multimedia",
+                valueText = "${state.volume.percent.toInt()}%",
                 value = state.volume.percent,
-                onValueChange = { viewModel.setVolume(it) },
                 valueRange = 0f..100f,
-                colors = accentSlider()
-            )
-            Text(
-                text = "Se aplica al volumen multimedia del sistema",
-                color = colors.textSecondary,
-                fontSize = 11.sp
+                onValueChange = { viewModel.setVolume(it) }
             )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = { viewModel.resetControls() }) {
                 Text("Restablecer controles", color = colors.textSecondary)
@@ -183,13 +167,6 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         }
     }
 }
-
-@Composable
-private fun accentSlider() = SliderDefaults.colors(
-    thumbColor = AuraTheme.colors.accent,
-    activeTrackColor = AuraTheme.colors.accent,
-    inactiveTrackColor = AuraTheme.colors.outline
-)
 
 /** Vista previa de las tres regiones del control de tono. */
 @Composable
@@ -201,6 +178,7 @@ private fun ToneCurve(
     trebleHz: Float
 ) {
     val colors = AuraTheme.colors
+    val accent = controlAccent()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -235,14 +213,14 @@ private fun ToneCurve(
             }
             drawPath(
                 path = path,
-                color = colors.accent,
+                color = accent,
                 style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
             )
         }
     }
 }
 
-private fun Float.formatK(): String =
-    if (this % 1f == 0f) toInt().toString() else String.format(Locale.US, "%.1f", this)
+private fun kilo(hz: Float): String =
+    if (hz % 1000f == 0f) "${(hz / 1000f).toInt()} kHz" else String.format(Locale.US, "%.1f kHz", hz / 1000f)
 
-private fun formatDb(value: Float): String = String.format(Locale.US, "%+.1f dB", value)
+private fun db(value: Float): String = String.format(Locale.US, "%+.1f dB", value)

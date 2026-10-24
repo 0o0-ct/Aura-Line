@@ -94,6 +94,8 @@ data class AppSettings(
     val spectrumAnalyzer: String = "off",
     val profilesByOutput: Boolean = true,
     val excludedApps: List<String> = emptyList(),
+    /** Si está activo, la app verifica el motor al encenderlo. */
+    val autoCheck: Boolean = false,
     val language: String = "system",
     val theme: AppTheme = AppTheme()
 )

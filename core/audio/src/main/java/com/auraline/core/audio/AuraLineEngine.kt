@@ -140,6 +140,14 @@ object AuraLineEngine {
     // --- cadena global -----------------------------------------------------
 
     private fun applyEngine(state: EqualizerState) {
+        // A/B compara la cadena completa: con bypass no queda ni EQ ni efectos.
+        if (state.bypass) {
+            runCatching { reverb?.enabled = false; reverb?.release() }
+            reverb = null
+            runCatching { virtualizer?.enabled = false; virtualizer?.release() }
+            virtualizer = null
+        }
+
         val bandCount = state.numBands.coerceIn(20, 25)
         // El número de bandas de un DynamicsProcessing no se puede cambiar en caliente:
         // si el usuario ajusta las bandas hay que reconstruir la cadena.
@@ -175,8 +183,10 @@ object AuraLineEngine {
             }
         }
 
-        applyVirtualizer(state)
-        applyReverb(state)
+        if (!state.bypass) {
+            applyVirtualizer(state)
+            applyReverb(state)
+        }
         sessionEq.values.forEach { applyToEqualizer(it, state) }
     }
 
@@ -297,7 +307,7 @@ object AuraLineEngine {
             )
         }
 
-        if (state.effectsEnabled) {
+        if (state.effectsEnabled && !state.bypass) {
             for (band in 0 until MBC_BANDS) {
                 val cutoff = floatArrayOf(180f, 1800f, 9000f)[band]
                 dp.setMbcBandAllChannelsTo(band, compressorBand(cutoff, state))

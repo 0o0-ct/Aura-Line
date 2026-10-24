@@ -1,6 +1,5 @@
 package com.auraline.app.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,8 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.AuraCard
-import com.auraline.core.ui.components.AuraKnob
+import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.SectionTitle
+import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.theme.AuraTheme
 import java.util.Locale
 
@@ -33,8 +34,13 @@ import java.util.Locale
 fun EffectsScreen(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
     val state by viewModel.state.collectAsState()
+    val engine by viewModel.engine.collectAsState()
     val reverb = state.reverb
     val compressor = state.compressor
+
+    val effectsOn = state.effectsEnabled && state.motorEnabled
+    val reverbStage = engine.stages.firstOrNull { it.name.startsWith("Reverb") }
+    val compressorStage = engine.stages.firstOrNull { it.name.startsWith("Compresor") }
 
     Column(
         modifier = Modifier
@@ -54,7 +60,11 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Compresor multibanda y reverb sobre la salida",
+                        text = when {
+                            !state.motorEnabled -> "El motor está apagado"
+                            state.effectsEnabled -> "Compresor y reverb activos"
+                            else -> "Compresor y reverb desactivados"
+                        },
                         color = colors.textSecondary,
                         fontSize = 12.sp
                     )
@@ -70,109 +80,149 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                     )
                 )
             }
-        }
 
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(text = "Reverb")
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                AuraKnob(
-                    value = reverb.size,
-                    onValueChange = { viewModel.setReverb(reverb.copy(size = it)) },
-                    valueRange = 0f..1f,
-                    diameter = 86.dp,
-                    label = "Tamaño",
-                    valueText = percent(reverb.size)
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusPill(
+                    text = if (compressorStage?.active == true) "Compresor activo" else "Compresor inactivo",
+                    color = if (compressorStage?.active == true) colors.positive else colors.textSecondary
                 )
-                AuraKnob(
-                    value = reverb.decay,
-                    onValueChange = { viewModel.setReverb(reverb.copy(decay = it)) },
-                    valueRange = 0f..1f,
-                    diameter = 86.dp,
-                    label = "Decaimiento",
-                    valueText = percent(reverb.decay)
-                )
-                AuraKnob(
-                    value = reverb.damping,
-                    onValueChange = { viewModel.setReverb(reverb.copy(damping = it)) },
-                    valueRange = 0f..1f,
-                    diameter = 86.dp,
-                    label = "Amortiguación",
-                    valueText = percent(reverb.damping)
-                )
-                AuraKnob(
-                    value = reverb.mix,
-                    onValueChange = { viewModel.setReverb(reverb.copy(mix = it)) },
-                    valueRange = 0f..1f,
-                    diameter = 86.dp,
-                    label = "Mezcla",
-                    valueText = percent(reverb.mix)
+                StatusPill(
+                    text = if (reverbStage?.active == true) "Reverb activa" else "Reverb inactiva",
+                    color = if (reverbStage?.active == true) colors.positive else colors.textSecondary
                 )
             }
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Compresor multibanda", trailing = "3 bandas")
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                AuraKnob(
-                    value = compressor.threshold,
-                    onValueChange = { viewModel.setCompressor(compressor.copy(threshold = it)) },
-                    valueRange = -60f..0f,
-                    diameter = 86.dp,
-                    label = "Umbral",
-                    valueText = "${compressor.threshold.toInt()} dB"
-                )
-                AuraKnob(
-                    value = compressor.ratio,
-                    onValueChange = { viewModel.setCompressor(compressor.copy(ratio = it)) },
-                    valueRange = 1f..20f,
-                    diameter = 86.dp,
-                    label = "Ratio",
-                    valueText = String.format(Locale.US, "%.1f:1", compressor.ratio)
-                )
-                AuraKnob(
-                    value = compressor.attackMs,
-                    onValueChange = { viewModel.setCompressor(compressor.copy(attackMs = it)) },
-                    valueRange = 1f..100f,
-                    diameter = 86.dp,
-                    label = "Ataque",
-                    valueText = "${compressor.attackMs.toInt()} ms"
-                )
-                AuraKnob(
-                    value = compressor.releaseMs,
-                    onValueChange = { viewModel.setCompressor(compressor.copy(releaseMs = it)) },
-                    valueRange = 10f..500f,
-                    diameter = 86.dp,
-                    label = "Liberación",
-                    valueText = "${compressor.releaseMs.toInt()} ms"
-                )
-                AuraKnob(
-                    value = compressor.makeupGain,
-                    onValueChange = { viewModel.setCompressor(compressor.copy(makeupGain = it)) },
-                    valueRange = 0f..24f,
-                    diameter = 86.dp,
-                    label = "Makeup",
-                    valueText = "${compressor.makeupGain.toInt()} dB"
+            Spacer(modifier = Modifier.height(4.dp))
+            AuraSliderRow(
+                label = "Umbral",
+                valueText = "${compressor.threshold.toInt()} dB",
+                value = compressor.threshold,
+                valueRange = -60f..0f,
+                onValueChange = { viewModel.setCompressor(compressor.copy(threshold = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Proporción",
+                valueText = String.format(Locale.US, "%.1f:1", compressor.ratio),
+                value = compressor.ratio,
+                valueRange = 1f..20f,
+                onValueChange = { viewModel.setCompressor(compressor.copy(ratio = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Ataque",
+                valueText = "${compressor.attackMs.toInt()} ms",
+                value = compressor.attackMs,
+                valueRange = 1f..100f,
+                onValueChange = { viewModel.setCompressor(compressor.copy(attackMs = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Liberación",
+                valueText = "${compressor.releaseMs.toInt()} ms",
+                value = compressor.releaseMs,
+                valueRange = 10f..500f,
+                onValueChange = { viewModel.setCompressor(compressor.copy(releaseMs = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Ganancia de compensación",
+                valueText = "${compressor.makeupGain.toInt()} dB",
+                value = compressor.makeupGain,
+                valueRange = 0f..24f,
+                onValueChange = { viewModel.setCompressor(compressor.copy(makeupGain = it)) },
+                enabled = effectsOn
+            )
+            Text(
+                text = "Umbral más bajo = comprime antes. Para que se note en música suave, baja el umbral a −30 dB y sube la compensación 3 dB.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+        }
+
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Reverb")
+            Spacer(modifier = Modifier.height(4.dp))
+            AuraSliderRow(
+                label = "Tamaño",
+                valueText = percent(reverb.size),
+                value = reverb.size,
+                valueRange = 0f..1f,
+                onValueChange = { viewModel.setReverb(reverb.copy(size = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Decaimiento",
+                valueText = percent(reverb.decay),
+                value = reverb.decay,
+                valueRange = 0f..1f,
+                onValueChange = { viewModel.setReverb(reverb.copy(decay = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Amortiguación",
+                valueText = percent(reverb.damping),
+                value = reverb.damping,
+                valueRange = 0f..1f,
+                onValueChange = { viewModel.setReverb(reverb.copy(damping = it)) },
+                enabled = effectsOn
+            )
+            AuraSliderRow(
+                label = "Mezcla",
+                valueText = percent(reverb.mix),
+                value = reverb.mix,
+                valueRange = 0f..1f,
+                onValueChange = { viewModel.setReverb(reverb.copy(mix = it)) },
+                enabled = effectsOn
+            )
+            if (reverbStage?.active == false) {
+                Text(
+                    text = "Este dispositivo no expone la reverb del sistema; el compresor sigue funcionando.",
+                    color = colors.warning,
+                    fontSize = 11.sp
                 )
             }
         }
 
-        Text(
-            text = "El limitador de salida se mantiene a −1 dBFS para evitar saturación.",
-            color = colors.textSecondary,
-            fontSize = 11.sp
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = {
+                viewModel.setReverb(
+                    com.auraline.core.domain.ReverbParams(
+                        damping = 0.4f,
+                        filter = 0.5f,
+                        decay = 0.45f,
+                        preDelay = 0.02f,
+                        predelayMix = 0.3f,
+                        size = 0.5f,
+                        mix = 0.3f
+                    )
+                )
+                viewModel.setCompressor(
+                    com.auraline.core.domain.CompressorParams(
+                        threshold = -30f,
+                        ratio = 4f,
+                        attackMs = 12f,
+                        releaseMs = 180f,
+                        makeupGain = 3f
+                    )
+                )
+            }) {
+                Text("Ajustes recomendados", color = colors.accent)
+            }
+            Text(
+                text = "El limitador de salida se mantiene a −1 dBFS.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+        }
     }
 }
 

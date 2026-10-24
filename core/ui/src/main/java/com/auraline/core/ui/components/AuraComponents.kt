@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,6 +46,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +56,13 @@ import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+
+/** Cuando el motor está apagado los controles pierden el color de acento. */
+val LocalPowered = androidx.compose.runtime.staticCompositionLocalOf { true }
+
+@Composable
+fun controlAccent(): Color =
+    if (LocalPowered.current) AuraTheme.colors.accent else AuraTheme.colors.textSecondary
 
 /** Permite que Ajustes desactive la vibración de toda la app. */
 val LocalHapticsEnabled = androidx.compose.runtime.staticCompositionLocalOf { true }
@@ -126,13 +136,14 @@ fun SelectableChip(
     modifier: Modifier = Modifier
 ) {
     val colors = AuraTheme.colors
+    val accent = controlAccent()
     val haptic = hapticFeedback()
     val shape = RoundedCornerShape(50)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .background(if (selected) colors.accent.copy(alpha = 0.16f) else colors.surfaceElevated, shape)
-            .border(1.dp, if (selected) colors.accent.copy(alpha = 0.7f) else colors.outline, shape)
+            .background(if (selected) accent.copy(alpha = 0.16f) else colors.surfaceElevated, shape)
+            .border(1.dp, if (selected) accent.copy(alpha = 0.7f) else colors.outline, shape)
             .clickable {
                 haptic()
                 onClick()
@@ -141,7 +152,7 @@ fun SelectableChip(
     ) {
         Text(
             text = text,
-            color = if (selected) colors.accent else colors.textSecondary,
+            color = if (selected) accent else colors.textSecondary,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1
@@ -165,6 +176,7 @@ fun BandFader(
     faderWidth: Dp = 34.dp
 ) {
     val colors = AuraTheme.colors
+    val accent = controlAccent()
     val haptic = hapticFeedback()
     val currentValue by rememberUpdatedState(value)
     val currentRange by rememberUpdatedState(valueRange)
@@ -174,7 +186,10 @@ fun BandFader(
     val normalized = ((value - currentRange.start) / span).coerceIn(0f, 1f)
     val zeroFraction = ((0f - currentRange.start) / span).coerceIn(0f, 1f)
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.width(faderWidth)
+    ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
@@ -255,7 +270,7 @@ fun BandFader(
                     strokeWidth = 1.dp.toPx()
                 )
 
-                val fillColor = if (highlighted) colors.accent else colors.accent.copy(alpha = 0.85f)
+                val fillColor = if (highlighted) accent else accent.copy(alpha = 0.85f)
                 drawLine(
                     color = fillColor,
                     start = Offset(centerX, zeroY),
@@ -285,14 +300,24 @@ fun BandFader(
         if (label.isNotEmpty()) {
             Text(
                 text = label,
-                color = if (highlighted) colors.accent else colors.textPrimary,
-                fontSize = 10.sp,
+                color = if (highlighted) controlAccent() else colors.textPrimary,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
         if (valueText.isNotEmpty()) {
-            Text(text = valueText, color = colors.textSecondary, fontSize = 10.sp)
+            Text(
+                text = valueText,
+                color = colors.textSecondary,
+                fontSize = 9.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip
+            )
         }
     }
 }
@@ -418,6 +443,45 @@ fun AuraKnob(
     }
 }
 
+/** Etiqueta + valor + deslizador horizontal: no compite con el scroll vertical. */
+@Composable
+fun AuraSliderRow(
+    label: String,
+    valueText: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
+) {
+    val colors = AuraTheme.colors
+    val accent = if (enabled) colors.accent else colors.textSecondary
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                color = if (enabled) colors.textPrimary else colors.textSecondary,
+                fontSize = 13.sp
+            )
+            Text(text = valueText, color = accent, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = accent,
+                activeTrackColor = accent,
+                inactiveTrackColor = colors.outline
+            )
+        )
+    }
+}
+
 /** Curva de respuesta construida con las bandas reales, eje logarítmico. */
 @Composable
 fun ResponseCurve(
@@ -434,6 +498,7 @@ fun ResponseCurve(
             .background(colors.surfaceElevated.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
             .border(1.dp, colors.outline.copy(alpha = 0.6f), RoundedCornerShape(16.dp))
     ) {
+        val accent = controlAccent()
         Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp, vertical = 10.dp)) {
             if (bands.isEmpty()) return@Canvas
             val minF = 20f
@@ -485,14 +550,14 @@ fun ResponseCurve(
             drawPath(
                 path = fill,
                 brush = Brush.verticalGradient(
-                    listOf(colors.accent.copy(alpha = 0.22f), Color.Transparent)
+                    listOf(accent.copy(alpha = 0.22f), Color.Transparent)
                 )
             )
-            drawPath(path = path, color = colors.accent, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(path = path, color = accent, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
 
             bands.indices.forEach { index ->
                 drawCircle(
-                    color = colors.accent,
+                    color = accent,
                     radius = 1.6.dp.toPx(),
                     center = Offset(edge(index), level(index))
                 )

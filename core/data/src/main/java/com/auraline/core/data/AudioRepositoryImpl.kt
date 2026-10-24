@@ -117,6 +117,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putBoolean("show_values", settings.showValues)
             .putString("spectrum", settings.spectrumAnalyzer)
             .putBoolean("profiles", settings.profilesByOutput)
+            .putBoolean("auto_check", settings.autoCheck)
             .putString("language", settings.language)
             .putString("palette_key", settings.theme.paletteKey)
             .putInt("accent_color", settings.theme.accentColor)
@@ -170,6 +171,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             showValues = p.getBoolean("show_values", true),
             spectrumAnalyzer = p.getString("spectrum", "off") ?: "off",
             profilesByOutput = p.getBoolean("profiles", true),
+            autoCheck = p.getBoolean("auto_check", false),
             language = p.getString("language", "system") ?: "system",
             theme = AppTheme(
                 paletteKey = p.getString("palette_key", "aura") ?: "aura",
@@ -334,8 +336,20 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     }
 
     override fun resetAll() {
-        val numBands = _state.value.numBands
-        saveState(EqualizerState(numBands = numBands, bands = generateEqualizerBands(numBands)))
+        // Restablecer la curva no debe apagar el motor ni tocar el volumen.
+        val current = _state.value
+        saveState(
+            current.copy(
+                bands = generateEqualizerBands(current.numBands),
+                tone = ToneControls(
+                    bassFrequencyHz = current.tone.bassFrequencyHz,
+                    trebleFrequencyHz = current.tone.trebleFrequencyHz
+                ),
+                preampDb = 0f,
+                bypass = false,
+                presetName = "Plano"
+            )
+        )
     }
 
     override fun setNumBands(count: Int) {

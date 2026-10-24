@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -378,25 +379,32 @@ private fun BandPage(
     range: Float,
     onGainChange: (Int, Float) -> Unit
 ) {
-    Row(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(210.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+            .height(210.dp)
     ) {
-        chunk.forEach { band ->
-            val index = bands.indexOf(band)
-            BandFader(
-                value = band.gainDb,
-                onValueChange = { onGainChange(band.id, it) },
-                valueRange = -range..range,
-                height = 170.dp,
-                label = formatFrequency(bandCenterHz(bands, index.coerceAtLeast(0))),
-                valueText = formatGain(band.gainDb),
-                highlighted = band.gainDb != 0f,
-                faderWidth = 34.dp
-            )
+        val count = chunk.size.coerceAtLeast(1)
+        // El ancho se reparte entre las bandas visibles: con 12 no caben a 34 dp.
+        val faderWidth = ((maxWidth - 8.dp) / count).coerceIn(18.dp, 40.dp)
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            chunk.forEach { band ->
+                val index = bands.indexOf(band)
+                BandFader(
+                    value = band.gainDb,
+                    onValueChange = { onGainChange(band.id, it) },
+                    valueRange = -range..range,
+                    height = 170.dp,
+                    label = formatFrequency(bandCenterHz(bands, index.coerceAtLeast(0))),
+                    valueText = formatGain(band.gainDb),
+                    highlighted = band.gainDb != 0f,
+                    faderWidth = faderWidth
+                )
+            }
         }
     }
 }

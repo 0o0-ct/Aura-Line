@@ -186,10 +186,21 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             SectionTitle(text = "Comprobación del motor", trailing = engine.route.label)
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Reproduce un tono de 1 kHz, lo captura con el micrófono y mide cuánto lo atenúa el ecualizador. Es la prueba de que el efecto procesa la salida real.",
+                text = "Emite dos tonos, los captura con el micrófono y comprueba que sólo se mueve la banda que toca.",
                 color = colors.textSecondary,
                 fontSize = 12.sp
             )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Cómo hacerlo:\n" +
+                    "1. Quita auriculares y Bluetooth: la salida debe ser el altavoz.\n" +
+                    "2. Sube el volumen multimedia a la mitad o más.\n" +
+                    "3. Mantén el teléfono sobre una superficie y no hables durante la prueba.\n" +
+                    "4. Pulsa el botón y espera unos 10 segundos.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
             Spacer(modifier = Modifier.height(12.dp))
 
             Button(
@@ -212,6 +223,32 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 )
             ) {
                 Text(if (checking) "Midiendo…" else "Comprobar el motor")
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "Comprobar al encender el motor", color = colors.textPrimary, fontSize = 14.sp)
+                    Text(
+                        text = "Opcional: verifica el motor automáticamente cada vez que lo activas",
+                        color = colors.textSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+                Switch(
+                    checked = settings.autoCheck,
+                    onCheckedChange = { viewModel.setAutoCheck(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.background,
+                        checkedTrackColor = colors.accent,
+                        uncheckedTrackColor = colors.surfaceElevated,
+                        uncheckedBorderColor = colors.outline
+                    )
+                )
             }
 
             if (permissionDenied) {
