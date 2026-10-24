@@ -1,0 +1,36 @@
+<resources>
+    <string name="app_name">AuraLine</string>
+    <string name="tab_equalizer">Ecualizador</string>
+    <string name="tab_controls">Controles</string>
+    <string name="tab_effects">Efectos</string>
+    <string name="settings">Ajustes</string>
+    <string name="settings_summary">Paleta de colores, número de bandas, motor, perfiles</string>
+    <string name="master_off">Motor apagado</string>
+    <string name="master_on">Motor activo</string>
+    <string name="preamp">Preamp</string>
+    <string name="bass">Graves</string>
+    <string name="treble">Agudos</string>
+    <string name="balance">Balance</string>
+    <string name="stereo">Expansión estéreo</string>
+    <string name="volume">Volumen</string>
+    <string name="mono">Mono</string>
+    <string name="reset">Restablecer</string>
+    <string name="effects">Efectos</string>
+    <string name="reverb">Reverb</string>
+    <string name="compressor">Compresor</string>
+    <string name="presets">Presets</string>
+    <string name="palette">Paleta de colores</string>
+    <string name="palette_summary">Elige una paleta de colores para la aplicación</string>
+    <string name="clipping">Clipping</string>
+    <string name="num_bands">Número de bandas</string>
+    <string name="auto_start">Inicio automático</string>
+    <string name="exclude_apps">Aplicaciones excluidas</string>
+    <string name="haptic_feedback">Retroalimentación háptica</string>
+    <string name="show_values">Mostrar valores numéricos</string>
+    <string name="analyzer">Analizador de espectro</string>
+    <string name="startup_ok">AuraLine iniciado</string>
+    <string name="device_speaker">Altavoz</string>
+    <string name="device_headphones">Audífonos</string>
+    <string name="device_bluetooth">Bluetooth</string>
+    <string name="device_usb">USB</string>
+</resources>

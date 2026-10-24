@@ -1,0 +1,15 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Tema oscuro por defecto (neumórfico base) - compatible con AppCompat -->
+    <style name="Theme.AuraLine" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@color/surface_base</item>
+        <item name="android:colorBackground">@color/surface_base</item>
+        <item name="colorPrimary">@color/accent_active</item>
+        <item name="colorPrimaryDark">@color/shadow_dark</item>
+        <item name="colorButtonNormal">@color/accent_active</item>
+        <item name="colorControlHighlight">#40FFFFFF</item>
+    </style>
+
+    <style name="Theme.AuraLine.NoActionBar" parent="Theme.AuraLine" />
+
+</resources>

@@ -1,0 +1,50 @@
+<resources>
+    <string-array name="band_counts">
+        <item>20</item>
+        <item>21</item>
+        <item>22</item>
+        <item>23</item>
+        <item>24</item>
+        <item>25</item>
+    </string-array>
+
+    <string-array name="gain_ranges">
+        <item>±6 dB</item>
+        <item>±12 dB</item>
+        <item>±15 dB</item>
+    </string-array>
+
+    <string-array name="palettes">
+        <item>Aura (teal)</item>
+        <item>Sunset (naranja)</item>
+        <item>Forest (verde)</item>
+        <item>Midnight (púrpura)</item>
+        <item>Coral (rojo)</item>
+        <item>Ocean (azul)</item>
+    </string-array>
+
+    <string-array name="palette_values">
+        <item>aura</item>
+        <item>sunset</item>
+        <item>forest</item>
+        <item>midnight</item>
+        <item>coral</item>
+        <item>ocean</item>
+    </string-array>
+
+    <integer-array name="palette_colors">
+        <item>@color/palette_aura</item>
+        <item>@color/palette_sunset</item>
+        <item>@color/palette_forest</item>
+        <item>@color/palette_midnight</item>
+        <item>@color/palette_coral</item>
+        <item>@color/palette_ocean</item>
+    </integer-array>
+
+    <string-array name="audio_routes">
+        <item>Altavoz</item>
+        <item>Audífonos con cable</item>
+        <item>Bluetooth</item>
+        <item>USB</item>
+    </string-array>
+</resources>

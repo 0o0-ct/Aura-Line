@@ -1,0 +1,17 @@
+# Build
+build/
+.gradle/
+.kotlin/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Toolchain bundled in the repo (see jdk/README)
+jdk/
+gradle/dist/
+
+# OS
+.DS_Store
