@@ -638,44 +638,101 @@ fun AuraKnob(
  * Fila deslizadora táctil con estética Apple / Neumorphic:
  * Canal empotrado, cursor de cápsula con sombra física y brillo de luz superior.
  */
-/** Una barra por banda, alineada con la curva de respuesta (mismo eje logarítmico). */
+/**
+ * Analizador de espectro en tiempo real con estética Apple / Glassmorphism:
+ * 25 barras de ancho uniforme y esquinas redondeadas tipo cápsula, ranuras empotradas
+ * de precisión (hardware meter wells), degradado luminoso cian-azul y resaltado de pico.
+ */
 @Composable
 fun SpectrumBars(
     levels: FloatArray,
-    edges: List<Float>,
+    edges: List<Float> = emptyList(),
     modifier: Modifier = Modifier,
-    height: Dp = 56.dp
+    height: Dp = 62.dp
 ) {
-    val colors = AuraTheme.colors
     val accent = controlAccent()
-    Canvas(modifier = modifier.fillMaxWidth().height(height)) {
-        if (levels.isEmpty() || edges.isEmpty()) return@Canvas
-        val minF = 20f
-        val maxF = 20000f
-        val span = log10(maxF / minF)
-        fun xOf(hz: Float): Float =
-            ((log10(hz.coerceIn(minF, maxF) / minF)) / span) * size.width
+    val shape = RoundedCornerShape(16.dp)
 
-        val gap = 1.5.dp.toPx()
-        for (index in levels.indices) {
-            val left = xOf(if (index == 0) minF else edges[index - 1])
-            val right = xOf(edges[index])
-            val width = (right - left - gap).coerceAtLeast(1f)
-            val level = levels[index].coerceIn(0f, 1f)
-            val barHeight = (level * size.height).coerceAtLeast(1.5.dp.toPx())
-            drawRoundRect(
-                color = accent.copy(alpha = 0.22f + 0.78f * level),
-                topLeft = Offset(left, size.height - barHeight),
-                size = Size(width, barHeight),
-                cornerRadius = CornerRadius(width / 3f, width / 3f)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF090D15), Color(0xFF101725))
+                ),
+                shape
+            )
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(Color(0x35FFFFFF), Color(0x0CFFFFFF))
+                ),
+                shape
+            )
+            .padding(horizontal = 12.dp, vertical = 9.dp)
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val count = levels.size
+            if (count == 0) return@Canvas
+
+            val gap = 2.2.dp.toPx()
+            val totalGaps = gap * (count - 1)
+            val barWidth = ((size.width - totalGaps) / count).coerceAtLeast(1.5f)
+            val radius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            val minBarHeight = (barWidth * 0.85f).coerceAtMost(size.height * 0.2f)
+
+            for (index in 0 until count) {
+                val left = index * (barWidth + gap)
+                val level = levels[index].coerceIn(0f, 1f)
+
+                // 1. Ranura física empotrada de fondo (canal inactivo visible)
+                drawRoundRect(
+                    color = Color(0x0EFFFFFF),
+                    topLeft = Offset(left, 0f),
+                    size = Size(barWidth, size.height),
+                    cornerRadius = radius
+                )
+
+                // 2. Barra activa con altura proporcional y degradado luminoso
+                val barHeight = minBarHeight + level * (size.height - minBarHeight)
+                val top = size.height - barHeight
+
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF68D8FF), // Cian eléctrico Apple
+                            accent             // Azul real de AuraLine
+                        ),
+                        startY = top,
+                        endY = size.height
+                    ),
+                    topLeft = Offset(left, top),
+                    size = Size(barWidth, barHeight),
+                    cornerRadius = radius,
+                    alpha = 0.35f + 0.65f * level
+                )
+
+                // 3. Resaltado de cúspide (LED glow en la cresta de la barra)
+                if (level > 0.04f) {
+                    val capHeight = (barWidth * 0.55f).coerceAtLeast(1.5.dp.toPx())
+                    drawRoundRect(
+                        color = Color(0xFFF2F9FF).copy(alpha = (0.50f + 0.50f * level).coerceIn(0f, 1f)),
+                        topLeft = Offset(left, top),
+                        size = Size(barWidth, capHeight),
+                        cornerRadius = radius
+                    )
+                }
+            }
+
+            // Línea sutil de referencia base
+            drawLine(
+                color = Color(0x1AFFFFFF),
+                start = Offset(0f, size.height),
+                end = Offset(size.width, size.height),
+                strokeWidth = 1.dp.toPx()
             )
         }
-        drawLine(
-            color = colors.outline.copy(alpha = 0.35f),
-            start = Offset(0f, size.height),
-            end = Offset(size.width, size.height),
-            strokeWidth = 1.dp.toPx()
-        )
     }
 }
 

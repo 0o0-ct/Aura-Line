@@ -43,7 +43,7 @@ object AuraLineEngine {
     /** Objetivo de nivel de salida: deja margen para que el códec no sature. */
     private const val TARGET_HEADROOM_DB = 4f
 
-    private const val MAX_HEADROOM_DB = 18f
+    private const val MAX_HEADROOM_DB = 6f
 
     /** Energía aproximada que añade la reverb al nivel medio, por unidad de mezcla. */
     private const val REVERB_ENERGY_DB = 3f
@@ -311,10 +311,11 @@ object AuraLineEngine {
         val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
         val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
         val totalBoost = peakBand + makeup + reverbEnergy
-        // En Bluetooth el códec recorta antes de 0 dBFS: se le deja margen extra.
-        val codecMargin = if (_status.value.route == AudioRoute.BLUETOOTH) 3f else 0f
+        // Se compensa sólo la mitad del exceso: así el refuerzo se escucha y el códec
+        // no satura. El usuario puede desactivarlo del todo desde Ajustes.
+        val codecMargin = if (_status.value.route == AudioRoute.BLUETOOTH) 1.5f else 0f
         val headroom = if (state.autoPreamp) {
-            (totalBoost - TARGET_HEADROOM_DB - codecMargin).coerceIn(0f, MAX_HEADROOM_DB)
+            ((totalBoost - TARGET_HEADROOM_DB - codecMargin) * 0.5f).coerceIn(0f, MAX_HEADROOM_DB)
         } else {
             0f
         }

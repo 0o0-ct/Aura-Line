@@ -59,6 +59,7 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
+    val eqState by viewModel.state.collectAsState()
     val engine by viewModel.engine.collectAsState()
     val checking by viewModel.checking.collectAsState()
     val checkResult by viewModel.checkResult.collectAsState()
@@ -175,6 +176,12 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 subtitle = "Vibración al mover faders y cambiar interruptores",
                 checked = settings.hapticFeedback,
                 onCheckedChange = { viewModel.setHapticFeedback(it) }
+            )
+            SettingSwitch(
+                title = "Protección de nivel",
+                subtitle = "Compensa parte del refuerzo para que el códec no sature. Desactívala si prefieres volumen máximo",
+                checked = eqState.autoPreamp,
+                onCheckedChange = { viewModel.setAutoPreamp(it) }
             )
             SettingSwitch(
                 title = "Iniciar al encender",
