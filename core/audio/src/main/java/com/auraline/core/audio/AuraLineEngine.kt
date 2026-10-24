@@ -489,7 +489,8 @@ object AuraLineEngine {
             context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         }.getOrNull()
 
-        val route = manager?.let { currentRoute(it) } ?: AudioRoute.UNKNOWN
+        val output = manager?.let { pickOutput(it) }
+        val route = output?.let { routeOf(it) } ?: AudioRoute.UNKNOWN
         val sampleRate = manager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
             ?.toIntOrNull() ?: 0
 
@@ -522,10 +523,34 @@ object AuraLineEngine {
             globalScope = processing != null || fallbackEq != null,
             route = route,
             sampleRateHz = sampleRate,
+            outputName = output?.productName?.toString()?.trim()?.takeIf { it.isNotEmpty() },
+            channels = output?.channelCounts?.maxOrNull() ?: 2,
             stages = stages,
             sessions = sessions,
             lastError = lastError
         )
+    }
+
+    /** Dispositivo que está sonando ahora mismo, con lo que el sistema permite ver. */
+    private fun pickOutput(manager: AudioManager): AudioDeviceInfo? {
+        val devices = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+        val priority = listOf(
+            AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_USB_DEVICE,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            AudioDeviceInfo.TYPE_WIRED_HEADSET,
+            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        )
+        return priority.firstNotNullOfOrNull { type -> devices.firstOrNull { it.type == type } }
+    }
+
+    private fun routeOf(device: AudioDeviceInfo): AudioRoute = when (device.type) {
+        AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> AudioRoute.USB
+        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> AudioRoute.BLUETOOTH
+        AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> AudioRoute.WIRED_HEADSET
+        else -> AudioRoute.SPEAKER
     }
 
     private fun currentRoute(manager: AudioManager): AudioRoute {

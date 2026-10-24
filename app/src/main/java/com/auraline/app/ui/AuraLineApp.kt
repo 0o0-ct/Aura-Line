@@ -189,7 +189,14 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                         color = if (state.motorEnabled) colors.positive else colors.textSecondary
                                     )
                                     Text(
-                                        text = "${engine.route.label} · ${engine.sampleRateHz} Hz",
+                                        text = buildString {
+                                            append(engine.route.label)
+                                            engine.outputName?.let { append(" · ").append(it) }
+                                            if (engine.sampleRateHz > 0) {
+                                                append(" · ").append(engine.sampleRateHz).append(" Hz")
+                                            }
+                                            append(" · ").append(engine.channels).append(" canales")
+                                        },
                                         color = colors.textSecondary.copy(alpha = 0.85f),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium,

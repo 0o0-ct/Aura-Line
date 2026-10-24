@@ -32,6 +32,9 @@ data class EngineStatus(
     val globalScope: Boolean = false,
     val route: AudioRoute = AudioRoute.UNKNOWN,
     val sampleRateHz: Int = 0,
+    /** Nombre del dispositivo de salida cuando el sistema lo expone (BT/USB). */
+    val outputName: String? = null,
+    val channels: Int = 2,
     val stages: List<EffectStage> = emptyList(),
     val sessions: List<AudioSession> = emptyList(),
     val lastError: String? = null
