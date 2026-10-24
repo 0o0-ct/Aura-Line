@@ -100,6 +100,11 @@ object AuraLineEngine {
         executor.execute {
             if (!desired.motorEnabled) return@execute
             if (sessionEq.containsKey(sessionId)) return@execute
+            // Una pista nueva puede haber soltado la cadena global: se reaplica.
+            if (processing != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                applyEngine(desired)
+            }
+
             try {
                 val eq = Equalizer(0, sessionId)
                 eq.enabled = true
@@ -209,7 +214,33 @@ object AuraLineEngine {
 
         return DynamicsProcessing(GLOBAL_SESSION, GLOBAL_SESSION, config.build()).apply {
             enabled = true
+            attachWatchdog(this)
             Log.i(TAG, "Cadena global lista: $bandCount bandas + MBC + limitador (cortes ${frequencies.first().toInt()}–${frequencies.last().toInt()} Hz)")
+        }
+    }
+
+    /**
+     * Si el sistema desactiva el efecto (otra app toma el control, cambio de salida, nueva
+     * pista), se vuelve a activar y se reaplican los parámetros para que el motor no se caiga.
+     */
+    private fun attachWatchdog(effect: DynamicsProcessing) {
+        runCatching {
+            effect.setEnableStatusListener { _, enabled ->
+                if (!enabled && desired.motorEnabled) {
+                    Log.w(TAG, "El sistema desactivó el efecto; reenganchando")
+                    executor.execute {
+                        runCatching {
+                            effect.enabled = true
+                            applyToDynamicsProcessing(effect, desired)
+                        }.onFailure {
+                            runCatching { processing?.release() }
+                            processing = null
+                            builtBandCount = 0
+                            applyEngine(desired)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -391,13 +422,29 @@ object AuraLineEngine {
     private fun registerDeviceCallback(context: Context) {
         if (deviceCallback != null) return
         val callback = object : AudioDeviceCallback() {
-            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = publish()
-            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = publish()
+            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                publish()
+                reapplySoon()
+            }
+
+            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                publish()
+                reapplySoon()
+            }
         }
         deviceCallback = callback
         runCatching {
             val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             manager.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
+        }
+    }
+
+    /** Al cambiar de salida el sistema puede reconfigurar la mezcla: se reengancha la cadena. */
+    private fun reapplySoon() {
+        executor.execute {
+            if (desired.motorEnabled) {
+                runCatching { applyEngine(desired) }
+            }
         }
     }
 

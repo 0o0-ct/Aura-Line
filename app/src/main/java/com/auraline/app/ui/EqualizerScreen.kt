@@ -34,12 +34,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqBand
@@ -76,6 +78,8 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
         state.bands.ifEmpty { generateEqualizerBands(state.numBands) }
     }
     val range = state.gainRangeDb.coerceIn(6f, 24f)
+    val scope = rememberCoroutineScope()
+    val selectedFactory = FactoryPresets.firstOrNull { it.name == state.presetName }
     val perWindow = WindowSizes[windowSize]
     val pages = remember(bands, perWindow) { bands.chunked(perWindow) }
     val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
@@ -124,9 +128,22 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                         onClick = {
                             if (preset.name == "Plano") viewModel.resetAll()
                             else viewModel.applyFactoryPreset(preset.name)
+                            scope.launch { pagerState.animateScrollToPage(0) }
                         }
                     )
                 }
+            }
+            selectedFactory?.hint?.takeIf { it.isNotEmpty() }?.let { hint ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = hint, color = colors.textSecondary, fontSize = 11.sp)
+            }
+            if (!state.motorEnabled) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "El motor está apagado: actívalo para escuchar el preajuste.",
+                    color = colors.warning,
+                    fontSize = 11.sp
+                )
             }
             if (presets.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))

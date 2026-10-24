@@ -1,7 +1,11 @@
 package com.auraline.app.ui
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -27,6 +31,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -57,6 +62,9 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
     val checkResult by viewModel.checkResult.collectAsState()
 
     var permissionDenied by remember { mutableStateOf(false) }
+
+    val powerManager = context.getSystemService(PowerManager::class.java)
+    val batteryExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
 
     val audioPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -135,6 +143,37 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 checked = settings.hapticFeedback,
                 onCheckedChange = { viewModel.setHapticFeedback(it) }
             )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = "Motor en segundo plano", color = colors.textPrimary, fontSize = 14.sp)
+                    Text(
+                        text = if (batteryExempt) {
+                            "Protegido: el sistema no cerrará AuraLine al cambiar de app"
+                        } else {
+                            "El sistema puede cerrar AuraLine al cambiar de app o de canción"
+                        },
+                        color = if (batteryExempt) colors.positive else colors.warning,
+                        fontSize = 11.sp
+                    )
+                }
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                        )
+                    }
+                }) {
+                    Text("Proteger", color = colors.accent, fontSize = 12.sp)
+                }
+            }
+
             SettingSwitch(
                 title = "Inicio automático",
                 subtitle = "Arranca el motor al encender el dispositivo",

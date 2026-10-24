@@ -6,12 +6,12 @@ está actuando sobre la señal, no solo que se haya podido instanciar.
 
 | | |
 |---|---|
-| Versión | 2.2.0 (versionCode 4) |
+| Versión | 2.3.0 (versionCode 5) |
 | minSdk / targetSdk | 28 / 35 |
 | Lenguaje | Kotlin 2.0.20 · Jetpack Compose (Material 3) |
 | APK release | ~3,4 MB con R8 habilitado |
 
-Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.2.0.apk`](dist/AuraLine-2.2.0.apk).
+Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.3.0.apk`](dist/AuraLine-2.3.0.apk).
 
 ## Módulos
 
@@ -71,13 +71,30 @@ La app está construida sobre documentación real de ecualización
 - **Rango ±6 / ±12 / ±24 dB**, como el interruptor Range del DEQ624.
 - **A/B**: compara la curva con la señal plana sin apagar el motor.
 - **Preajustes de fábrica** por instrumento (voz, bombo, bajo, guitarras, piano, platillos,
-  metales, batería), derivados de las tablas de frecuencias por instrumento.
+  metales, batería), derivados de las tablas de frecuencias por instrumento, más dos curvas de
+  referencia de consumo: **Harman** (graves +4/+5, medios −1/−2, agudos +2/+3) y **JBL**
+  (graves firmes, medios retraídos, agudos brillantes).
 - **Guía de frecuencias** dentro de la app: qué hace cada zona del espectro.
 - **Tono de tres regiones** (graves / medios / agudos) con frecuencias de cruce ajustables,
   en lugar de dos shelves fijos, con vista previa de la curva.
 
 No se implementan HPF/LPF ni el modo HI-Q del DEQ624: `DynamicsProcessing` no expone filtros
 paso-alto/paso-bajo ni control de Q por banda.
+
+## Mantener el motor activo
+
+El motor está pensado para no caerse solo:
+
+- **Watchdog de efecto**: si el sistema desactiva el `DynamicsProcessing` (otra app toma el
+  control, se reconfigura la salida, cambia la pista), se vuelve a activar y se reaplican los
+  parámetros automáticamente.
+- **Reenganche al abrir sesión**: cada vez que un reproductor anuncia una sesión nueva se
+  reaplica la cadena global.
+- **Reenganche al cambiar de salida**: altavoz, cable, Bluetooth o USB.
+- **Servicio en primer plano** con notificación y acción para apagar el motor.
+- **Protección de batería**: Ajustes → *Motor en segundo plano* abre el diálogo del sistema para
+  eximir a AuraLine de la optimización de batería, que es lo que mata apps en segundo plano en
+  One UI.
 
 ## Verificación (prueba objetiva)
 

@@ -58,6 +58,16 @@ val FactoryPresets: List<FactoryPreset> = listOf(
         gains = mapOf(140f to -3f, 650f to -2f, 3000f to 3f, 10000f to 3f)
     ),
     FactoryPreset(
+        name = "Harman",
+        hint = "Curva de referencia: graves +4/+5 · medios −1/−2 · agudos +2/+3",
+        gains = mapOf(60f to 5f, 120f to 4f, 250f to 2f, 1000f to -1f, 2000f to -2f, 4000f to 2f, 6000f to 3f, 9000f to 2f)
+    ),
+    FactoryPreset(
+        name = "JBL",
+        hint = "Sonido JBL: graves firmes, medios retraídos y agudos brillantes",
+        gains = mapOf(60f to 6f, 120f to 4f, 500f to -2f, 1000f to -2f, 2500f to 2f, 5000f to 4f, 8000f to 3f)
+    ),
+    FactoryPreset(
         name = "Batería completa",
         hint = "Bombo y caja con cuerpo, brillo sin hojalata",
         gains = mapOf(80f to 3f, 240f to 2f, 450f to -3f, 3000f to 2f, 5000f to 3f, 9000f to 2f)
