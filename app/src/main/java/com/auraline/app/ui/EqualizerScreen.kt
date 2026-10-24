@@ -51,6 +51,7 @@ import com.auraline.core.domain.FrequencyGuides
 import com.auraline.core.domain.bandCenterHz
 import com.auraline.core.domain.generateEqualizerBands
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.BandFader
 import com.auraline.core.ui.components.ResponseCurve
 import com.auraline.core.ui.components.SectionTitle
@@ -280,17 +281,17 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     onClick = { viewModel.setBypass(!state.bypass) }
                 )
             }
-            Slider(
+            Spacer(modifier = Modifier.height(4.dp))
+            AuraSliderRow(
+                label = "Nivel de preamplificación",
+                valueText = "${formatGain(state.preampDb)} dB",
                 value = state.preampDb,
-                onValueChange = { viewModel.setPreamp(it) },
                 valueRange = -15f..15f,
-                colors = SliderDefaults.colors(
-                    thumbColor = colors.accent,
-                    activeTrackColor = colors.accent,
-                    inactiveTrackColor = colors.outline
-                )
+                onValueChange = { viewModel.setPreamp(it) },
+                enabled = state.motorEnabled
             )
             if (state.bypass) {
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "Estás escuchando la curva plana para comparar. Pulsa A/B para volver.",
                     color = colors.warning,
@@ -304,15 +305,19 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { viewModel.resetAll() }) {
-                Text("Restablecer ecualizador", color = colors.textSecondary)
-            }
-            TextButton(onClick = {
-                pendingPresetName = state.presetName
-                showSaveDialog = true
-            }) {
-                Text("Guardar preajuste", color = colors.accent)
-            }
+            SelectableChip(
+                text = "Restablecer",
+                selected = false,
+                onClick = { viewModel.resetAll() }
+            )
+            SelectableChip(
+                text = "Guardar preajuste",
+                selected = true,
+                onClick = {
+                    pendingPresetName = state.presetName
+                    showSaveDialog = true
+                }
+            )
         }
     }
 
@@ -382,7 +387,7 @@ private fun BandPage(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(210.dp)
+            .height(215.dp)
     ) {
         val count = chunk.size.coerceAtLeast(1)
         // El ancho se reparte entre las bandas visibles: con 12 no caben a 34 dp.
@@ -398,7 +403,7 @@ private fun BandPage(
                     value = band.gainDb,
                     onValueChange = { onGainChange(band.id, it) },
                     valueRange = -range..range,
-                    height = 170.dp,
+                    height = 148.dp,
                     label = formatFrequency(bandCenterHz(bands, index.coerceAtLeast(0))),
                     valueText = formatGain(band.gainDb),
                     highlighted = band.gainDb != 0f,

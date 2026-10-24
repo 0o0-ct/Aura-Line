@@ -18,6 +18,7 @@ interface AudioRepository {
     fun setEffectsEnabled(enabled: Boolean)
     fun setPreamp(db: Float)
     fun setBandGain(bandId: Int, gainDb: Float)
+    fun setSubBass(db: Float)
     fun setTone(bassDb: Float, midDb: Float, trebleDb: Float)
     fun setToneFrequencies(bassHz: Float, trebleHz: Float)
     fun setBalance(balance: Float)

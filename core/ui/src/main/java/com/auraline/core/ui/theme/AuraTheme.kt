@@ -42,33 +42,57 @@ data class AuraColors(
     val textSecondary: Color,
     val positive: Color,
     val warning: Color,
-    val danger: Color
+    val danger: Color,
+    val glassSurfaceStart: Color = Color(0x381F293A),
+    val glassSurfaceEnd: Color = Color(0x1F131A26),
+    val glassBorderTop: Color = Color(0x4DFFFFFF),
+    val glassBorderBottom: Color = Color(0x0DFFFFFF),
+    val neumorphicCavity: Color = Color(0xFF080C12),
+    val neumorphicHighlight: Color = Color(0x26FFFFFF),
+    val neumorphicShadow: Color = Color(0xCC000000),
+    val ambientGlow: Color = accent.copy(alpha = 0.22f)
 )
 
 private fun darkColors(accent: Color) = AuraColors(
     accent = accent,
-    background = Color(0xFF080B10),
-    surface = Color(0xFF11161D),
-    surfaceElevated = Color(0xFF171E27),
-    outline = Color(0xFF25303C),
-    textPrimary = Color(0xFFEAF1F8),
-    textSecondary = Color(0xFF8CA0B4),
-    positive = Color(0xFF37E39B),
-    warning = Color(0xFFFFC24B),
-    danger = Color(0xFFFF6B6B)
+    background = Color(0xFF07090E),
+    surface = Color(0xFF111722),
+    surfaceElevated = Color(0xFF17202D),
+    outline = Color(0x26FFFFFF),
+    textPrimary = Color(0xFFF5F6F8),
+    textSecondary = Color(0xFF8E9BAE),
+    positive = Color(0xFF34D399),
+    warning = Color(0xFFFBBF24),
+    danger = Color(0xFFF87171),
+    glassSurfaceStart = Color(0x38222E42),
+    glassSurfaceEnd = Color(0x1C131A26),
+    glassBorderTop = Color(0x4DFFFFFF),
+    glassBorderBottom = Color(0x0DFFFFFF),
+    neumorphicCavity = Color(0xFF080C13),
+    neumorphicHighlight = Color(0x26FFFFFF),
+    neumorphicShadow = Color(0xCC000000),
+    ambientGlow = accent.copy(alpha = 0.24f)
 )
 
 private fun lightColors(accent: Color) = AuraColors(
     accent = accent,
-    background = Color(0xFFF4F6F9),
+    background = Color(0xFFF2F4F7),
     surface = Color(0xFFFFFFFF),
-    surfaceElevated = Color(0xFFEDF1F6),
-    outline = Color(0xFFD3DBE5),
-    textPrimary = Color(0xFF11161D),
-    textSecondary = Color(0xFF5A6B7D),
-    positive = Color(0xFF0E9C63),
-    warning = Color(0xFFB57A00),
-    danger = Color(0xFFC73B3B)
+    surfaceElevated = Color(0xFFE9EEF4),
+    outline = Color(0xFFD2D9E2),
+    textPrimary = Color(0xFF10141D),
+    textSecondary = Color(0xFF5F6E80),
+    positive = Color(0xFF059669),
+    warning = Color(0xFFD97706),
+    danger = Color(0xFFDC2626),
+    glassSurfaceStart = Color(0xD9FFFFFF),
+    glassSurfaceEnd = Color(0xB3F0F4F9),
+    glassBorderTop = Color(0x80FFFFFF),
+    glassBorderBottom = Color(0x26CBD5E1),
+    neumorphicCavity = Color(0xFFE2E7EE),
+    neumorphicHighlight = Color(0xFFFFFFFF),
+    neumorphicShadow = Color(0x26000000),
+    ambientGlow = accent.copy(alpha = 0.15f)
 )
 
 val LocalAuraColors = staticCompositionLocalOf { darkColors(AuraPalettes.first().accent) }
@@ -79,12 +103,35 @@ object AuraTheme {
 }
 
 private val AuraTypography = Typography(
-    headlineMedium = TextStyle(fontSize = 26.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.4).sp),
-    titleLarge = TextStyle(fontSize = 19.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
-    titleMedium = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-    bodyMedium = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal),
-    bodySmall = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal),
-    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp)
+    headlineMedium = TextStyle(
+        fontSize = 24.sp,
+        fontWeight = FontWeight.Bold,
+        letterSpacing = (-0.5).sp
+    ),
+    titleLarge = TextStyle(
+        fontSize = 19.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.3).sp
+    ),
+    titleMedium = TextStyle(
+        fontSize = 15.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = (-0.1).sp
+    ),
+    bodyMedium = TextStyle(
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Normal,
+        letterSpacing = (-0.1).sp
+    ),
+    bodySmall = TextStyle(
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Normal
+    ),
+    labelSmall = TextStyle(
+        fontSize = 11.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.0.sp
+    )
 )
 
 @Composable
@@ -97,7 +144,7 @@ fun AuraLineTheme(
     val scheme = if (darkTheme) {
         darkColorScheme(
             primary = accentColor,
-            onPrimary = Color(0xFF04100E),
+            onPrimary = Color(0xFF030A09),
             secondary = accentColor,
             background = colors.background,
             onBackground = colors.textPrimary,

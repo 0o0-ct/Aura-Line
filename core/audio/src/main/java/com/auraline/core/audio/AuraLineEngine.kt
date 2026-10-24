@@ -37,6 +37,9 @@ object AuraLineEngine {
     private const val GLOBAL_SESSION = 0
     private const val MBC_BANDS = 3
 
+    /** Por debajo de este centro la banda recibe además el control de sub-bajo. */
+    private const val SUB_BAND_HZ = 70f
+
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "auraline-engine").apply { priority = Thread.NORM_PRIORITY + 1 }
     }
@@ -276,15 +279,26 @@ object AuraLineEngine {
         val bandCount = state.numBands.coerceIn(20, 25)
         val frequencies = bandFrequencies(state, bandCount)
         val bandGains = bandGains(state, bandCount)
+        val centers = bandCenters(frequencies)
+
+        // Preamp automático: si la curva sube, se baja la entrada lo mismo para no
+        // comerse el refuerzo contra el limitador.
+        // Se limita a 6 dB para que subir una banda no baje el volumen de forma brusca.
+        val maxBoost = if (state.autoPreamp) {
+            ((0 until bandCount).maxOfOrNull { band ->
+                (bandGains[band] + toneOffset(state, centers[band])).coerceAtLeast(0f)
+            } ?: 0f).coerceAtMost(6f)
+        } else {
+            0f
+        }
 
         val balance = state.stereo.balance / 100f
-        val preamp = state.preampDb
+        val preamp = state.preampDb - maxBoost
         val leftGain = preamp + if (balance > 0f) -balance * 12f else 0f
         val rightGain = preamp + if (balance < 0f) balance * 12f else 0f
         dp.setInputGainbyChannel(0, leftGain)
         dp.setInputGainbyChannel(1, rightGain)
 
-        val centers = bandCenters(frequencies)
         for (band in 0 until bandCount) {
             val gain = if (state.bypass) {
                 0f
@@ -420,6 +434,8 @@ object AuraLineEngine {
 
     /** Graves / medios / agudos: tres regiones contiguas sobre la rejilla de bandas. */
     private fun toneOffset(state: EqualizerState, centerHz: Float): Float = when {
+        // La banda más grave suma graves + sub-bajo: es la única que cubre 0-100 Hz.
+        centerHz <= SUB_BAND_HZ -> state.tone.subDb + state.tone.bassDb
         centerHz <= state.tone.bassFrequencyHz -> state.tone.bassDb
         centerHz >= state.tone.trebleFrequencyHz -> state.tone.trebleDb
         else -> state.tone.midDb

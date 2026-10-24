@@ -9,6 +9,8 @@ data class EqBand(
 )
 
 data class ToneControls(
+    /** Refuerzo extra de la banda más grave (0-100 Hz). */
+    val subDb: Float = 0f,
     val bassDb: Float = 0f,
     val trebleDb: Float = 0f,
     /** Medios: cuerpo (200-400 Hz) y presencia (2,5 kHz). */

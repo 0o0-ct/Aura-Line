@@ -22,14 +22,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,6 +37,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraSliderRow
+import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.theme.AuraPalettes
@@ -84,6 +86,7 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Paleta de colores con discos táctiles Neumórficos
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Paleta", trailing = settings.theme.paletteKey)
             Spacer(modifier = Modifier.height(12.dp))
@@ -94,33 +97,62 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 AuraPalettes.forEach { palette ->
                     val selected = settings.theme.paletteKey == palette.key
                     Box(
+                        contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(40.dp)
-                            .background(palette.accent.copy(alpha = if (selected) 1f else 0.25f), RoundedCornerShape(20.dp))
+                            .size(44.dp)
+                            .shadow(
+                                elevation = if (selected) 8.dp else 2.dp,
+                                shape = CircleShape,
+                                ambientColor = if (selected) palette.accent.copy(alpha = 0.5f) else Color.Black
+                            )
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        palette.accent,
+                                        palette.accent.copy(alpha = if (selected) 0.85f else 0.45f)
+                                    )
+                                ),
+                                CircleShape
+                            )
                             .border(
                                 width = if (selected) 2.dp else 1.dp,
-                                color = if (selected) colors.textPrimary else colors.outline,
-                                shape = RoundedCornerShape(20.dp)
+                                brush = if (selected) {
+                                    Brush.verticalGradient(
+                                        listOf(Color.White, palette.accent)
+                                    )
+                                } else {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0x33FFFFFF), Color(0x0AFFFFFF))
+                                    )
+                                },
+                                shape = CircleShape
                             )
                             .clickable { viewModel.setPalette(palette.key, palette.accent.value.toInt()) }
-                    )
+                    ) {
+                        if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color.White, CircleShape)
+                            )
+                        }
+                    }
                 }
             }
         }
 
+        // Resolución de bandas
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Ecualizador", trailing = "${settings.numBands} bandas")
-            Slider(
+            Spacer(modifier = Modifier.height(6.dp))
+            AuraSliderRow(
+                label = "Resolución de bandas",
+                valueText = "${settings.numBands} bandas",
                 value = settings.numBands.toFloat(),
-                onValueChange = { viewModel.setNumBands(it.toInt()) },
                 valueRange = 20f..25f,
-                steps = 4,
-                colors = SliderDefaults.colors(
-                    thumbColor = colors.accent,
-                    activeTrackColor = colors.accent,
-                    inactiveTrackColor = colors.outline
-                )
+                onValueChange = { viewModel.setNumBands(it.toInt()) }
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Más bandas dan más control; el rango audible va de 20 Hz a 20 kHz.",
                 color = colors.textSecondary,
@@ -128,6 +160,7 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             )
         }
 
+        // Comportamiento del sistema
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Comportamiento")
             Spacer(modifier = Modifier.height(4.dp))
@@ -139,70 +172,70 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             )
             SettingSwitch(
                 title = "Respuesta háptica",
-                subtitle = "Vibración ligera al ajustar controles",
+                subtitle = "Vibración al mover faders y cambiar interruptores",
                 checked = settings.hapticFeedback,
                 onCheckedChange = { viewModel.setHapticFeedback(it) }
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Motor en segundo plano", color = colors.textPrimary, fontSize = 14.sp)
-                    Text(
-                        text = if (batteryExempt) {
-                            "Protegido: el sistema no cerrará AuraLine al cambiar de app"
-                        } else {
-                            "El sistema puede cerrar AuraLine al cambiar de app o de canción"
-                        },
-                        color = if (batteryExempt) colors.positive else colors.warning,
-                        fontSize = 11.sp
-                    )
-                }
-                TextButton(onClick = {
-                    runCatching {
-                        context.startActivity(
-                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            }
-                        )
-                    }
-                }) {
-                    Text("Proteger", color = colors.accent, fontSize = 12.sp)
-                }
-            }
-
             SettingSwitch(
-                title = "Inicio automático",
-                subtitle = "Arranca el motor al encender el dispositivo",
+                title = "Iniciar al encender",
+                subtitle = "Activa el ecualizador automáticamente tras reiniciar el teléfono",
                 checked = settings.autoStart,
                 onCheckedChange = { viewModel.setAutoStart(it) }
             )
         }
 
+        // Protección de batería
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(text = "Comprobación del motor", trailing = engine.route.label)
-            Spacer(modifier = Modifier.height(8.dp))
+            SectionTitle(text = "Segundo plano")
             Text(
-                text = "Emite dos tonos, los captura con el micrófono y comprueba que sólo se mueve la banda que toca.",
+                text = "One UI y otros sistemas cierran servicios de audio en reposo. Para mantener AuraLine activo mientras la pantalla está apagada, exímelo de la optimización de batería.",
                 color = colors.textSecondary,
-                fontSize = 12.sp
+                fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 8.dp)
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Cómo hacerlo:\n" +
-                    "1. Quita auriculares y Bluetooth: la salida debe ser el altavoz.\n" +
-                    "2. Sube el volumen multimedia a la mitad o más.\n" +
-                    "3. Mantén el teléfono sobre una superficie y no hables durante la prueba.\n" +
-                    "4. Pulsa el botón y espera unos 10 segundos.",
-                color = colors.textSecondary,
-                fontSize = 11.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusPill(
+                    text = if (batteryExempt) "Batería protegida" else "Sin protección",
+                    color = if (batteryExempt) colors.positive else colors.warning
+                )
+                if (!batteryExempt) {
+                    TextButton(onClick = {
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                        }
+                        runCatching { context.startActivity(intent) }
+                    }) {
+                        Text("Configurar", color = colors.accent)
+                    }
+                }
+            }
+        }
 
+        // Comprobación acústica
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Comprobación del motor", trailing = "prueba acústica")
+            Text(
+                text = "Mide con el micrófono si el ecualizador modifica realmente el sonido del altavoz. " +
+                    "Emite dos tonos simultáneos (grave y agudo) y comprueba si al subir la banda del tono agudo " +
+                    "este se vuelve más dominante respecto al grave.",
+                color = colors.textSecondary,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            Text(
+                text = "Requisitos: salida por altavoz del teléfono (no auriculares ni Bluetooth), " +
+                    "volumen al 50% o más, teléfono apoyado y silencio durante la medición (≈1,5 s).",
+                color = colors.textSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+
+            // Botón estilo Apple Pill
             Button(
                 onClick = {
                     permissionDenied = false
@@ -210,25 +243,33 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                         context,
                         Manifest.permission.RECORD_AUDIO
                     ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) viewModel.runAudioCheck() else {
+                    if (granted) {
+                        viewModel.runAudioCheck()
+                    } else {
                         audioPermission.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 },
                 enabled = !checking,
+                shape = RoundedCornerShape(999.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.accent,
                     contentColor = colors.background,
                     disabledContainerColor = colors.surfaceElevated,
                     disabledContentColor = colors.textSecondary
-                )
+                ),
+                modifier = Modifier.height(44.dp)
             ) {
-                Text(if (checking) "Midiendo…" else "Comprobar el motor")
+                Text(
+                    text = if (checking) "Midiendo…" else "Comprobar el motor",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
             }
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -239,15 +280,9 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                         fontSize = 11.sp
                     )
                 }
-                Switch(
+                AuraSwitch(
                     checked = settings.autoCheck,
-                    onCheckedChange = { viewModel.setAutoCheck(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.background,
-                        checkedTrackColor = colors.accent,
-                        uncheckedTrackColor = colors.surfaceElevated,
-                        uncheckedBorderColor = colors.outline
-                    )
+                    onCheckedChange = { viewModel.setAutoCheck(it) }
                 )
             }
 
@@ -291,7 +326,7 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
 
         Text(
             text = "AuraLine 2.0 · ${engine.sampleRateHz} Hz · ${if (engine.globalScope) "procesado global" else "sin cadena activa"}",
-            color = colors.textSecondary,
+            color = colors.textSecondary.copy(alpha = 0.7f),
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp)
         )
@@ -313,18 +348,12 @@ private fun SettingSwitch(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, color = colors.textPrimary, fontSize = 14.sp)
+            Text(text = title, color = colors.textPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Text(text = subtitle, color = colors.textSecondary, fontSize = 11.sp)
         }
-        Switch(
+        AuraSwitch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = colors.background,
-                checkedTrackColor = colors.accent,
-                uncheckedTrackColor = colors.surfaceElevated,
-                uncheckedBorderColor = colors.outline
-            )
+            onCheckedChange = onCheckedChange
         )
     }
 }

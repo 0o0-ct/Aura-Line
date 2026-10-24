@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraSliderRow
+import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.theme.AuraTheme
@@ -69,15 +70,10 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                         fontSize = 12.sp
                     )
                 }
-                Switch(
+                AuraSwitch(
                     checked = state.effectsEnabled,
                     onCheckedChange = { viewModel.setEffectsEnabled(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = colors.background,
-                        checkedTrackColor = colors.accent,
-                        uncheckedTrackColor = colors.surfaceElevated,
-                        uncheckedBorderColor = colors.outline
-                    )
+                    enabled = state.motorEnabled
                 )
             }
 

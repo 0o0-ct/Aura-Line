@@ -141,6 +141,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putBoolean("state_auto_preamp", state.autoPreamp)
             .putInt("state_route", state.selectedRoute)
             .putString("state_preset", state.presetName)
+            .putFloat("state_sub", state.tone.subDb)
             .putFloat("state_bass", state.tone.bassDb)
             .putFloat("state_treble", state.tone.trebleDb)
             .putFloat("state_mid", state.tone.midDb)
@@ -204,6 +205,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             selectedRoute = p.getInt("state_route", 0),
             presetName = p.getString("state_preset", "Plano") ?: "Plano",
             tone = ToneControls(
+                subDb = p.getFloat("state_sub", 0f),
                 bassDb = p.getFloat("state_bass", 0f),
                 trebleDb = p.getFloat("state_treble", 0f),
                 midDb = p.getFloat("state_mid", 0f)
@@ -255,6 +257,11 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             if (band.id == bandId) band.copy(gainDb = gainDb) else band
         }
         saveState(current.copy(bands = bands, presetName = "Personalizado"))
+    }
+
+    override fun setSubBass(db: Float) {
+        val tone = _state.value.tone
+        saveState(_state.value.copy(tone = tone.copy(subDb = db)))
     }
 
     override fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) {
