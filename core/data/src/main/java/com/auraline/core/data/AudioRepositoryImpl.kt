@@ -2,6 +2,10 @@ package com.auraline.core.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.media.AudioManager
 import android.util.Log
 import com.auraline.core.audio.AuraLineEngine
@@ -59,6 +63,17 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     private var currentRoute = AudioRoute.UNKNOWN
 
+    /**
+     * Los botones físicos de volumen no tocan nuestro estado: hay que escuchar el ajuste
+     * del sistema para que la barra de la app refleje el volumen real.
+     */
+    private val volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            super.onChange(selfChange)
+            syncVolumeFromSystem(force = true)
+        }
+    }
+
     init {
         migrateLegacyPresets()
         val loadedSettings = loadSettings()
@@ -68,6 +83,14 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
         AuraLineEngine.initialize(appContext)
         AuraLineEngine.setState(loadedState)
+
+        runCatching {
+            appContext.contentResolver.registerContentObserver(
+                Settings.System.CONTENT_URI,
+                true,
+                volumeObserver
+            )
+        }
 
         scope.launch {
             AuraLineEngine.status.collect { status ->
@@ -234,14 +257,27 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     private fun syncVolumeFromSystem(state: EqualizerState): EqualizerState {
         if (!state.volume.linkedToSystem) return state
-        return try {
-            val manager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-            val percent = manager.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max
-            state.copy(volume = state.volume.copy(percent = percent))
-        } catch (_: Throwable) {
-            state
-        }
+        val percent = readSystemVolumePercent() ?: return state
+        return state.copy(volume = state.volume.copy(percent = percent))
+    }
+
+    /** Actualiza el estado cuando el volumen cambia desde fuera de la app. */
+    private fun syncVolumeFromSystem(force: Boolean) {
+        val current = _state.value
+        if (!current.volume.linkedToSystem) return
+        val percent = readSystemVolumePercent() ?: return
+        if (!force && kotlin.math.abs(percent - current.volume.percent) < 0.5f) return
+        if (kotlin.math.abs(percent - current.volume.percent) < 0.5f) return
+        _state.value = current.copy(volume = current.volume.copy(percent = percent))
+        statePrefs.edit().putFloat("state_volume", percent).apply()
+    }
+
+    private fun readSystemVolumePercent(): Float? = try {
+        val manager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val max = manager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        manager.getStreamVolume(AudioManager.STREAM_MUSIC) * 100f / max
+    } catch (_: Throwable) {
+        null
     }
 
     // --- ajustes individuales ----------------------------------------------
