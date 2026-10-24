@@ -30,6 +30,8 @@ interface AudioRepository {
     fun setReverb(params: ReverbParams)
     fun applyReverbPreset(name: String)
     fun setCompressor(params: CompressorParams)
+    fun setGate(params: GateParams)
+    fun setModules(modules: ModuleState)
 
     fun resetAll()
     fun resetControls()

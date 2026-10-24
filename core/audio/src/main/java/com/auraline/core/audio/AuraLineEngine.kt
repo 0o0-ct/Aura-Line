@@ -194,10 +194,15 @@ object AuraLineEngine {
             }
         }
 
-        if (!state.bypass) {
-            applyVirtualizer(state)
-            applyReverb(state)
+        if (!state.bypass && state.modules.width) applyVirtualizer(state) else {
+            runCatching { virtualizer?.enabled = false; virtualizer?.release() }
+            virtualizer = null
         }
+        if (!state.bypass && state.modules.reverb) applyReverb(state) else {
+            runCatching { reverb?.enabled = false; reverb?.release() }
+            reverb = null
+        }
+        if (state.motorEnabled) AuraLineSpectrum.start() else AuraLineSpectrum.stop()
         sessionEq.values.forEach { applyToEqualizer(it, state) }
     }
 
@@ -216,7 +221,10 @@ object AuraLineEngine {
             mbc.setBand(band, compressorBand(crossovers[band], state))
         }
 
-        val limiter = DynamicsProcessing.Limiter(true, true, 0, 5f, 60f, 10f, -2f, 0f)
+        val limiter = DynamicsProcessing.Limiter(
+            state.modules.limiter,
+            true, 0, 5f, 60f, 10f, -2f, 0f
+        )
 
         val config = DynamicsProcessing.Config.Builder(
             DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
@@ -267,7 +275,9 @@ object AuraLineEngine {
 
     private fun compressorBand(cutoffHz: Float, state: EqualizerState): DynamicsProcessing.MbcBand {
         val compressor = state.compressor
-        val active = state.effectsEnabled
+        val gate = state.gate
+        val active = state.effectsEnabled && state.modules.compressor && !state.bypass
+        val gateActive = state.effectsEnabled && state.modules.gate && !state.bypass
         return DynamicsProcessing.MbcBand(
             active,
             cutoffHz,
@@ -276,8 +286,8 @@ object AuraLineEngine {
             compressor.ratio.coerceIn(1f, 20f),
             compressor.threshold.coerceIn(-60f, 0f),
             6f,
-            -80f,
-            1f,
+            if (gateActive) gate.thresholdDb.coerceIn(-80f, -20f) else -80f,
+            if (gateActive) gate.ratio.coerceIn(1f, 10f) else 1f,
             compressor.makeupGain.coerceIn(0f, 24f) / 2f,
             0f
         )
@@ -316,11 +326,12 @@ object AuraLineEngine {
         dp.setInputGainbyChannel(0, leftGain)
         dp.setInputGainbyChannel(1, rightGain)
 
+        val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            val gain = if (state.bypass) {
-                0f
-            } else {
+            val gain = if (eqActive) {
                 (bandGains[band] + toneOffset(state, centers[band])).coerceIn(-24f, 24f)
+            } else {
+                0f
             }
             dp.setPreEqBandAllChannelsTo(
                 band,
@@ -338,14 +349,13 @@ object AuraLineEngine {
             )
         }
 
-        if (state.effectsEnabled && !state.bypass) {
-            for (band in 0 until MBC_BANDS) {
-                val cutoff = floatArrayOf(180f, 1800f, 9000f)[band]
-                dp.setMbcBandAllChannelsTo(band, compressorBand(cutoff, state))
-            }
-        } else {
-            dp.setMbcBandAllChannelsTo(0, DynamicsProcessing.MbcBand(false, 180f, 10f, 120f, 1f, 0f, 6f, -80f, 1f, 0f, 0f))
+        for (band in 0 until MBC_BANDS) {
+            val cutoff = floatArrayOf(180f, 1800f, 9000f)[band]
+            dp.setMbcBandAllChannelsTo(band, compressorBand(cutoff, state))
         }
+        dp.setLimiterAllChannelsTo(
+            DynamicsProcessing.Limiter(state.modules.limiter && !state.bypass, true, 0, 5f, 60f, 10f, -2f, 0f)
+        )
     }
 
     private fun applyToEqualizer(eq: Equalizer, state: EqualizerState) {
@@ -426,6 +436,7 @@ object AuraLineEngine {
     }
 
     private fun releaseChain() {
+        AuraLineSpectrum.stop()
         runCatching { processing?.enabled = false; processing?.release() }
         processing = null
         builtBandCount = 0

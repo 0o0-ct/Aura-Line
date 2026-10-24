@@ -18,6 +18,8 @@ import com.auraline.core.domain.CompressorParams
 import com.auraline.core.domain.FactoryPresets
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqualizerState
+import com.auraline.core.domain.GateParams
+import com.auraline.core.domain.ModuleState
 import com.auraline.core.domain.ReverbParams
 import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.domain.StereoControls
@@ -181,6 +183,14 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putFloat("state_comp_attack", state.compressor.attackMs)
             .putFloat("state_comp_release", state.compressor.releaseMs)
             .putFloat("state_comp_makeup", state.compressor.makeupGain)
+            .putFloat("gate_threshold", state.gate.thresholdDb)
+            .putFloat("gate_ratio", state.gate.ratio)
+            .putBoolean("module_eq", state.modules.equalizer)
+            .putBoolean("module_gate", state.modules.gate)
+            .putBoolean("module_comp", state.modules.compressor)
+            .putBoolean("module_limiter", state.modules.limiter)
+            .putBoolean("module_reverb", state.modules.reverb)
+            .putBoolean("module_width", state.modules.width)
             .putString("state_bands", state.bands.joinToString(",") { "${it.frequencyHz}:${it.gainDb}" })
             .apply()
     }
@@ -244,6 +254,18 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
                 mix = p.getFloat("state_reverb_mix", 0.25f),
                 damping = p.getFloat("state_reverb_damping", 0.5f),
                 size = p.getFloat("state_reverb_size", 0.5f)
+            ),
+            gate = GateParams(
+                thresholdDb = p.getFloat("gate_threshold", -60f),
+                ratio = p.getFloat("gate_ratio", 2f)
+            ),
+            modules = ModuleState(
+                equalizer = p.getBoolean("module_eq", true),
+                gate = p.getBoolean("module_gate", true),
+                compressor = p.getBoolean("module_comp", true),
+                limiter = p.getBoolean("module_limiter", true),
+                reverb = p.getBoolean("module_reverb", true),
+                width = p.getBoolean("module_width", true)
             ),
             compressor = CompressorParams(
                 threshold = p.getFloat("state_comp_threshold", -18f),
@@ -375,6 +397,10 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     }
 
     override fun setCompressor(params: CompressorParams) = saveState(_state.value.copy(compressor = params))
+
+    override fun setGate(params: GateParams) = saveState(_state.value.copy(gate = params))
+
+    override fun setModules(modules: ModuleState) = saveState(_state.value.copy(modules = modules))
 
     override fun resetControls() {
         val current = _state.value

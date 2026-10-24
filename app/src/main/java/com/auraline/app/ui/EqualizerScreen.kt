@@ -54,6 +54,7 @@ import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.BandFader
 import com.auraline.core.ui.components.ResponseCurve
+import com.auraline.core.ui.components.SpectrumBars
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.StatusPill
@@ -80,6 +81,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
         state.bands.ifEmpty { generateEqualizerBands(state.numBands) }
     }
     val range = state.gainRangeDb.coerceIn(6f, 24f)
+    val spectrum by com.auraline.core.audio.AuraLineSpectrum.levels.collectAsState()
     val scope = rememberCoroutineScope()
     val selectedFactory = FactoryPresets.firstOrNull { it.name == state.presetName }
     val perWindow = WindowSizes[windowSize]
@@ -112,6 +114,8 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             }
             Spacer(modifier = Modifier.height(6.dp))
             ResponseCurve(bands = bands, gainRangeDb = range)
+            Spacer(modifier = Modifier.height(8.dp))
+            SpectrumBars(levels = spectrum)
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {

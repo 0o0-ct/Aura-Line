@@ -53,6 +53,24 @@ data class CompressorParams(
     val limiterCeiling: Float = -0.1f
 )
 
+/** Cada etapa de la cadena se puede desactivar por separado. */
+data class ModuleState(
+    val equalizer: Boolean = true,
+    val gate: Boolean = true,
+    val compressor: Boolean = true,
+    val limiter: Boolean = true,
+    val reverb: Boolean = true,
+    val width: Boolean = true
+)
+
+/** Puerta de ruido y expansor, aplicados en las bandas del compresor multibanda. */
+data class GateParams(
+    /** Por debajo de este nivel la señal se atenúa. */
+    val thresholdDb: Float = -60f,
+    /** 1 = puerta cerrada; valores mayores expansión más agresiva. */
+    val ratio: Float = 2f
+)
+
 data class EqualizerState(
     val numBands: Int = 25,
     val gainRangeDb: Float = 12f,
@@ -63,6 +81,8 @@ data class EqualizerState(
     val volume: VolumeControls = VolumeControls(),
     val reverb: ReverbParams = ReverbParams(),
     val compressor: CompressorParams = CompressorParams(),
+    val gate: GateParams = GateParams(),
+    val modules: ModuleState = ModuleState(),
     val motorEnabled: Boolean = false,
     val effectsEnabled: Boolean = false,
     /** Comparación A/B: procesa la cadena pero con la curva plana. */

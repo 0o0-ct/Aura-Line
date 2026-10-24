@@ -6,6 +6,8 @@ import com.auraline.core.domain.AppSettings
 import com.auraline.core.domain.AudioCheckResult
 import com.auraline.core.domain.AudioRepository
 import com.auraline.core.domain.CompressorParams
+import com.auraline.core.domain.GateParams
+import com.auraline.core.domain.ModuleState
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqualizerState
 import com.auraline.core.domain.ReverbParams
@@ -45,6 +47,8 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setReverb(params: ReverbParams) = repository.setReverb(params)
     fun applyReverbPreset(name: String) = repository.applyReverbPreset(name)
     fun setCompressor(params: CompressorParams) = repository.setCompressor(params)
+    fun setGate(params: GateParams) = repository.setGate(params)
+    fun setModules(modules: ModuleState) = repository.setModules(modules)
     fun resetAll() = repository.resetAll()
     fun resetControls() = repository.resetControls()
 

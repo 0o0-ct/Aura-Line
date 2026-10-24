@@ -55,6 +55,55 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Cadena de módulos", trailing = "orden real del motor")
+            Spacer(modifier = Modifier.height(6.dp))
+            ModuleRow("Ecualizador", "bandas + tono", state.modules.equalizer) {
+                viewModel.setModules(state.modules.copy(equalizer = it))
+            }
+            ModuleRow("Puerta / Expansor", "limpia el ruido de fondo", state.modules.gate) {
+                viewModel.setModules(state.modules.copy(gate = it))
+            }
+            ModuleRow("Compresor multibanda", "3 bandas", state.modules.compressor) {
+                viewModel.setModules(state.modules.copy(compressor = it))
+            }
+            ModuleRow("Limitador", "techo a −2 dBFS", state.modules.limiter) {
+                viewModel.setModules(state.modules.copy(limiter = it))
+            }
+            ModuleRow("Reverb", "sala y cola", state.modules.reverb) {
+                viewModel.setModules(state.modules.copy(reverb = it))
+            }
+            ModuleRow("Anchura estéreo", "Virtualizer", state.modules.width) {
+                viewModel.setModules(state.modules.copy(width = it))
+            }
+        }
+
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Puerta / Expansor", trailing = if (state.modules.gate) "activa" else "desactivada")
+            Spacer(modifier = Modifier.height(4.dp))
+            AuraSliderRow(
+                label = "Umbral",
+                valueText = "${state.gate.thresholdDb.toInt()} dB",
+                value = state.gate.thresholdDb,
+                valueRange = -80f..-20f,
+                onValueChange = { viewModel.setGate(state.gate.copy(thresholdDb = it)) },
+                enabled = effectsOn && state.modules.gate
+            )
+            AuraSliderRow(
+                label = "Expansión",
+                valueText = String.format(Locale.US, "%.1f:1", state.gate.ratio),
+                value = state.gate.ratio,
+                valueRange = 1f..10f,
+                onValueChange = { viewModel.setGate(state.gate.copy(ratio = it)) },
+                enabled = effectsOn && state.modules.gate
+            )
+            Text(
+                text = "Por debajo del umbral la señal se atenúa: quita el siseo entre canciones y en pasajes silenciosos.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+        }
+
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -237,6 +286,28 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                 fontSize = 11.sp
             )
         }
+    }
+}
+
+@Composable
+private fun ModuleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val colors = AuraTheme.colors
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, color = colors.textPrimary, fontSize = 14.sp)
+            Text(text = subtitle, color = colors.textSecondary, fontSize = 11.sp)
+        }
+        AuraSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

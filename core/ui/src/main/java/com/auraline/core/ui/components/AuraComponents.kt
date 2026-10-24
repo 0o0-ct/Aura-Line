@@ -638,6 +638,37 @@ fun AuraKnob(
  * Fila deslizadora táctil con estética Apple / Neumorphic:
  * Canal empotrado, cursor de cápsula con sombra física y brillo de luz superior.
  */
+/** Barras del analizador de espectro. */
+@Composable
+fun SpectrumBars(
+    levels: FloatArray,
+    modifier: Modifier = Modifier,
+    height: Dp = 56.dp
+) {
+    val colors = AuraTheme.colors
+    val accent = controlAccent()
+    Canvas(modifier = modifier.fillMaxWidth().height(height)) {
+        if (levels.isEmpty()) return@Canvas
+        val gap = 2.dp.toPx()
+        val barWidth = ((size.width - gap * (levels.size - 1)) / levels.size).coerceAtLeast(1f)
+        levels.forEachIndexed { index, level ->
+            val barHeight = (level * size.height).coerceAtLeast(1.5.dp.toPx())
+            drawRoundRect(
+                color = accent.copy(alpha = 0.25f + 0.75f * level),
+                topLeft = Offset(index * (barWidth + gap), size.height - barHeight),
+                size = Size(barWidth, barHeight),
+                cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+            )
+        }
+        drawLine(
+            color = colors.outline.copy(alpha = 0.4f),
+            start = Offset(0f, size.height),
+            end = Offset(size.width, size.height),
+            strokeWidth = 1.dp.toPx()
+        )
+    }
+}
+
 @Composable
 fun AuraSliderRow(
     label: String,
