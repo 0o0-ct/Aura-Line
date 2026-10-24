@@ -49,7 +49,7 @@ data class CompressorParams(
     val ratio: Float = 4f,
     val attackMs: Float = 10f,
     val releaseMs: Float = 200f,
-    val makeupGain: Float = 6f,
+    val makeupGain: Float = 3f,
     val limiterCeiling: Float = -0.1f
 )
 

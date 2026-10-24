@@ -28,38 +28,48 @@ class AudioForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        return when (intent?.action) {
-            ACTION_STOP -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                START_NOT_STICKY
-            }
-            else -> {
-                startInForeground()
-                START_STICKY
-            }
+        if (intent?.action == ACTION_STOP) {
+            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return try {
+            startInForeground()
+            START_STICKY
+        } catch (error: Throwable) {
+            // Si no se consigue entrar en primer plano el sistema mata la app por timeout:
+            // mejor cerrar el servicio nosotros mismos y dejar el motor activo en segundo plano.
+            android.util.Log.e("AuraLine", "No se pudo entrar en primer plano: ${error.message}")
+            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+            stopSelf(startId)
+            START_NOT_STICKY
         }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     private fun startInForeground() {
-        val notification = buildNotification()
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                startForeground(
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, notification)
-            }
-        } catch (_: Throwable) {
-            // Si el sistema no permite el primer plano, el motor sigue activo en segundo plano.
-            stopSelf()
+        val notification = runCatching { buildNotification() }.getOrElse { minimalNotification() }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
         }
     }
+
+    private fun minimalNotification(): Notification =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_auraline)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.notification_active))
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
 
     private fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

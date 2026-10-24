@@ -40,8 +40,13 @@ object AuraLineEngine {
     /** Por debajo de este centro la banda recibe además el control de sub-bajo. */
     private const val SUB_BAND_HZ = 70f
 
-    /** Por debajo de este refuerzo no se toca la entrada. */
-    private const val AUTO_PREAMP_THRESHOLD = 9f
+    /** Objetivo de nivel de salida: deja margen para que el códec no sature. */
+    private const val TARGET_HEADROOM_DB = 4f
+
+    private const val MAX_HEADROOM_DB = 18f
+
+    /** Energía aproximada que añade la reverb al nivel medio, por unidad de mezcla. */
+    private const val REVERB_ENERGY_DB = 3f
 
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "auraline-engine").apply { priority = Thread.NORM_PRIORITY + 1 }
@@ -211,7 +216,7 @@ object AuraLineEngine {
             mbc.setBand(band, compressorBand(crossovers[band], state))
         }
 
-        val limiter = DynamicsProcessing.Limiter(true, true, 0, 5f, 60f, 10f, -1f, 0f)
+        val limiter = DynamicsProcessing.Limiter(true, true, 0, 5f, 60f, 10f, -2f, 0f)
 
         val config = DynamicsProcessing.Config.Builder(
             DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
@@ -286,15 +291,23 @@ object AuraLineEngine {
 
         // Preamp automático: si la curva sube, se baja la entrada lo mismo para no
         // comerse el refuerzo contra el limitador.
-        // Sólo corrige refuerzos grandes: con curvas moderadas bajaría el volumen sin ganancia audible.
-        val maxBoost = if (state.autoPreamp) {
-            val peak = (0 until bandCount).maxOfOrNull { band ->
-                (bandGains[band] + toneOffset(state, centers[band])).coerceAtLeast(0f)
-            } ?: 0f
-            if (peak > AUTO_PREAMP_THRESHOLD) (peak - AUTO_PREAMP_THRESHOLD).coerceAtMost(6f) else 0f
+        // Headroom real: cuenta el refuerzo de las bandas, la compensación del compresor y la
+        // energía que añade la reverb. Sin esto el códec de Bluetooth satura y suena "quemado".
+        val peakBand = (0 until bandCount).maxOfOrNull { band ->
+            (bandGains[band] + toneOffset(state, centers[band])).coerceAtLeast(0f)
+        } ?: 0f
+        val effectsActive = state.effectsEnabled && !state.bypass
+        val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
+        val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
+        val totalBoost = peakBand + makeup + reverbEnergy
+        // En Bluetooth el códec recorta antes de 0 dBFS: se le deja margen extra.
+        val codecMargin = if (_status.value.route == AudioRoute.BLUETOOTH) 3f else 0f
+        val headroom = if (state.autoPreamp) {
+            (totalBoost - TARGET_HEADROOM_DB - codecMargin).coerceIn(0f, MAX_HEADROOM_DB)
         } else {
             0f
         }
+        val maxBoost = headroom
 
         val balance = state.stereo.balance / 100f
         val preamp = state.preampDb - maxBoost
@@ -401,7 +414,7 @@ object AuraLineEngine {
                 effect.decayTime = (params.decay * 9000f).toInt().coerceIn(200, 10000)
                 effect.decayHFRatio = ((1f - params.damping) * 1000f).toInt().toShort()
                 // Reflexiones tempranas: es lo que hace distinguible una sala de otra.
-                effect.reflectionsLevel = ((params.predelayMix * 1000f) - 300f).toInt().toShort()
+                effect.reflectionsLevel = ((params.predelayMix * 700f) - 350f).toInt().toShort()
                 effect.reflectionsDelay = (params.preDelay * 150f).toInt().coerceIn(0, 300)
                 effect.reverbDelay = (params.preDelay * 300f).toInt().coerceIn(0, 500)
                 effect.reverbLevel = (params.mix * 2000f).toInt().toShort()
