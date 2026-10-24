@@ -139,6 +139,16 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(text = hint, color = colors.textSecondary, fontSize = 11.sp)
             }
+            val strongest = bands.maxByOrNull { kotlin.math.abs(it.gainDb) }
+            if (strongest != null && kotlin.math.abs(strongest.gainDb) >= 0.5f) {
+                val index = bands.indexOf(strongest)
+                Text(
+                    text = "Aplicado: ${formatGain(strongest.gainDb)} dB en " +
+                        "${formatFrequency(bandCenterHz(bands, index))} Hz",
+                    color = colors.accent,
+                    fontSize = 11.sp
+                )
+            }
             if (!state.motorEnabled) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(

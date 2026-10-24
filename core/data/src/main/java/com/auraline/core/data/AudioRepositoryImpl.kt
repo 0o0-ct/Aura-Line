@@ -298,9 +298,12 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val centers = bands.indices.map { bandCenterHz(bands, it) }
         val gains = FloatArray(bands.size)
 
+        val limit = current.gainRangeDb.coerceIn(6f, 24f)
         preset.gains.forEach { (frequency, gain) ->
             val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
-            gains[index] = (gains[index] + gain).coerceIn(-current.gainRangeDb, current.gainRangeDb)
+            // Los valores de tabla son conservadores; se escalan para que el cambio se note.
+            val scaled = (gain * PRESET_GAIN_SCALE).coerceIn(-limit, limit)
+            gains[index] = (gains[index] + scaled).coerceIn(-limit, limit)
         }
 
         val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
@@ -583,6 +586,9 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     private companion object {
         const val PROBE_DURATION = 2.2
+
+        /** Los preajustes de las tablas son de mezcla; aquí se aplican más marcados. */
+        const val PRESET_GAIN_SCALE = 1.8f
     }
 
 }

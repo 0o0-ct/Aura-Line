@@ -40,6 +40,9 @@ object AuraLineEngine {
     /** Por debajo de este centro la banda recibe además el control de sub-bajo. */
     private const val SUB_BAND_HZ = 70f
 
+    /** Por debajo de este refuerzo no se toca la entrada. */
+    private const val AUTO_PREAMP_THRESHOLD = 9f
+
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "auraline-engine").apply { priority = Thread.NORM_PRIORITY + 1 }
     }
@@ -283,11 +286,12 @@ object AuraLineEngine {
 
         // Preamp automático: si la curva sube, se baja la entrada lo mismo para no
         // comerse el refuerzo contra el limitador.
-        // Se limita a 6 dB para que subir una banda no baje el volumen de forma brusca.
+        // Sólo corrige refuerzos grandes: con curvas moderadas bajaría el volumen sin ganancia audible.
         val maxBoost = if (state.autoPreamp) {
-            ((0 until bandCount).maxOfOrNull { band ->
+            val peak = (0 until bandCount).maxOfOrNull { band ->
                 (bandGains[band] + toneOffset(state, centers[band])).coerceAtLeast(0f)
-            } ?: 0f).coerceAtMost(6f)
+            } ?: 0f
+            if (peak > AUTO_PREAMP_THRESHOLD) (peak - AUTO_PREAMP_THRESHOLD).coerceAtMost(6f) else 0f
         } else {
             0f
         }

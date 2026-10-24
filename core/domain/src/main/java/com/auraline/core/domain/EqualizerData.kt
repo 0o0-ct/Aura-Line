@@ -58,6 +58,11 @@ val FactoryPresets: List<FactoryPreset> = listOf(
         gains = mapOf(140f to -3f, 650f to -2f, 3000f to 3f, 10000f to 3f)
     ),
     FactoryPreset(
+        name = "Graves +",
+        hint = "Refuerzo fuerte de sub-bajo y graves, con medios retraídos",
+        gains = mapOf(60f to 8f, 120f to 6f, 250f to 3f, 900f to -2f, 2500f to 1f, 6000f to 2f)
+    ),
+    FactoryPreset(
         name = "Harman",
         hint = "Curva de referencia: graves +4/+5 · medios −1/−2 · agudos +2/+3",
         gains = mapOf(60f to 5f, 120f to 4f, 250f to 2f, 1000f to -1f, 2000f to -2f, 4000f to 2f, 6000f to 3f, 9000f to 2f)
