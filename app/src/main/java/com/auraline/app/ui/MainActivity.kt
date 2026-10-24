@@ -35,9 +35,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by viewModel.settings.collectAsState()
-            val accent = paletteFor(settings.theme.paletteKey).accent
+            val paletteId = settings.theme.paletteKey.toIntOrNull() ?: 1
 
-            AuraLineTheme(accentColor = accent, darkTheme = true) {
+            com.auraline.core.ui.theme.PixelTheme(paletteId = paletteId) {
                 LaunchedEffect(Unit) {
                     requestNotificationPermission()
                 }
