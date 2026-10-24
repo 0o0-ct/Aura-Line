@@ -2,105 +2,78 @@ package com.auraline.app.domain
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.auraline.core.domain.*
+import com.auraline.core.domain.AppSettings
+import com.auraline.core.domain.AudioCheckResult
 import com.auraline.core.domain.AudioRepository
+import com.auraline.core.domain.CompressorParams
+import com.auraline.core.domain.EngineStatus
+import com.auraline.core.domain.EqualizerState
+import com.auraline.core.domain.ReverbParams
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class AuraLineViewModel(
-    private val repository: AudioRepository
-) : ViewModel() {
+class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
 
     val state: StateFlow<EqualizerState> = repository.stateFlow
     val settings: StateFlow<AppSettings> = repository.settingsFlow
+    val engine: StateFlow<EngineStatus> = repository.engineStatus
 
-    fun toggleMotor(enabled: Boolean) {
-        repository.toggleMotor(enabled)
-    }
+    private val _presets = MutableStateFlow(repository.listPresets())
+    val presets: StateFlow<List<String>> = _presets.asStateFlow()
 
-    fun setEffectsEnabled(enabled: Boolean) {
-        repository.setEffectsEnabled(enabled)
-    }
+    private val _checkResult = MutableStateFlow<AudioCheckResult?>(null)
+    val checkResult: StateFlow<AudioCheckResult?> = _checkResult.asStateFlow()
 
-    fun setPreamp(db: Float) {
-        repository.setPreamp(db)
-    }
+    private val _checking = MutableStateFlow(false)
+    val checking: StateFlow<Boolean> = _checking.asStateFlow()
 
-    fun setBandGain(bandId: Int, gainDb: Float) {
-        repository.setBandGain(bandId, gainDb)
-    }
+    fun toggleMotor(enabled: Boolean) = repository.toggleMotor(enabled)
+    fun setEffectsEnabled(enabled: Boolean) = repository.setEffectsEnabled(enabled)
+    fun setPreamp(db: Float) = repository.setPreamp(db)
+    fun setBandGain(bandId: Int, gainDb: Float) = repository.setBandGain(bandId, gainDb)
+    fun setTone(bassDb: Float, trebleDb: Float) = repository.setTone(bassDb, trebleDb)
+    fun setBalance(balance: Float) = repository.setBalance(balance)
+    fun setExpansion(expansion: Float) = repository.setExpansion(expansion)
+    fun setVolume(percent: Float) = repository.setVolume(percent)
+    fun setReverb(params: ReverbParams) = repository.setReverb(params)
+    fun setCompressor(params: CompressorParams) = repository.setCompressor(params)
+    fun resetAll() = repository.resetAll()
+    fun resetControls() = repository.resetControls()
 
-    fun setTone(bassDb: Float, trebleDb: Float) {
-        repository.setTone(bassDb, trebleDb)
-    }
+    fun setNumBands(count: Int) = repository.setNumBands(count)
+    fun setHapticFeedback(enabled: Boolean) = repository.setHapticFeedback(enabled)
+    fun setPalette(key: String, color: Int) = repository.setThemePalette(key, color)
 
-    fun setBalance(balance: Float) {
-        repository.setBalance(balance)
-    }
+    fun setProfilesByOutput(enabled: Boolean) =
+        repository.saveSettings(repository.getSettings().copy(profilesByOutput = enabled))
 
-    fun setExpansion(expansion: Float) {
-        repository.setExpansion(expansion)
-    }
-
-    fun setVolume(percent: Float) {
-        repository.setVolume(percent)
-    }
-
-    fun setMono(mono: Boolean) {
-        repository.setMono(mono)
-    }
-
-    fun setReverb(params: ReverbParams) {
-        repository.setReverb(params)
-    }
-
-    fun setCompressor(params: CompressorParams) {
-        repository.setCompressor(params)
-    }
-
-    fun resetAll() {
-        repository.resetAll()
-    }
-
-    fun resetControls() {
-        repository.resetControls()
-    }
+    fun setAutoStart(enabled: Boolean) = repository.setAutoStart(enabled)
 
     fun savePreset(name: String) {
-        repository.savePreset(name)
+        val clean = name.trim().ifEmpty { "Preajuste" }
+        repository.savePreset(clean)
+        _presets.value = repository.listPresets()
     }
 
-    fun loadPreset(name: String) {
-        repository.loadPreset(name)
-    }
+    fun applyPreset(name: String) = repository.applyPreset(name)
 
     fun deletePreset(name: String) {
         repository.deletePreset(name)
+        _presets.value = repository.listPresets()
     }
 
-    fun listPresets(): List<String> = repository.listPresets()
-
-    fun setThemePalette(paletteKey: String, accentColor: Int) {
+    fun runAudioCheck() {
+        if (_checking.value) return
         viewModelScope.launch {
-            repository.setThemePalette(paletteKey, accentColor)
+            _checking.value = true
+            _checkResult.value = repository.runAudioCheck()
+            _checking.value = false
         }
     }
 
-    fun setNumBands(count: Int) {
-        repository.setNumBands(count)
-    }
-
-    fun setAutoStart(enabled: Boolean) {
-        repository.setAutoStart(enabled)
-    }
-
-    fun setHapticFeedback(enabled: Boolean) {
-        repository.setHapticFeedback(enabled)
-    }
-
-    fun getSettings(): AppSettings = repository.getSettings()
-    fun getState(): EqualizerState = repository.getState()
-    fun saveSettings(settings: AppSettings) {
-        repository.saveSettings(settings)
+    fun dismissCheck() {
+        _checkResult.value = null
     }
 }

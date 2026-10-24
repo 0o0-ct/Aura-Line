@@ -1,85 +1,133 @@
 package com.auraline.app.audio
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.auraline.app.R
 import com.auraline.app.ui.MainActivity
 
+/**
+ * Mantiene vivo el proceso mientras el motor está encendido y ofrece el control desde la
+ * notificación. No reproduce audio: usa el tipo mediaPlayback porque el servicio existe
+ * para procesar la salida del dispositivo.
+ */
 class AudioForegroundService : Service() {
-
-    private lateinit var notificationManager: NotificationManagerCompat
-    private var currentChannelId = "auraline_audio_channel"
 
     override fun onCreate() {
         super.onCreate()
-        notificationManager = NotificationManagerCompat.from(this)
-        createNotificationChannel()
+        ensureChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(1, buildNotification())
-        return START_STICKY
+        return when (intent?.action) {
+            ACTION_STOP -> {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                START_NOT_STICKY
+            }
+            else -> {
+                startInForeground()
+                START_STICKY
+            }
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onDestroy() {
-        super.onDestroy()
+    private fun startInForeground() {
+        val notification = buildNotification()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (_: Throwable) {
+            // Si el sistema no permite el primer plano, el motor sigue activo en segundo plano.
+            stopSelf()
+        }
     }
 
-    private fun createNotificationChannel() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            val channel = android.app.NotificationChannel(
-                currentChannelId,
-                "AuraLine Audio",
-                android.app.NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Control del motor de audio de AuraLine"
-                enableLights(true)
-                lightColor = 0x00E5CC.toInt()
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
-            }
-            notificationManager.createNotificationChannel(channel)
+    private fun ensureChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            getString(R.string.notification_channel_name),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = getString(R.string.notification_channel_description)
+            setShowBadge(false)
         }
+        manager.createNotificationChannel(channel)
     }
 
     private fun buildNotification(): Notification {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val openApp = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val toggleIntent = Intent(this, AudioToggleReceiver::class.java)
-        val togglePending = PendingIntent.getBroadcast(
-            this, 1, toggleIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        val stopMotor = PendingIntent.getBroadcast(
+            this,
+            1,
+            Intent(this, MotorToggleReceiver::class.java).setAction(MotorToggleReceiver.ACTION_STOP_MOTOR),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, currentChannelId)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("AuraLine")
-            .setContentText("Motor de audio activo")
-            .setContentIntent(pendingIntent)
-            .addAction(
-                NotificationCompat.Action.Builder(
-                    android.R.drawable.ic_media_pause,
-                    "Apagar",
-                    togglePending
-                ).build()
-            )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_auraline)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.notification_active))
+            .setContentIntent(openApp)
             .setOngoing(true)
+            .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .addAction(
+                R.drawable.ic_stat_auraline,
+                getString(R.string.notification_stop),
+                stopMotor
+            )
             .build()
     }
 
     companion object {
-        const val ACTION_TOGGLE_AUDIO = "com.auraline.app.action.TOGGLE_AUDIO"
+        private const val CHANNEL_ID = "auraline_engine"
+        private const val NOTIFICATION_ID = 1001
+        const val ACTION_STOP = "com.auraline.app.action.STOP_SERVICE"
+
+        fun start(context: Context) {
+            val intent = Intent(context, AudioForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun stop(context: Context) {
+            context.stopService(Intent(context, AudioForegroundService::class.java))
+        }
+
+        fun notificationsEnabled(context: Context): Boolean =
+            NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 }

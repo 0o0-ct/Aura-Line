@@ -1,22 +1,7 @@
 <resources>
-    <!-- Colores base del sistema (sobrescritos por tema/paleta) -->
-    <color name="surface_base">#1E2229</color>
-    <color name="surface_elevated">#252A33</color>
-    <color name="shadow_light">#2F3641</color>
-    <color name="shadow_dark">#14171C</color>
+    <color name="surface_base">#080B10</color>
+    <color name="surface_elevated">#171E27</color>
     <color name="accent_active">#00E5CC</color>
-    <color name="text_primary">#F2F4F8</color>
-    <color name="text_secondary">#9AA3B2</color>
-    <color name="level_green">#2EE86B</color>
-    <color name="level_yellow">#FFE600</color>
-    <color name="level_orange">#FF9F0A</color>
-    <color name="level_red">#FF453A</color>
-
-    <!-- Paletas de color (se aplican desde Ajustes) -->
-    <color name="palette_aura">#00E5CC</color>
-    <color name="palette_sunset">#FF7E5F</color>
-    <color name="palette_forest">#6ABD45</color>
-    <color name="palette_midnight">#7B2CBF</color>
-    <color name="palette_coral">#FF6B6B</color>
-    <color name="palette_ocean">#4D96FF</color>
+    <color name="text_primary">#EAF1F8</color>
+    <color name="text_secondary">#8CA0B4</color>
 </resources>

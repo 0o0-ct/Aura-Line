@@ -1,146 +1,75 @@
 package com.auraline.app.ui
 
+import android.Manifest
+import android.content.ComponentName
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import android.content.Intent
-import androidx.compose.ui.platform.LocalContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.animation.Crossfade
-import androidx.compose.ui.graphics.Brush
-import com.auraline.core.ui.components.glass
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.core.content.ContextCompat
+import com.auraline.app.audio.AudioForegroundService
+import com.auraline.app.audio.BootReceiver
 import com.auraline.app.di.AuraLineModule
 import com.auraline.app.domain.AuraLineViewModel
-import com.auraline.core.domain.AudioRepository
-import com.auraline.core.domain.EqualizerState
-import com.auraline.core.ui.components.NeumorphicTabBar
-import com.auraline.core.ui.theme.BackgroundDark
-import com.auraline.core.ui.theme.CyanNeon
-import com.auraline.core.ui.theme.DarkShadowDark
-import com.auraline.core.ui.theme.NeumorphicTheme
-import com.auraline.core.ui.theme.TextPrimary
-import com.auraline.core.ui.theme.TextSecondary
+import com.auraline.core.ui.theme.AuraLineTheme
+import com.auraline.core.ui.theme.paletteFor
 
 class MainActivity : ComponentActivity() {
 
-    private val repository: AudioRepository by lazy {
-        AuraLineModule.provideRepository(this)
-    }
     private val viewModel: AuraLineViewModel by lazy {
-        AuraLineViewModel(repository)
+        AuraLineViewModel(AuraLineModule.repository(applicationContext))
     }
+
+    private val permissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
         setContent {
-            NeumorphicTheme {
-                AuraLineMainApp(viewModel = viewModel)
-            }
-        }
-    }
-}
+            val settings by viewModel.settings.collectAsState()
+            val accent = paletteFor(settings.theme.paletteKey).accent
 
-@Composable
-fun AuraLineMainApp(viewModel: AuraLineViewModel) {
-    val state: EqualizerState by viewModel.state.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) } // 0=EQ, 1=Controls, 2=Effects, 3=Settings
-    val context = LocalContext.current
-    LaunchedEffect(state.motorEnabled) {
-        val intent = Intent(context, com.auraline.app.audio.AudioForegroundService::class.java)
-        if (state.motorEnabled) {
-            context.startForegroundService(intent)
-        } else {
-            context.stopService(intent)
-        }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(BackgroundDark, DarkShadowDark)))
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) {
-        // --- TOP APP HEADER ---
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .glass(cornerRadius = 16.dp, alpha = 0.08f),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "AuraLine",
-                    color = TextPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (state.motorEnabled) "Motor: ACTIVO" else "Motor: APAGADO",
-                    color = if (state.motorEnabled) CyanNeon else TextSecondary,
-                    fontSize = 11.sp
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Settings Icon Button
-                Text(
-                    text = "⚙️",
-                    fontSize = 20.sp,
-                    modifier = Modifier
-                        .clickable { selectedTab = 3 }
-                        .padding(8.dp)
-                )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                // Master Motor Switch
-                Switch(
-                    checked = state.motorEnabled,
-                    onCheckedChange = { viewModel.toggleMotor(it) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = CyanNeon,
-                        checkedTrackColor = DarkShadowDark
-                    )
-                )
-            }
-        }
-
-        // --- TOP NEUMORPHIC TAB BAR (EQ / CONTROLES / EFECTOS) ---
-        if (selectedTab != 3) {
-            NeumorphicTabBar(
-                selectedTab = selectedTab,
-                onTabSelected = { selectedTab = it }
-            )
-        }
-
-        // --- SCREEN CONTENT VIEW ---
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .weight(1f)
-        ) {
-            Crossfade(targetState = selectedTab, label = "tab") { tab ->
-                when (tab) {
-                    0 -> EqualizerScreen(viewModel = viewModel)
-                    1 -> ControlsScreen(viewModel = viewModel)
-                    2 -> EffectsScreen(viewModel = viewModel)
-                    3 -> SettingsScreen(viewModel = viewModel)
+            AuraLineTheme(accentColor = accent, darkTheme = true) {
+                LaunchedEffect(Unit) {
+                    requestNotificationPermission()
                 }
+                LaunchedEffect(settings.autoStart) {
+                    syncBootReceiver(settings.autoStart)
+                }
+                AuraLineApp(viewModel = viewModel)
             }
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            permissionLauncher.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS))
+        }
+    }
+
+    /** El receiver de arranque sólo existe cuando el usuario activa el inicio automático. */
+    private fun syncBootReceiver(enabled: Boolean) {
+        val component = ComponentName(this, BootReceiver::class.java)
+        val state = if (enabled) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        runCatching {
+            packageManager.setComponentEnabledSetting(component, state, PackageManager.DONT_KILL_APP)
         }
     }
 }
