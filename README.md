@@ -6,12 +6,12 @@ está actuando sobre la señal, no solo que se haya podido instanciar.
 
 | | |
 |---|---|
-| Versión | 2.0.0 (versionCode 2) |
+| Versión | 2.1.0 (versionCode 3) |
 | minSdk / targetSdk | 28 / 35 |
 | Lenguaje | Kotlin 2.0.20 · Jetpack Compose (Material 3) |
 | APK release | ~3,4 MB con R8 habilitado |
 
-Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.0.0.apk`](dist/AuraLine-2.0.0.apk).
+Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.1.0.apk`](dist/AuraLine-2.1.0.apk).
 
 ## Módulos
 
@@ -42,19 +42,41 @@ por sesión: el motor crea un `Equalizer` independiente y lo refleja en el estad
 Todo el trabajo con efectos ocurre en un hilo dedicado y los cambios en ráfaga se agrupan,
 porque cada llamada es una IPC síncrona con el servidor de audio.
 
+
+## Rejilla de bandas (por qué 25 bandas de verdad)
+
+`DynamicsProcessing` no filtra de forma continua: reparte la señal en bins de FFT
+(`binStop = round(cutoff * blockSize / sampleRate)`, ≈47 Hz con bloque de 1024 a 48 kHz) y
+**descarta en silencio toda banda cuyo rango quede vacío**. Con una rejilla logarítmica de 20 Hz
+a 20 kHz, 11 bandas compartían bin y 4 no hacían absolutamente nada.
+
+La rejilla actual es lineal hasta 1 kHz (pasos de 100 Hz, dos bins por banda) y logarítmica por
+encima. Resultado verificado en el dispositivo: **0 bandas muertas y un mínimo de 2 bins por
+banda** para 20 y para 25 bandas. La UI etiqueta cada fader con el **centro** de su banda, no con
+el corte.
+
+Cambiar el número de bandas reconstruye la cadena: el recuento de bandas de un
+`DynamicsProcessing` no se puede modificar en caliente.
+
 ## Verificación (prueba objetiva)
 
 Ajustes → **Comprobar el motor** reproduce un tono de 1 kHz, lo captura con el micrófono
 (`AudioRecord`) y compara el nivel con el motor apagado y con una atenuación de −20 dB en la
 banda cercana a 1 kHz. Mide con Goertzel y muestra la diferencia en dB.
 
-Resultado en un Samsung SM-G998U1 / Android 15 (sin root):
+Y **Comprobar selectividad** emite dos tonos a la vez (447 Hz y 1647 Hz), sube sólo la banda de
+1647 Hz y compara el cociente entre ambas frecuencias, lo que cancela el AGC del micrófono.
+
+Resultados en un Samsung SM-G998U1 / Android 15 (sin root, salida por altavoz):
 
 ```
-Referencia  -43,1 dBFS
-Procesado   -59,5 dBFS
-Δ           -16,5 dB   → VERIFICADO
+Atenuación:  referencia -43,1 dBFS · procesado -59,5 dBFS · Δ -16,5 dB   → VERIFICADO
+Selectividad: 447 Hz -48,9 → -49,3 dBFS (−0,4 dB)
+              1647 Hz -32,5 → -21,4 dBFS (+11,1 dB)                    → +11,5 dB VERIFICADO
 ```
+
+La comprobación exige que la salida sea el altavoz: con Bluetooth o auriculares el micrófono no
+captura el tono y la app lo avisa en lugar de dar un resultado falso.
 
 ## Integración con el dispositivo
 

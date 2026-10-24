@@ -421,20 +421,21 @@ fun ResponseCurve(
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
             )
 
-            val points = bands.map { band ->
-                val frequency = band.frequencyHz.coerceIn(minF, maxF)
-                val x = ((log10(frequency / minF)) / spanLog) * size.width
-                val normalized = (band.gainDb / gainRangeDb).coerceIn(-1f, 1f)
-                Offset(x, centerY - normalized * (size.height / 2.1f))
+            // La respuesta de DynamicsProcessing es constante por banda (bins contiguos),
+            // así que la curva honesta es escalonada, no suavizada.
+            val edge = { index: Int ->
+                val cutoff = bands[index].frequencyHz.coerceIn(minF, maxF)
+                ((log10(cutoff / minF)) / spanLog) * size.width
+            }
+            val level = { index: Int ->
+                centerY - (bands[index].gainDb / gainRangeDb).coerceIn(-1f, 1f) * (size.height / 2.1f)
             }
 
             val path = Path().apply {
-                moveTo(points.first().x, points.first().y)
-                for (index in 0 until points.size - 1) {
-                    val from = points[index]
-                    val to = points[index + 1]
-                    val midX = (from.x + to.x) / 2f
-                    cubicTo(midX, from.y, midX, to.y, to.x, to.y)
+                moveTo(0f, level(0))
+                for (index in bands.indices) {
+                    lineTo(edge(index), level(index))
+                    if (index < bands.lastIndex) lineTo(edge(index), level(index + 1))
                 }
             }
 
@@ -452,8 +453,12 @@ fun ResponseCurve(
             )
             drawPath(path = path, color = colors.accent, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
 
-            points.forEach { point ->
-                drawCircle(color = colors.accent, radius = 2.dp.toPx(), center = point)
+            bands.indices.forEach { index ->
+                drawCircle(
+                    color = colors.accent,
+                    radius = 1.6.dp.toPx(),
+                    center = Offset(edge(index), level(index))
+                )
             }
         }
     }

@@ -175,6 +175,27 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 Text(if (checking) "Midiendo…" else "Comprobar el motor")
             }
 
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    permissionDenied = false
+                    val granted = ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.RECORD_AUDIO
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (granted) viewModel.runSelectivityCheck() else {
+                        audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                enabled = !checking,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = "Probar selectividad de las bandas",
+                    color = colors.accent,
+                    fontSize = 12.sp
+                )
+            }
+
             if (permissionDenied) {
                 Text(
                     text = "Sin permiso de micrófono no se puede medir. Puedes activarlo en los ajustes del sistema.",

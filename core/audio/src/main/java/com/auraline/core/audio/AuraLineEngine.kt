@@ -57,6 +57,7 @@ object AuraLineEngine {
     private val sessionEq = LinkedHashMap<Int, Equalizer>()
 
     private var lastError: String? = null
+    private var builtBandCount = 0
     private val scheduled = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun initialize(context: Context) {
@@ -133,10 +134,20 @@ object AuraLineEngine {
     // --- cadena global -----------------------------------------------------
 
     private fun applyEngine(state: EqualizerState) {
+        val bandCount = state.numBands.coerceIn(20, 25)
+        // El número de bandas de un DynamicsProcessing no se puede cambiar en caliente:
+        // si el usuario ajusta las bandas hay que reconstruir la cadena.
+        if (processing != null && builtBandCount != bandCount) {
+            Log.i(TAG, "Bandas $builtBandCount → $bandCount: reconstruyendo la cadena")
+            runCatching { processing?.enabled = false; processing?.release() }
+            processing = null
+        }
+
         if (processing == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             processing = runCatching { createDynamicsProcessing(state) }
                 .onFailure { lastError = "DynamicsProcessing: ${it.message}" }
                 .getOrNull()
+            if (processing != null) builtBandCount = bandCount
         }
 
         val dp = processing
@@ -197,7 +208,7 @@ object AuraLineEngine {
 
         return DynamicsProcessing(GLOBAL_SESSION, GLOBAL_SESSION, config.build()).apply {
             enabled = true
-            Log.i(TAG, "Cadena global lista: $bandCount bandas + MBC + limitador")
+            Log.i(TAG, "Cadena global lista: $bandCount bandas + MBC + limitador (cortes ${frequencies.first().toInt()}–${frequencies.last().toInt()} Hz)")
         }
     }
 
@@ -327,6 +338,7 @@ object AuraLineEngine {
     private fun releaseChain() {
         runCatching { processing?.enabled = false; processing?.release() }
         processing = null
+        builtBandCount = 0
         runCatching { fallbackEq?.enabled = false; fallbackEq?.release() }
         fallbackEq = null
         runCatching { reverb?.enabled = false; reverb?.release() }

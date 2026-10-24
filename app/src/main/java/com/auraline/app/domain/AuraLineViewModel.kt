@@ -73,6 +73,15 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
         }
     }
 
+    fun runSelectivityCheck() {
+        if (_checking.value) return
+        viewModelScope.launch {
+            _checking.value = true
+            _checkResult.value = repository.runSelectivityCheck()
+            _checking.value = false
+        }
+    }
+
     fun dismissCheck() {
         _checkResult.value = null
     }

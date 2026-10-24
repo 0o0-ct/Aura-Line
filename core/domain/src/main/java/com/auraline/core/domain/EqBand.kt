@@ -92,12 +92,38 @@ data class AppSettings(
     val theme: AppTheme = AppTheme()
 )
 
+/**
+ * Rejilla de cortes para un ecualizador gráfico realizable.
+ *
+ * `DynamicsProcessing` reparte el espectro en bins de FFT (~47 Hz con bloque de 1024 a 48 kHz)
+ * y descarta en silencio toda banda cuyo rango quede vacío. Por eso la rejilla es lineal hasta
+ * 1 kHz (pasos de 100 Hz, dos bins) y logarítmica por encima: así ninguna banda queda muerta.
+ */
 fun generateEqualizerBands(count: Int, gainRangeDb: Float = 12f): List<EqBand> {
-    val fStart = 20f
-    val fEnd = 20000f
-    val n = count.coerceAtLeast(2)
-    return List(n) { i ->
-        val freq = fStart * Math.pow((fEnd / fStart).toDouble(), (i.toDouble() / (n - 1))).toFloat()
-        EqBand(id = i, frequencyHz = freq, gainDb = 0f)
+    val bands = count.coerceIn(20, 25)
+    val lowBands = Math.round(bands * 0.40f).coerceIn(6, 12)
+    val crossover = 1000f
+
+    val cutoffs = ArrayList<Float>(bands)
+    for (index in 1..lowBands) {
+        cutoffs.add(crossover * index / lowBands)
     }
+    val highBands = bands - lowBands
+    if (highBands > 0) {
+        val ratio = Math.pow((20000.0 / crossover), 1.0 / highBands)
+        for (index in 1..highBands) {
+            cutoffs.add((crossover * Math.pow(ratio, index.toDouble())).toFloat())
+        }
+    }
+
+    return cutoffs.mapIndexed { index, cutoff ->
+        EqBand(id = index, frequencyHz = cutoff.coerceIn(20f, 20000f), gainDb = 0f)
+    }
+}
+
+/** Centro audible de la banda, el valor que tiene sentido mostrar al usuario. */
+fun bandCenterHz(bands: List<EqBand>, index: Int): Float {
+    val cutoff = bands.getOrNull(index)?.frequencyHz ?: return 0f
+    val previous = if (index == 0) 0f else bands.getOrNull(index - 1)?.frequencyHz ?: 0f
+    return if (previous <= 0f) cutoff / 2f else kotlin.math.sqrt(previous * cutoff)
 }

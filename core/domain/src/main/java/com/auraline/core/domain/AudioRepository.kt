@@ -40,4 +40,7 @@ interface AudioRepository {
 
     /** Comprueba con el micrófono que el motor altera de verdad la señal de salida. */
     suspend fun runAudioCheck(): AudioCheckResult
+
+    /** Comprueba que una sola banda se mueve y que las lejanas no: selectividad real. */
+    suspend fun runSelectivityCheck(): AudioCheckResult
 }

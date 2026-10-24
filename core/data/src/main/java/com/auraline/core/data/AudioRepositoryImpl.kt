@@ -3,10 +3,11 @@ package com.auraline.core.data
 import android.content.Context
 import android.content.SharedPreferences
 import android.media.AudioManager
+import android.util.Log
 import com.auraline.core.audio.AuraLineEngine
 import com.auraline.core.domain.AudioCheckResult
-import com.auraline.core.domain.AudioRepository
 import com.auraline.core.domain.AudioRoute
+import com.auraline.core.domain.AudioRepository
 import com.auraline.core.domain.AppSettings
 import com.auraline.core.domain.AppTheme
 import com.auraline.core.domain.CompressorParams
@@ -16,6 +17,7 @@ import com.auraline.core.domain.ReverbParams
 import com.auraline.core.domain.StereoControls
 import com.auraline.core.domain.ToneControls
 import com.auraline.core.domain.VolumeControls
+import com.auraline.core.domain.bandCenterHz
 import com.auraline.core.domain.generateEqualizerBands
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -426,10 +428,96 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     // --- comprobación acústica --------------------------------------------
 
-    override suspend fun runAudioCheck(): AudioCheckResult {
+
+    override suspend fun runSelectivityCheck(): AudioCheckResult {
+        val route = AuraLineEngine.status.value.route
+        if (route != AudioRoute.SPEAKER) {
+            return AudioCheckResult(
+                message = "Cambia la salida al altavoz para medir (ahora: ${route.label})."
+            )
+        }
+
         val original = _state.value
         val bands = original.bands.ifEmpty { generateEqualizerBands(original.numBands) }
-        val target = bands.indices.minByOrNull { abs(bands[it].frequencyHz - AudioCheckRunner.TONE_HZ.toFloat()) } ?: 0
+        // Frecuencias donde el altavoz y el micrófono del móvil rinden bien.
+        val target = bands.indices.minByOrNull { abs(bandCenterHz(bands, it) - 1600f) } ?: bands.lastIndex
+        val lowIndex = bands.indices.minByOrNull { abs(bandCenterHz(bands, it) - 400f) } ?: 0
+        val highTone = bandCenterHz(bands, target).toDouble().coerceIn(1200.0, 3000.0)
+        val lowTone = bandCenterHz(bands, lowIndex).toDouble().coerceIn(300.0, 700.0)
+
+        val testBands = bands.mapIndexed { index, band ->
+            band.copy(gainDb = if (index == target) 18f else 0f)
+        }
+        val testState = original.copy(
+            motorEnabled = true,
+            effectsEnabled = false,
+            preampDb = 0f,
+            tone = ToneControls(),
+            stereo = StereoControls(),
+            bands = testBands
+        )
+
+        return try {
+            applyRuntime(original.copy(motorEnabled = false))
+            AuraLineEngine.flush()
+            val (lowReference, highReference) = runner.measureTwo(lowTone, highTone, PROBE_DURATION)
+
+            applyRuntime(testState)
+            AuraLineEngine.flush()
+            val (lowBoosted, highBoosted) = runner.measureTwo(lowTone, highTone, PROBE_DURATION)
+
+            // Cociente entre las dos frecuencias dentro de la MISMA grabación: el AGC del
+            // micrófono afecta igual a ambas y desaparece al restar.
+            val referenceRatio = highReference - lowReference
+            val boostedRatio = highBoosted - lowBoosted
+            val selectivity = boostedRatio - referenceRatio
+
+            Log.i(
+                "AuraLine",
+                "Sonda " + "${lowTone.toInt()}/${highTone.toInt()} Hz: " +
+                    "ref ${"%.1f".format(lowReference)}/${"%.1f".format(highReference)} dBFS, " +
+                    "test ${"%.1f".format(lowBoosted)}/${"%.1f".format(highBoosted)} dBFS, " +
+                    "selectividad ${"%.1f".format(selectivity)} dB (banda $target a +18 dB)"
+            )
+
+            val passed = selectivity >= 8f
+            AudioCheckResult(
+                referenceDb = highReference,
+                processedDb = highBoosted,
+                deltaDb = selectivity,
+                passed = passed,
+                message = if (passed) {
+                    "La banda de ${highTone.toInt()} Hz sube ${"%.1f".format(selectivity)} dB respecto a la de ${lowTone.toInt()} Hz: cada banda mueve su rango."
+                } else {
+                    "${highTone.toInt()} Hz frente a ${lowTone.toInt()} Hz: ${"%+.1f".format(selectivity)} dB. Sube el volumen multimedia y repite."
+                }
+            )
+        } catch (error: Throwable) {
+            Log.w("AuraLine", "Medición fallida", error)
+            AudioCheckResult(message = "No se pudo medir: ${error.message}")
+        } finally {
+            applyRuntime(original)
+            AuraLineEngine.flush()
+        }
+    }
+
+    private companion object {
+        const val PROBE_DURATION = 2.2
+    }
+
+    override suspend fun runAudioCheck(): AudioCheckResult {
+        val route = AuraLineEngine.status.value.route
+        if (route != AudioRoute.SPEAKER) {
+            return AudioCheckResult(
+                message = "Cambia la salida al altavoz para medir (ahora: ${route.label})."
+            )
+        }
+
+        val original = _state.value
+        val bands = original.bands.ifEmpty { generateEqualizerBands(original.numBands) }
+        val target = bands.indices.minByOrNull {
+            abs(bandCenterHz(bands, it) - AudioCheckRunner.TONE_HZ.toFloat())
+        } ?: 0
         val testBands = bands.mapIndexed { index, band ->
             band.copy(gainDb = if (index == target) -20f else 0f)
         }
@@ -465,6 +553,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
                 }
             )
         } catch (error: Throwable) {
+            Log.w("AuraLine", "Medición fallida", error)
             AudioCheckResult(message = "No se pudo medir: ${error.message}")
         } finally {
             applyRuntime(original)

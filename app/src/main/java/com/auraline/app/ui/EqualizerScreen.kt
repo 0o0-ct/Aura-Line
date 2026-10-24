@@ -37,7 +37,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.EngineStatus
+import com.auraline.core.domain.bandCenterHz
 import com.auraline.core.domain.generateEqualizerBands
+import com.auraline.core.domain.EqBand
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.BandFader
 import com.auraline.core.ui.components.ResponseCurve
@@ -131,13 +133,13 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                bands.forEach { band ->
+                bands.forEachIndexed { index, band ->
                     BandFader(
                         value = band.gainDb,
                         onValueChange = { viewModel.setBandGain(band.id, it) },
                         valueRange = -range..range,
                         height = 170.dp,
-                        label = formatFrequency(band.frequencyHz),
+                        label = formatFrequency(bandCenterHz(bands, index)),
                         valueText = formatGain(band.gainDb),
                         highlighted = band.gainDb != 0f
                     )
