@@ -1,6 +1,8 @@
 package com.auraline.app.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,32 +13,37 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
-import com.auraline.core.ui.components.PixelCard
-import com.auraline.core.ui.components.PixelSectionTitle
-import com.auraline.core.ui.components.PixelSliderRow
-import com.auraline.core.ui.theme.LocalMonoPalette
+import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraSliderRow
+import com.auraline.core.ui.components.SectionTitle
+import com.auraline.core.ui.components.SelectableChip
+import com.auraline.core.ui.components.controlAccent
+import com.auraline.core.ui.theme.AuraTheme
 import java.util.Locale
 import kotlin.math.log10
 
 @Composable
 fun ToneScreen(viewModel: AuraLineViewModel) {
-    val palette = LocalMonoPalette.current
+    val colors = AuraTheme.colors
     val state by viewModel.state.collectAsState()
     val tone = state.tone
     val powered = state.motorEnabled
@@ -49,22 +56,21 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             .padding(bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        PixelCard {
-            PixelSectionTitle(
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(
                 text = "Tono",
                 trailing = "graves ${tone.bassFrequencyHz.toInt()} · agudos ${kilo(tone.trebleFrequencyHz)}"
             )
-            Spacer(Modifier.height(8.dp))
-            ToneCurvePreview(
-                subDb = tone.subDb,
+            Spacer(modifier = Modifier.height(10.dp))
+            ToneCurve(
                 bassDb = tone.bassDb,
                 midDb = tone.midDb,
                 trebleDb = tone.trebleDb,
                 bassHz = tone.bassFrequencyHz,
                 trebleHz = tone.trebleFrequencyHz
             )
-            Spacer(Modifier.height(8.dp))
-            PixelSliderRow(
+            Spacer(modifier = Modifier.height(10.dp))
+            AuraSliderRow(
                 label = "Sub-bajo · 0–100 Hz",
                 valueText = db(tone.subDb),
                 value = tone.subDb,
@@ -74,10 +80,10 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             )
             Text(
                 text = "El altavoz del teléfono no reproduce por debajo de ~150 Hz: el sub-bajo se nota con auriculares o un equipo externo.",
-                color = palette.secondary,
+                color = colors.textSecondary,
                 fontSize = 11.sp
             )
-            PixelSliderRow(
+            AuraSliderRow(
                 label = "Graves",
                 valueText = db(tone.bassDb),
                 value = tone.bassDb,
@@ -85,7 +91,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setTone(it, tone.midDb, tone.trebleDb) },
                 enabled = powered
             )
-            PixelSliderRow(
+            AuraSliderRow(
                 label = "Medios",
                 valueText = db(tone.midDb),
                 value = tone.midDb,
@@ -93,7 +99,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) },
                 enabled = powered
             )
-            PixelSliderRow(
+            AuraSliderRow(
                 label = "Agudos",
                 valueText = db(tone.trebleDb),
                 value = tone.trebleDb,
@@ -101,12 +107,18 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) },
                 enabled = powered
             )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Graves hasta ${tone.bassFrequencyHz.toInt()} Hz · medios hasta ${kilo(tone.trebleFrequencyHz)}",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
         }
 
-        PixelCard {
-            PixelSectionTitle(text = "Frecuencias de cruce")
-            Spacer(Modifier.height(4.dp))
-            PixelSliderRow(
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Frecuencias de cruce")
+            Spacer(modifier = Modifier.height(6.dp))
+            AuraSliderRow(
                 label = "Graves / medios",
                 valueText = "${tone.bassFrequencyHz.toInt()} Hz",
                 value = tone.bassFrequencyHz,
@@ -114,7 +126,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setToneFrequencies(it, tone.trebleFrequencyHz) },
                 enabled = powered
             )
-            PixelSliderRow(
+            AuraSliderRow(
                 label = "Medios / agudos",
                 valueText = kilo(tone.trebleFrequencyHz),
                 value = tone.trebleFrequencyHz,
@@ -122,16 +134,18 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setToneFrequencies(tone.bassFrequencyHz, it) },
                 enabled = powered
             )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Cuerpo de voces y caja en 200–400 Hz · presencia en 2,5–5 kHz · aire por encima de 10 kHz",
-                color = palette.secondary,
+                color = colors.textSecondary,
                 fontSize = 11.sp
             )
         }
 
-        PixelCard {
-            PixelSectionTitle(text = "Imagen estéreo")
-            PixelSliderRow(
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Imagen estéreo y volumen")
+            Spacer(modifier = Modifier.height(6.dp))
+            AuraSliderRow(
                 label = "Balance",
                 valueText = when {
                     state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
@@ -143,7 +157,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setBalance(it) },
                 enabled = powered
             )
-            PixelSliderRow(
+            AuraSliderRow(
                 label = "Anchura estéreo",
                 valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
                 value = state.stereo.expansion,
@@ -151,21 +165,12 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onValueChange = { viewModel.setExpansion(it) },
                 enabled = powered
             )
-        }
-
-        PixelCard {
-            PixelSectionTitle(text = "Volumen", trailing = "${state.volume.percent.toInt()}%")
-            PixelSliderRow(
+            AuraSliderRow(
                 label = "Volumen multimedia",
                 valueText = "${state.volume.percent.toInt()}%",
                 value = state.volume.percent,
                 valueRange = 0f..100f,
                 onValueChange = { viewModel.setVolume(it) }
-            )
-            Text(
-                text = "Sigue al volumen del sistema: si lo cambias con los botones, la barra se actualiza.",
-                color = palette.secondary,
-                fontSize = 11.sp
             )
         }
 
@@ -174,27 +179,45 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { viewModel.resetControls() }) {
-                Text("Restablecer controles", color = palette.secondary)
-            }
+            SelectableChip(
+                text = "Restablecer controles",
+                selected = false,
+                onClick = { viewModel.resetControls() }
+            )
         }
     }
 }
 
+/** Vista previa tipo osciloscopio de cristal de las tres regiones del control de tono. */
 @Composable
-private fun ToneCurvePreview(
-    subDb: Float,
+private fun ToneCurve(
     bassDb: Float,
     midDb: Float,
     trebleDb: Float,
     bassHz: Float,
     trebleHz: Float
 ) {
-    val palette = LocalMonoPalette.current
+    val accent = controlAccent()
+    val shape = RoundedCornerShape(16.dp)
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(84.dp)
+            .height(90.dp)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color(0xFF090D14), Color(0xFF0F1420))
+                )
+            )
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(Color(0x33FFFFFF), Color(0x0AFFFFFF))
+                ),
+                shape
+            )
+            .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val minF = 20f
@@ -204,35 +227,65 @@ private fun ToneCurvePreview(
                 ((log10(frequency.coerceIn(minF, maxF) / minF)) / span) * size.width
 
             val centerY = size.height / 2f
-            val scale = size.height / 2.4f
+            val scale = size.height / 2.3f
             fun yOf(db: Float) = centerY - (db / 12f).coerceIn(-1f, 1f) * scale
 
+            // Línea central punteada de 0 dB
             drawLine(
-                color = palette.secondary.copy(alpha = 0.5f),
+                color = Color(0x28FFFFFF),
                 start = Offset(0f, centerY),
                 end = Offset(size.width, centerY),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
+            )
+
+            // Líneas divisorias de frecuencias de cruce
+            val xBass = xOf(bassHz)
+            val xTreble = xOf(trebleHz)
+            drawLine(
+                color = Color(0x18FFFFFF),
+                start = Offset(xBass, 0f),
+                end = Offset(xBass, size.height),
+                strokeWidth = 1.dp.toPx()
+            )
+            drawLine(
+                color = Color(0x18FFFFFF),
+                start = Offset(xTreble, 0f),
+                end = Offset(xTreble, size.height),
                 strokeWidth = 1.dp.toPx()
             )
 
             val path = Path().apply {
-                moveTo(0f, yOf(subDb + bassDb))
-                lineTo(xOf(bassHz), yOf(subDb + bassDb))
-                lineTo(xOf(bassHz), yOf(midDb))
-                lineTo(xOf(trebleHz), yOf(midDb))
-                lineTo(xOf(trebleHz), yOf(trebleDb))
+                moveTo(0f, yOf(bassDb))
+                lineTo(xBass, yOf(bassDb))
+                lineTo(xBass, yOf(midDb))
+                lineTo(xTreble, yOf(midDb))
+                lineTo(xTreble, yOf(trebleDb))
                 lineTo(size.width, yOf(trebleDb))
             }
+
+            // Resplandor neón exterior
             drawPath(
                 path = path,
-                color = palette.primary,
+                color = accent.copy(alpha = 0.3f),
+                style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // Trazo nítido de tono
+            drawPath(
+                path = path,
+                color = accent,
                 style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
             )
+
+            // Puntos nodales
+            drawCircle(color = accent, radius = 2.dp.toPx(), center = Offset(xBass, yOf(bassDb)))
+            drawCircle(color = accent, radius = 2.dp.toPx(), center = Offset(xTreble, yOf(trebleDb)))
         }
     }
 }
 
 private fun kilo(hz: Float): String =
-    if (hz % 1000f == 0f) "${(hz / 1000f).toInt()} kHz"
-    else String.format(Locale.US, "%.1f kHz", hz / 1000f)
+    if (hz % 1000f == 0f) "${(hz / 1000f).toInt()} kHz" else String.format(Locale.US, "%.1f kHz", hz / 1000f)
 
 private fun db(value: Float): String = String.format(Locale.US, "%+.1f dB", value)
