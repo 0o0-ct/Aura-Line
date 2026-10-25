@@ -73,74 +73,42 @@ data class AuraColors(
     val positive: Color,
     val warning: Color,
     val danger: Color,
-    val glassSurfaceStart: Color = Color(0x381F293A),
-    val glassSurfaceEnd: Color = Color(0x1F131A26),
-    val glassBorderTop: Color = Color(0x4DFFFFFF),
-    val glassBorderBottom: Color = Color(0x0DFFFFFF),
-    val neumorphicCavity: Color = Color(0xFF080C12),
-    val neumorphicHighlight: Color = Color(0x0CFFFFFF),
-    val neumorphicShadow: Color = Color(0xCC000000),
+    val glassSurfaceStart: Color,
+    val glassSurfaceEnd: Color,
+    val glassBorderTop: Color,
+    val glassBorderBottom: Color,
+    val neumorphicCavity: Color,
+    val neumorphicHighlight: Color,
+    val neumorphicShadow: Color,
     val ambientGlow: Color = accent.copy(alpha = 0.22f)
 )
 
-private fun darkColors(accent: Color): AuraColors {
-    // Sutil tintado del color de acento sobre un fondo oscuro profundo
-    val tintedBackground = Color(
-        red = 0.05f + (accent.red * 0.03f),
-        green = 0.05f + (accent.green * 0.03f),
-        blue = 0.05f + (accent.blue * 0.03f),
-        alpha = 1f
-    )
-    val tintedSurface = Color(
-        red = 0.09f + (accent.red * 0.04f),
-        green = 0.09f + (accent.green * 0.04f),
-        blue = 0.09f + (accent.blue * 0.04f),
-        alpha = 1f
-    )
+private fun neumorphicLightColors(accent: Color): AuraColors {
+    // Fondo claro con un ligerísimo tono azulado/gris (Soft Neumorphic Light)
+    val bgColor = Color(0xFFE5E9F0)
     return AuraColors(
         accent = accent,
-        background = tintedBackground,
-        surface = tintedSurface,
-        surfaceElevated = Color(0xFF1A1F29),
-        outline = Color(0x26FFFFFF),
-        textPrimary = Color(0xFFF5F6F8),
-        textSecondary = Color(0xFF8E9BAE),
+        background = bgColor,
+        surface = bgColor, // Neumorphism usa el mismo color de fondo para la superficie
+        surfaceElevated = Color(0xFFEDF1F8), // Un poco más claro
+        outline = Color(0xFFD3D8E0),
+        textPrimary = Color(0xFF2E3440),
+        textSecondary = Color(0xFF4C566A),
         positive = Color(0xFF34D399),
         warning = Color(0xFFFBBF24),
         danger = Color(0xFFF87171),
-        glassSurfaceStart = Color(0x14FFFFFF),
-        glassSurfaceEnd = Color(0x05FFFFFF),
-        glassBorderTop = Color(0x1AFFFFFF),
-        glassBorderBottom = Color(0x00FFFFFF),
-        neumorphicCavity = Color(0x66000000), // Usado para multiplicar o superponer sombras oscuras
-        neumorphicHighlight = Color(0x0CFFFFFF),
-        neumorphicShadow = Color(0xCC000000),
+        glassSurfaceStart = Color(0x99FFFFFF),
+        glassSurfaceEnd = Color(0x33FFFFFF),
+        glassBorderTop = Color(0xB3FFFFFF),
+        glassBorderBottom = Color(0x33FFFFFF),
+        neumorphicCavity = Color(0xFFD0D7E3), // Sombra interna para los huecos
+        neumorphicHighlight = Color(0xFFFFFFFF), // Brillo blanco puro (sombra clara superior izquierda)
+        neumorphicShadow = Color(0xFFB8C2D5), // Sombra oscura inferior derecha (gris azulado)
         ambientGlow = accent.copy(alpha = 0.24f)
     )
 }
 
-private fun lightColors(accent: Color) = AuraColors(
-    accent = accent,
-    background = Color(0xFFF2F4F7),
-    surface = Color(0xFFFFFFFF),
-    surfaceElevated = Color(0xFFE9EEF4),
-    outline = Color(0xFFD2D9E2),
-    textPrimary = Color(0xFF10141D),
-    textSecondary = Color(0xFF5F6E80),
-    positive = Color(0xFF059669),
-    warning = Color(0xFFD97706),
-    danger = Color(0xFFDC2626),
-    glassSurfaceStart = Color(0xD9FFFFFF),
-    glassSurfaceEnd = Color(0xB3F0F4F9),
-    glassBorderTop = Color(0x80FFFFFF),
-    glassBorderBottom = Color(0x26CBD5E1),
-    neumorphicCavity = Color(0xFFE2E7EE),
-    neumorphicHighlight = Color(0xFFFFFFFF),
-    neumorphicShadow = Color(0x26000000),
-    ambientGlow = accent.copy(alpha = 0.15f)
-)
-
-val LocalAuraColors = staticCompositionLocalOf { darkColors(AuraPalettes.first().accent) }
+val LocalAuraColors = staticCompositionLocalOf { neumorphicLightColors(AuraPalettes.first().accent) }
 
 object AuraTheme {
     val colors: AuraColors
@@ -183,40 +151,25 @@ private val AuraTypography = Typography(
 fun AuraLineTheme(
     accentColor: Color = AuraPalettes.first().accent,
     paletteKey: String = "",
-    darkTheme: Boolean = true,
+    darkTheme: Boolean = true, // We ignore darkTheme for now to force the light neumorphic style from the image
     content: @Composable () -> Unit
 ) {
     val activeAccent = if (paletteKey.isNotEmpty()) paletteFor(paletteKey).accent else accentColor
-    val colors = if (darkTheme) darkColors(activeAccent) else lightColors(activeAccent)
-    val scheme = if (darkTheme) {
-        darkColorScheme(
-            primary = activeAccent,
-            onPrimary = Color(0xFF030A09),
-            secondary = activeAccent,
-            background = colors.background,
-            onBackground = colors.textPrimary,
-            surface = colors.surface,
-            onSurface = colors.textPrimary,
-            surfaceVariant = colors.surfaceElevated,
-            onSurfaceVariant = colors.textSecondary,
-            outline = colors.outline,
-            error = colors.danger
-        )
-    } else {
-        lightColorScheme(
-            primary = activeAccent,
-            onPrimary = Color.White,
-            secondary = activeAccent,
-            background = colors.background,
-            onBackground = colors.textPrimary,
-            surface = colors.surface,
-            onSurface = colors.textPrimary,
-            surfaceVariant = colors.surfaceElevated,
-            onSurfaceVariant = colors.textSecondary,
-            outline = colors.outline,
-            error = colors.danger
-        )
-    }
+    val colors = neumorphicLightColors(activeAccent)
+
+    val scheme = lightColorScheme(
+        primary = activeAccent,
+        onPrimary = Color.White,
+        secondary = activeAccent,
+        background = colors.background,
+        onBackground = colors.textPrimary,
+        surface = colors.surface,
+        onSurface = colors.textPrimary,
+        surfaceVariant = colors.surfaceElevated,
+        onSurfaceVariant = colors.textSecondary,
+        outline = colors.outline,
+        error = colors.danger
+    )
 
     CompositionLocalProvider(LocalAuraColors provides colors) {
         MaterialTheme(colorScheme = scheme, typography = AuraTypography, content = content)

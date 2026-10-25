@@ -71,6 +71,8 @@ import com.auraline.core.ui.components.LocalHapticsEnabled
 import com.auraline.core.ui.components.LocalPowered
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.components.hapticFeedback
+import com.auraline.core.ui.components.neumorphicConvex
+import com.auraline.core.ui.components.neumorphicConcave
 import com.auraline.core.ui.theme.AuraTheme
 import kotlinx.coroutines.launch
 
@@ -239,26 +241,13 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .shadow(elevation = 16.dp, shape = dockShape, ambientColor = Color(0x66000000), spotColor = Color(0x80000000))
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xD9060910),
-                                            Color(0xF20F141D)
-                                        )
-                                    ),
-                                    dockShape
+                                .neumorphicConvex(
+                                    radius = 28.dp,
+                                    highlightColor = colors.neumorphicHighlight,
+                                    shadowColor = colors.neumorphicShadow,
+                                    elevation = 8.dp
                                 )
-                                .border(
-                                    1.dp,
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0x26FFFFFF),
-                                            Color(0x05FFFFFF)
-                                        )
-                                    ),
-                                    dockShape
-                                )
+                                .background(colors.surfaceElevated, dockShape)
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             val containerMaxWidth = this@BoxWithConstraints.maxWidth
@@ -278,9 +267,13 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                     .offset(x = indicatorOffset)
                                     .width(itemWidth)
                                     .height(52.dp)
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(accent.copy(alpha = 0.15f))
-                                    .border(1.dp, accent.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+                                    .neumorphicConcave(
+                                        radius = 20.dp,
+                                        shadowColor = colors.neumorphicCavity,
+                                        highlightColor = colors.neumorphicHighlight,
+                                        elevation = 3.dp
+                                    )
+                                    .background(colors.background, RoundedCornerShape(20.dp))
                             )
 
                             Row(

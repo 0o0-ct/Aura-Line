@@ -83,14 +83,14 @@ fun controlAccent(): Color =
  */
 fun Modifier.neumorphicConvex(
     radius: Dp,
-    highlightColor: Color = Color(0x14FFFFFF),
-    shadowColor: Color = Color(0xCC000000),
-    elevation: Dp = 6.dp
+    highlightColor: Color,
+    shadowColor: Color,
+    elevation: Dp = 8.dp
 ) = this.drawBehind {
     val cornerRadius = radius.toPx()
-    val blurRadius = elevation.toPx()
-    val dx = (elevation / 2).toPx()
-    val dy = (elevation / 2).toPx()
+    val blurRadius = elevation.toPx() * 1.5f // Blur más difuso como en el diseño de referencia
+    val dx = (elevation).toPx()
+    val dy = (elevation).toPx()
 
     val paintHighlight = Paint().apply {
         color = highlightColor
@@ -132,11 +132,10 @@ fun Modifier.neumorphicConvex(
 
 fun Modifier.neumorphicConcave(
     radius: Dp,
-    shadowColor: Color = Color(0x99000000),
-    highlightColor: Color = Color(0x14FFFFFF),
+    shadowColor: Color,
+    highlightColor: Color,
     elevation: Dp = 4.dp
 ) = this.drawBehind {
-    // Para lograr un inset shadow simple usando un path
     val cornerRadius = radius.toPx()
     val blurRadius = elevation.toPx()
     val dx = (elevation / 1.5f).toPx()
@@ -145,7 +144,7 @@ fun Modifier.neumorphicConcave(
     val paintShadow = Paint().apply {
         color = shadowColor
         style = androidx.compose.ui.graphics.PaintingStyle.Stroke
-        strokeWidth = elevation.toPx()
+        strokeWidth = elevation.toPx() * 2 // Stroke más grueso para que se vea más natural al difuminar
         asFrameworkPaint().apply {
             maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
@@ -154,33 +153,37 @@ fun Modifier.neumorphicConcave(
     val paintHighlight = Paint().apply {
         color = highlightColor
         style = androidx.compose.ui.graphics.PaintingStyle.Stroke
-        strokeWidth = elevation.toPx()
+        strokeWidth = elevation.toPx() * 2
         asFrameworkPaint().apply {
             maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
     }
 
     drawIntoCanvas { canvas ->
+        // Sombra interior superior izquierda (simulando que la luz viene de arriba a la izquierda y pega dentro)
+        canvas.drawRoundRect(
+            left = -dx,
+            top = -dy,
+            right = size.width + dx,
+            bottom = size.height + dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintShadow
+        )
         // Brillo interior inferior derecho
         canvas.drawRoundRect(
-            left = dx,
-            top = dy,
+            left = -dx,
+            top = -dy,
             right = size.width + dx,
             bottom = size.height + dy,
             radiusX = cornerRadius,
             radiusY = cornerRadius,
             paint = paintHighlight
         )
-        // Sombra interior superior izquierda
-        canvas.drawRoundRect(
-            left = -dx,
-            top = -dy,
-            right = size.width - dx,
-            bottom = size.height - dy,
-            radiusX = cornerRadius,
-            radiusY = cornerRadius,
-            paint = paintShadow
-        )
+
+        // Se requiere un clip o un clear en el borde interior si no estuviese recortado,
+        // pero Compose aplica modifier background/clip despues de drawBehind
+        // (por lo tanto drawBehind afecta al fondo)
     }
 }
 
@@ -484,7 +487,7 @@ fun BandFader(
         ) {
 
             // 1. Canal profundamente hundido (Inset shadow simulada por Modifier.neumorphicConcave)
-            val cavityWidth = 14.dp
+            val cavityWidth = 12.dp
             Box(
                 modifier = Modifier
                     .width(cavityWidth)
@@ -493,10 +496,10 @@ fun BandFader(
                     .neumorphicConcave(
                         radius = cavityWidth / 2,
                         shadowColor = colors.neumorphicCavity,
-                        highlightColor = Color(0x0AFFFFFF),
-                        elevation = 4.dp
+                        highlightColor = colors.neumorphicHighlight,
+                        elevation = 3.dp
                     )
-                    .background(Color(0xFF0F141D), RoundedCornerShape(cavityWidth / 2))
+                    .background(colors.background, RoundedCornerShape(cavityWidth / 2))
             )
 
             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -506,60 +509,61 @@ fun BandFader(
                 val zeroY = padding + usable * (1f - zeroFraction)
                 val thumbY = padding + usable * (1f - normalized)
 
-                // 2. Marca de 0 dB fresada
+                // Progreso Activo (Pintura Rosa/Accent) desde 0 dB hasta el thumb
+                val fillColor = if (highlighted) accent else accent.copy(alpha = 0.9f)
+                val topY = min(zeroY, thumbY)
+                val bottomY = max(zeroY, thumbY)
+                val barWidth = 6.dp.toPx()
+
+                if (kotlin.math.abs(thumbY - zeroY) > 1.5f) {
+                     drawRoundRect(
+                        color = fillColor,
+                        topLeft = Offset(centerX - barWidth / 2f, topY),
+                        size = Size(barWidth, bottomY - topY),
+                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+                    )
+                }
+
+                // 2. Marca de 0 dB fresada sutil
                 drawLine(
-                    color = Color(0x66FFFFFF),
-                    start = Offset(centerX - 12.dp.toPx(), zeroY),
-                    end = Offset(centerX + 12.dp.toPx(), zeroY),
-                    strokeWidth = 1.5.dp.toPx(),
+                    color = colors.textSecondary.copy(alpha = 0.3f),
+                    start = Offset(centerX - 16.dp.toPx(), zeroY),
+                    end = Offset(centerX + 16.dp.toPx(), zeroY),
+                    strokeWidth = 2.dp.toPx(),
                     cap = StrokeCap.Round
                 )
             }
 
-            // 3. Thumb 3D
+            // 3. Thumb 3D rectangular (como en el mockup)
             val thumbYPadding = 10.dp
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(vertical = thumbYPadding)
             ) {
-                // Layout en Box puro no permite offset relativo tan simple sin onSizeChanged o padding,
-                // Usamos Offset animado o calculado con Spacer y offset
                 Box(
                     modifier = Modifier
                         .offset(
                             x = (faderWidth - 28.dp) / 2,
-                            y = (height - thumbYPadding * 2 - 24.dp) * (1f - normalized)
+                            y = (height - thumbYPadding * 2 - 16.dp) * (1f - normalized)
                         )
-                        .size(width = 28.dp, height = 24.dp)
+                        .size(width = 28.dp, height = 16.dp)
                         // Convexo
                         .neumorphicConvex(
-                            radius = 12.dp,
+                            radius = 6.dp,
                             highlightColor = colors.neumorphicHighlight,
                             shadowColor = colors.neumorphicShadow,
                             elevation = 4.dp
                         )
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(colors.surfaceElevated, colors.background)
-                            ),
-                            RoundedCornerShape(12.dp)
-                        )
-                        .border(
-                            1.dp,
-                            Brush.verticalGradient(
-                                listOf(Color(0x26FFFFFF), Color(0x05FFFFFF))
-                            ),
-                            RoundedCornerShape(12.dp)
-                        ),
+                        .background(colors.surfaceElevated, RoundedCornerShape(6.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    val fillColor = if (highlighted) accent else accent.copy(alpha = 0.5f)
-                    // LED indicator en el thumb
+                    val fillColor = if (highlighted) accent else colors.textSecondary.copy(alpha=0.5f)
+                    // Pequeña franja / LED en el centro
                     Box(
                         modifier = Modifier
-                            .size(width = 12.dp, height = 3.dp)
-                            .background(fillColor, RoundedCornerShape(1.5.dp))
+                            .size(width = 8.dp, height = 2.dp)
+                            .background(fillColor, RoundedCornerShape(1.dp))
                     )
                 }
             }
@@ -623,14 +627,13 @@ fun AuraKnob(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(diameter)
-                // Anillo exterior extruido (convexo)
                 .neumorphicConvex(
                     radius = diameter / 2,
                     highlightColor = colors.neumorphicHighlight,
                     shadowColor = colors.neumorphicShadow,
                     elevation = 8.dp
                 )
-                .background(colors.background, CircleShape)
+                .background(colors.surfaceElevated, CircleShape)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
                         haptic()
@@ -651,32 +654,40 @@ fun AuraKnob(
                     )
                 }
         ) {
-            // Centro cóncavo
+
+            // Relieve intermedio (como en el mockup: dial de perilla extruida suave)
             Box(
                 modifier = Modifier
-                    .size(diameter - 24.dp)
-                    .neumorphicConcave(
-                        radius = (diameter - 24.dp) / 2,
-                        shadowColor = colors.neumorphicCavity,
-                        highlightColor = Color(0x0AFFFFFF),
-                        elevation = 6.dp
+                    .size(diameter - 28.dp)
+                    .neumorphicConvex(
+                        radius = (diameter - 28.dp) / 2,
+                        highlightColor = colors.neumorphicHighlight,
+                        shadowColor = colors.neumorphicShadow,
+                        elevation = 4.dp
                     )
-                    .background(Color(0xFF0F141D), CircleShape),
+                    .background(colors.background, CircleShape)
+            )
+
+            // Centro cóncavo (hendidura central)
+            Box(
+                modifier = Modifier
+                    .size(diameter - 56.dp)
+                    .neumorphicConcave(
+                        radius = (diameter - 56.dp) / 2,
+                        shadowColor = colors.neumorphicCavity,
+                        highlightColor = colors.neumorphicHighlight,
+                        elevation = 3.dp
+                    )
+                    .background(colors.background, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = valueText,
-                    color = colors.textPrimary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
             }
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val radius = size.width / 2f
-                val markRadiusOuter = radius - 4.dp.toPx()
-                val markRadiusInner = radius - 10.dp.toPx()
-                val numMarks = 30
+                val markRadiusOuter = radius - 8.dp.toPx() // Alejar las lineas un poco del borde
+                val markRadiusInner = radius - 14.dp.toPx()
+                val numMarks = 36 // Más densidad de lineas pequeñas
                 val angleStep = sweepAngle / (numMarks - 1)
 
                 for (i in 0 until numMarks) {
@@ -696,14 +707,15 @@ fun AuraKnob(
                     )
 
                     val markColor = if (isActive) {
-                        accent.copy(alpha = 0.4f + (0.6f * markFraction)) // Gradiente a lo largo del volumen
+                        accent.copy(alpha = 0.6f + (0.4f * markFraction))
                     } else {
-                        Color(0x33FFFFFF)
+                        // En fondo claro el inactivo debe ser gris claro o hundido visualmente
+                        Color(0xFFC5CBD6)
                     }
 
                     if (isActive) {
                          drawLine(
-                            color = markColor.copy(alpha = 0.4f),
+                            color = markColor.copy(alpha = 0.3f),
                             start = start,
                             end = end,
                             strokeWidth = 3.dp.toPx(),
@@ -1132,43 +1144,20 @@ fun AuraSwitch(
         label = "switchBg"
     )
 
-    // Inactivo = Convexo. Activo = Cóncavo + Brillo
-    val interactionModifier = if (checked) {
-        Modifier.neumorphicConcave(
-            radius = trackHeight / 2,
-            shadowColor = colors.neumorphicCavity,
-            highlightColor = accent.copy(alpha = 0.3f),
-            elevation = 3.dp
-        )
-    } else {
-        Modifier.neumorphicConvex(
-            radius = trackHeight / 2,
-            highlightColor = colors.neumorphicHighlight,
-            shadowColor = colors.neumorphicShadow,
-            elevation = 3.dp
-        )
-    }
+    // En el diseño de referencia, los toggles son cóncavos/hundidos (como pistas).
+    val interactionModifier = Modifier.neumorphicConcave(
+        radius = trackHeight / 2,
+        shadowColor = colors.neumorphicCavity,
+        highlightColor = colors.neumorphicHighlight,
+        elevation = 3.dp
+    )
 
     Box(
         modifier = modifier
             .width(trackWidth)
             .height(trackHeight)
             .then(interactionModifier)
-            .clip(RoundedCornerShape(999.dp))
-            .background(
-                if (checked) Brush.verticalGradient(listOf(trackBgColor, Color.Transparent))
-                else Brush.verticalGradient(listOf(colors.glassSurfaceStart, colors.glassSurfaceEnd))
-            )
-            .border(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        if (checked) accent.copy(alpha = 0.5f) else Color(0x1AFFFFFF),
-                        Color.Transparent
-                    )
-                ),
-                RoundedCornerShape(999.dp)
-            )
+            .background(colors.background, RoundedCornerShape(999.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -1179,21 +1168,28 @@ fun AuraSwitch(
             },
         contentAlignment = Alignment.CenterStart
     ) {
+        // En el diseño, cuando esta ON, se ve un pequeño punto interior en el thumb.
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .size(thumbSize)
-                .shadow(elevation = 2.dp, shape = CircleShape)
-                .background(
-                    if (checked) accent else Color(0xFFE2E8F0),
-                    CircleShape
+                .neumorphicConvex(
+                    radius = thumbSize / 2,
+                    highlightColor = colors.neumorphicHighlight,
+                    shadowColor = colors.neumorphicShadow,
+                    elevation = 2.dp
                 )
-                .border(
-                    0.5.dp,
-                    Color(0x40FFFFFF),
-                    CircleShape
+                .background(colors.surfaceElevated, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            if (checked) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .background(accent, CircleShape)
                 )
-        )
+            }
+        }
     }
 }
 
