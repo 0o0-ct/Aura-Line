@@ -1,157 +1,104 @@
-# AuraLine 2.0
+# 🎛️ AuraLine - Global Audio Equalizer for Android
 
-Ecualizador de audio para Android. Procesa la salida del dispositivo con una cadena de
-efectos real (`DynamicsProcessing`) y permite comprobar con el micrófono que el efecto
-está actuando sobre la señal, no solo que se haya podido instanciar.
+**AuraLine** es una aplicación de ecualización y moldeado de sonido de alta fidelidad para Android (API 28+ / Android 9.0+) que permite controlar de forma profunda y en tiempo real todo el audio saliente del dispositivo desde una sola interfaz táctil moderna con diseño **Apple Neumorphism & Glassmorphism**.
 
-| | |
+Procesa la salida global del dispositivo con una cadena de efectos real (`DynamicsProcessing`) y permite comprobar con el micrófono que el efecto está actuando sobre la señal acústica, no solo que se haya podido instanciar.
+
+| Especificación | Detalle |
 |---|---|
-| Versión | 2.4.0 (versionCode 6) |
-| minSdk / targetSdk | 28 / 35 |
-| Lenguaje | Kotlin 2.0.20 · Jetpack Compose (Material 3) |
-| APK release | ~3,4 MB con R8 habilitado |
+| **Versión** | 2.4.0 (versionCode 6) |
+| **minSdk / targetSdk** | 28 / 35 (Android 9.0 – 15) |
+| **Lenguaje** | Kotlin 2.0.20 · Jetpack Compose |
+| **Diseño** | Apple Neumorphism + Glassmorphism UI (30 paletas) |
+| **APK release** | ~3,4 MB con R8 optimizado |
 
-Capturas en [`docs/capturas`](docs/capturas). APK firmado en [`dist/AuraLine-2.4.0.apk`](dist/AuraLine-2.4.0.apk).
+Capturas en [`docs/capturas`](docs/capturas). APKs compilados en [`dist/`](dist/).
 
-## Módulos
+---
 
-```
-:app          UI Compose, actividad, servicio en primer plano, receivers
-:core:domain  Modelo (EqualizerState, EngineStatus, AppSettings) e interfaces
-:core:audio   AuraLineEngine: propietario único de los AudioEffect
-:core:data    Persistencia (SharedPreferences + JSON), presets, perfiles, autodiagnóstico
-:core:ui      Sistema de diseño (tema, faders, knobs, curva de respuesta)
-```
+## ✨ Características Principales
 
-## Cómo procesa el audio
+### 🎚️ 1. Ventana de Ecualizador
+- **Preamplificador Máster (Preamp)**: Control de ganancia de entrada encapsulado en cápsula flotante con ganancia precisa.
+- **Ecualizador Gráfico de 20 a 25 Bandas**:
+  - Filtros independientes con cortes realizables para evitar bandas inactivas en `DynamicsProcessing`.
+  - Deslizadores fader verticales táctiles con manejador en cápsula extruida e indicación de nivel con código de color.
+- **Gráfica de Respuesta en Frecuencia**: Panel cóncavo en tiempo real con trazado de curva en cristal oscuro.
+- **Analizador de Espectro en Tiempo Real (RTA)**: 25 barras de ancho uniforme con ranuras físicas de canal (*meter wells*), degradado luminoso Apple neón y picos LED reactivos.
+- **Preajustes de Fábrica e Instrumento**: Plano, Voz, Bombo, Bajo eléctrico, Guitarras, Teclado, Batería, Metales, Platillos, más curvas Harman y JBL.
+- **Selector de Ventana y Rango**: Vista de 8, 12 o todas las bandas; rangos conmutables de ±6 dB, ±12 dB y ±24 dB.
 
-`AuraLineEngine` construye **una sola vez** la cadena sobre la mezcla de salida
-(`AudioEffect` con sesión 0) y sólo actualiza parámetros en cada cambio:
+### 🎛️ 2. Ventana de Tono
+- **Moldeado de 4 Regiones**: Sub-bajo (0–100 Hz), Graves, Medios y Agudos con deslizadores empotrados.
+- **Frecuencias de Cruce Ajustables**: Personalización milimétrica de las frecuencias de corte entre bandas de tono.
+- **Panel de Curva de Tono**: Previsualización instantánea en tiempo real de la respuesta de ecualización de tono.
 
-- **Ecualizador paramétrico** de 20–25 bandas (`DynamicsProcessing` preEq).
-- **Compresor multibanda** de 3 bandas (MBC) con umbral, ratio, ataque y liberación.
-- **Limitador** de salida a −1 dBFS.
-- **Graves/Agudos** como shelves dentro del propio EQ.
-- **Anchura estéreo** (`Virtualizer`) y **reverb** (`EnvironmentalReverb`), solo si están activos.
-- **Ecualizador de 5 bandas del dispositivo** únicamente como respaldo si `DynamicsProcessing` falla,
-  para no duplicar la curva.
+### 🔘 3. Ventana de Efectos
+- **Cadena de 6 Módulos con Bypass**: Conmutadores individuales para Ecualizador, Puerta/Expansor, Compresor multibanda, Limitador de salida, Reverb acústica y Virtualizador estéreo.
+- **Puerta de Ruido / Expansor**: Umbral y ratio ajustables para silenciar siseos de fondo.
+- **Compresor Multibanda**: Umbral de compresión y recuperación transparente.
+- **Reverberación de Entorno**: 8 salas acústicas calibradas (Auditorio, Estudio, Gran Salón, Escenario, etc.).
 
-Los reproductores que lo anuncian (`ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION`) se enganchan
-por sesión: el motor crea un `Equalizer` independiente y lo refleja en el estado.
+### ⚙️ 4. Ajustes y Personalización
+- **Perfiles de Uso Automáticos**: Altavoz del móvil, auriculares con cable, auriculares Bluetooth, altavoces externos y barras de sonido/5.1.
+- **30 Paletas de Color Monocromáticas**: Selector táctil con carrusel horizontal de discos neumórficos y brillo ambiental.
+- **Diagnóstico Acústico Objetivo**: Emisión de tonos duales (485 Hz y 1771 Hz) y medición por micrófono para verificar la ganancia real del DSP (+10 dB selectividad).
+- **Protección de Batería y Auto-arranque**: Configuración del servicio en primer plano y exención de optimización de batería en One UI / AOSP.
 
-Todo el trabajo con efectos ocurre en un hilo dedicado y los cambios en ráfaga se agrupan,
-porque cada llamada es una IPC síncrona con el servidor de audio.
+---
 
-
-## Rejilla de bandas (por qué 25 bandas de verdad)
-
-`DynamicsProcessing` no filtra de forma continua: reparte la señal en bins de FFT
-(`binStop = round(cutoff * blockSize / sampleRate)`, ≈47 Hz con bloque de 1024 a 48 kHz) y
-**descarta en silencio toda banda cuyo rango quede vacío**. Con una rejilla logarítmica de 20 Hz
-a 20 kHz, 11 bandas compartían bin y 4 no hacían absolutamente nada.
-
-La rejilla actual es lineal hasta 1 kHz (pasos de 100 Hz) y logarítmica por encima. El bloque
-real del efecto es de 960 muestras (50 Hz por bin), así que los cortes se cuantizan a múltiplos
-de 50 Hz: el borde efectivo de una banda puede desplazarse medio bin respecto a su corte
-nominal, y por eso la verificación sondea **dentro** de la banda y no en su centro geométrico. Resultado verificado en el dispositivo: **0 bandas muertas y un mínimo de 2 bins por
-banda** para 20 y para 25 bandas. La UI etiqueta cada fader con el **centro** de su banda, no con
-el corte.
-
-Cambiar el número de bandas reconstruye la cadena: el recuento de bandas de un
-`DynamicsProcessing` no se puede modificar en caliente.
-
-
-## Preajustes, ventana de bandas y tono
-
-La app está construida sobre documentación real de ecualización
-(tablas de electrofante.com, apuntes de Cetear y el manual del PreSonus DEQ624):
-
-- **Ventana de bandas**: 8, 12 o todas, con paginación horizontal. El ancho de cada fader se
-  reparte según cuántas bandas se muestran, así que con 12 no se solapan las etiquetas.
-- **Rango ±6 / ±12 / ±24 dB**, como el interruptor Range del DEQ624.
-- **A/B**: compara la curva con la señal plana sin apagar el motor.
-- **Preajustes de fábrica** por instrumento (voz, bombo, bajo, guitarras, piano, platillos,
-  metales, batería), derivados de las tablas de frecuencias por instrumento, más dos curvas de
-  referencia de consumo: **Harman** (graves +4/+5, medios −1/−2, agudos +2/+3) y **JBL**
-  (graves firmes, medios retraídos, agudos brillantes).
-- **Guía de frecuencias** dentro de la app: qué hace cada zona del espectro.
-- **Tono de tres regiones** (graves / medios / agudos) con frecuencias de cruce ajustables,
-  en lugar de dos shelves fijos, con vista previa de la curva.
-
-No se implementan HPF/LPF ni el modo HI-Q del DEQ624: `DynamicsProcessing` no expone filtros
-paso-alto/paso-bajo ni control de Q por banda.
-
-## Mantener el motor activo
-
-El motor está pensado para no caerse solo:
-
-- **Watchdog de efecto**: si el sistema desactiva el `DynamicsProcessing` (otra app toma el
-  control, se reconfigura la salida, cambia la pista), se vuelve a activar y se reaplican los
-  parámetros automáticamente.
-- **Reenganche al abrir sesión**: cada vez que un reproductor anuncia una sesión nueva se
-  reaplica la cadena global.
-- **Reenganche al cambiar de salida**: altavoz, cable, Bluetooth o USB.
-- **Servicio en primer plano** con notificación y acción para apagar el motor.
-- **Protección de batería**: Ajustes → *Motor en segundo plano* abre el diálogo del sistema para
-  eximir a AuraLine de la optimización de batería, que es lo que mata apps en segundo plano en
-  One UI.
-
-## Estados visuales y navegación
-
-- Con el **motor apagado** la app pierde el color de acento: faders, curva, deslizadores,
-  chips y navegación pasan a gris. Con el motor encendido vuelve el color.
-- Los controles de **Tono y Efectos son deslizadores horizontales**, no mandos circulares:
-  antes, al desplazar la pantalla, se agarraba una perilla sin querer.
-- **A/B** compara la cadena completa (curva + compresor + reverb), no sólo la curva.
-
-## Verificación (prueba objetiva)
-
-Ajustes → **Comprobar el motor** emite **dos tonos simultáneos** (≈485 Hz y ≈1771 Hz), sube
-sólo la banda del tono agudo y compara el cociente entre ambas frecuencias antes y después.
-El cociente cancela el procesado espectral del micrófono, que en este teléfono compensa los
-cortes y hace inservibles las medidas absolutas.
-
-Resultado en un Samsung SM-G998U1 / Android 15 (sin root, salida por altavoz):
+## 🏛️ Módulos del Proyecto
 
 ```
-485 Hz:  -44,2 → -47,5 dBFS
-1771 Hz: -27,8 → -20,5 dBFS
-Selectividad: +10,5 dB   → VERIFICADO
+:app          UI Jetpack Compose, actividades, servicio en primer plano, receivers
+:core:domain  Modelo de dominio (EqualizerState, EngineStatus, AppSettings) y contratos
+:core:audio   AuraLineEngine: motor de audio, propietario único de DynamicsProcessing y Visualizer
+:core:data    Persistencia (SharedPreferences + JSON), presets, perfiles, diagnóstico
+:core:ui      Sistema de diseño (AuraTheme, faders, perillas neumórficas, barras de espectro, curvas)
 ```
 
-La comprobación exige que la salida sea el altavoz: con Bluetooth o auriculares el micrófono no
-captura el tono y la app lo avisa en lugar de dar un resultado falso.
+---
 
-Es **opcional**: Ajustes → *Comprobar al encender el motor* la ejecuta sola cada vez que activas
-el motor, y la tarjeta incluye las instrucciones (sin auriculares, volumen a la mitad o más,
-teléfono apoyado y sin hablar durante la prueba).
+## 🛠️ Arquitectura Técnica y Motor DSP
 
-## Integración con el dispositivo
+- **Motor Principal (`DynamicsProcessing`)**:
+  - Utiliza la API nativa de Android para ecualización paramétrica estéreo de bloque completo en la etapa `PreEQ` con asignación atómica por canal.
+- **Captura de Sesiones Globales (`AudioEffectSessionReceiver`)**:
+  - Intercepta eventos `ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION` emitidos por reproductores (Spotify, YouTube, Poweramp, etc.) y acopla el procesamiento dinámico al `audioSessionId` o a la mezcla global (sesión 0).
+- **Analizador de Espectro (`AuraLineSpectrum`)**:
+  - `Visualizer` en tiempo real con normalización por trama contra el pico y caída balística suave (decay 0.82), emitiendo una barra por cada una de las 25 bandas del ecualizador.
+- **Servicio en Primer Plano (`AudioForegroundService`)**:
+  - Servicio `mediaPlayback` con notificación persistente y controles rápidos para garantizar que el sistema no interrumpa el motor.
 
-- Edge-to-edge real (`enableEdgeToEdge` + insets), sin barras opacas.
-- Permisos en tiempo de ejecución: `POST_NOTIFICATIONS` al abrir; `RECORD_AUDIO` sólo al diagnosticar.
-- Servicio en primer plano `mediaPlayback` con notificación de control y acción funcional para apagar el motor.
-- `BootReceiver` deshabilitado en el manifest y activado en caliente solo si el usuario habilita el inicio automático.
-- Detección de salida (altavoz, cable, Bluetooth, USB) con `AudioDeviceCallback` y perfiles de curva por salida.
-- R8 y reducción de recursos en release; APK de 3,4 MB.
+---
 
-## Compilar
+## 🚀 Tecnologías Utilizadas
 
-El proyecto incluye su propio toolchain, así que no hace falta instalar nada:
+- **Lenguaje**: Kotlin 100% (2.0.20)
+- **UI Framework**: Jetpack Compose con renderizado directo en Canvas (`drawRoundRect`, `drawPath`, degradados verticales).
+- **Estilo Visual**: Apple Neumorphism & Glassmorphism UI.
+- **Arquitectura**: Clean Architecture modularizada.
+- **Concurrencia**: Kotlin Coroutines & StateFlow reactivo.
 
+---
+
+## 💻 Compilación e Instalación
+
+### Requisitos
+- JDK 17 – 23
+- Android SDK (API 28 mínimo, API 35 destino)
+
+### Pasos
 ```bash
-./gradlew :app:assembleDebug     # APK de desarrollo
-./gradlew :app:assembleRelease   # APK release (sin firmar)
+# Clonar el repositorio
+git clone git@github.com:0o0-ct/Aura-Line.git
+
+# Abrir el directorio del proyecto
+cd Aura-Line
+
+# Compilar e instalar APK de desarrollo en dispositivo conectado
+./gradlew :app:installDebug
+
+# Compilar APK de lanzamiento optimizado
+./gradlew :app:assembleRelease
 ```
-
-`gradlew` usa el JDK 17 de `jdk/` (Kotlin 2.0.20 no entiende JDK 24+) y la distribución de
-Gradle de `gradle/dist/`. Ambos están excluidos de git por tamaño; si clonas el repositorio
-en otra máquina necesitas un JDK 17–23 y Gradle 8.10.
-
-## Limitaciones conocidas
-
-- El procesado de la mezcla global depende del dispositivo: en este Samsung los efectos se
-  enganchan y procesan; en firmwares que lo restrinjan el motor cae al ecualizador de sesión
-  y el estado lo refleja (`Cadena de procesado`).
-- La interfaz está en español; los textos no están externalizados todavía.
-- El APK de `dist/` está firmado con una clave de desarrollo, no de publicación.
