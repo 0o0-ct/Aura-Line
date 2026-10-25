@@ -78,31 +78,46 @@ data class AuraColors(
     val glassBorderTop: Color = Color(0x4DFFFFFF),
     val glassBorderBottom: Color = Color(0x0DFFFFFF),
     val neumorphicCavity: Color = Color(0xFF080C12),
-    val neumorphicHighlight: Color = Color(0x26FFFFFF),
+    val neumorphicHighlight: Color = Color(0x0CFFFFFF),
     val neumorphicShadow: Color = Color(0xCC000000),
     val ambientGlow: Color = accent.copy(alpha = 0.22f)
 )
 
-private fun darkColors(accent: Color) = AuraColors(
-    accent = accent,
-    background = Color(0xFF07090E),
-    surface = Color(0xFF111722),
-    surfaceElevated = Color(0xFF17202D),
-    outline = Color(0x26FFFFFF),
-    textPrimary = Color(0xFFF5F6F8),
-    textSecondary = Color(0xFF8E9BAE),
-    positive = Color(0xFF34D399),
-    warning = Color(0xFFFBBF24),
-    danger = Color(0xFFF87171),
-    glassSurfaceStart = Color(0x38222E42),
-    glassSurfaceEnd = Color(0x1C131A26),
-    glassBorderTop = Color(0x4DFFFFFF),
-    glassBorderBottom = Color(0x0DFFFFFF),
-    neumorphicCavity = Color(0xFF080C13),
-    neumorphicHighlight = Color(0x26FFFFFF),
-    neumorphicShadow = Color(0xCC000000),
-    ambientGlow = accent.copy(alpha = 0.24f)
-)
+private fun darkColors(accent: Color): AuraColors {
+    // Sutil tintado del color de acento sobre un fondo oscuro profundo
+    val tintedBackground = Color(
+        red = 0.05f + (accent.red * 0.03f),
+        green = 0.05f + (accent.green * 0.03f),
+        blue = 0.05f + (accent.blue * 0.03f),
+        alpha = 1f
+    )
+    val tintedSurface = Color(
+        red = 0.09f + (accent.red * 0.04f),
+        green = 0.09f + (accent.green * 0.04f),
+        blue = 0.09f + (accent.blue * 0.04f),
+        alpha = 1f
+    )
+    return AuraColors(
+        accent = accent,
+        background = tintedBackground,
+        surface = tintedSurface,
+        surfaceElevated = Color(0xFF1A1F29),
+        outline = Color(0x26FFFFFF),
+        textPrimary = Color(0xFFF5F6F8),
+        textSecondary = Color(0xFF8E9BAE),
+        positive = Color(0xFF34D399),
+        warning = Color(0xFFFBBF24),
+        danger = Color(0xFFF87171),
+        glassSurfaceStart = Color(0x14FFFFFF),
+        glassSurfaceEnd = Color(0x05FFFFFF),
+        glassBorderTop = Color(0x1AFFFFFF),
+        glassBorderBottom = Color(0x00FFFFFF),
+        neumorphicCavity = Color(0x66000000), // Usado para multiplicar o superponer sombras oscuras
+        neumorphicHighlight = Color(0x0CFFFFFF),
+        neumorphicShadow = Color(0xCC000000),
+        ambientGlow = accent.copy(alpha = 0.24f)
+    )
+}
 
 private fun lightColors(accent: Color) = AuraColors(
     accent = accent,

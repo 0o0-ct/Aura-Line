@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -49,6 +50,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -58,10 +63,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.core.domain.EqBand
 import com.auraline.core.ui.theme.AuraTheme
+import kotlin.math.cos
 import kotlin.math.log10
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.sin
 
 /** Cuando el motor está apagado los controles pierden el color de acento. */
 val LocalPowered = androidx.compose.runtime.staticCompositionLocalOf { true }
@@ -69,6 +76,113 @@ val LocalPowered = androidx.compose.runtime.staticCompositionLocalOf { true }
 @Composable
 fun controlAccent(): Color =
     if (LocalPowered.current) AuraTheme.colors.accent else AuraTheme.colors.textSecondary
+
+
+/**
+ * Modificadores para sombras Neumórficas personalizadas (2.5D)
+ */
+fun Modifier.neumorphicConvex(
+    radius: Dp,
+    highlightColor: Color = Color(0x14FFFFFF),
+    shadowColor: Color = Color(0xCC000000),
+    elevation: Dp = 6.dp
+) = this.drawBehind {
+    val cornerRadius = radius.toPx()
+    val blurRadius = elevation.toPx()
+    val dx = (elevation / 2).toPx()
+    val dy = (elevation / 2).toPx()
+
+    val paintHighlight = Paint().apply {
+        color = highlightColor
+        asFrameworkPaint().apply {
+            maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
+        }
+    }
+
+    val paintShadow = Paint().apply {
+        color = shadowColor
+        asFrameworkPaint().apply {
+            maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
+        }
+    }
+
+    drawIntoCanvas { canvas ->
+        // Sombra inferior derecha (Oscura)
+        canvas.drawRoundRect(
+            left = dx,
+            top = dy,
+            right = size.width + dx,
+            bottom = size.height + dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintShadow
+        )
+        // Brillo superior izquierdo (Claro)
+        canvas.drawRoundRect(
+            left = -dx,
+            top = -dy,
+            right = size.width - dx,
+            bottom = size.height - dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintHighlight
+        )
+    }
+}
+
+fun Modifier.neumorphicConcave(
+    radius: Dp,
+    shadowColor: Color = Color(0x99000000),
+    highlightColor: Color = Color(0x14FFFFFF),
+    elevation: Dp = 4.dp
+) = this.drawBehind {
+    // Para lograr un inset shadow simple usando un path
+    val cornerRadius = radius.toPx()
+    val blurRadius = elevation.toPx()
+    val dx = (elevation / 1.5f).toPx()
+    val dy = (elevation / 1.5f).toPx()
+
+    val paintShadow = Paint().apply {
+        color = shadowColor
+        style = androidx.compose.ui.graphics.PaintingStyle.Stroke
+        strokeWidth = elevation.toPx()
+        asFrameworkPaint().apply {
+            maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
+        }
+    }
+
+    val paintHighlight = Paint().apply {
+        color = highlightColor
+        style = androidx.compose.ui.graphics.PaintingStyle.Stroke
+        strokeWidth = elevation.toPx()
+        asFrameworkPaint().apply {
+            maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
+        }
+    }
+
+    drawIntoCanvas { canvas ->
+        // Brillo interior inferior derecho
+        canvas.drawRoundRect(
+            left = dx,
+            top = dy,
+            right = size.width + dx,
+            bottom = size.height + dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintHighlight
+        )
+        // Sombra interior superior izquierda
+        canvas.drawRoundRect(
+            left = -dx,
+            top = -dy,
+            right = size.width - dx,
+            bottom = size.height - dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintShadow
+        )
+    }
+}
 
 /** Permite que Ajustes desactive la vibración de toda la app. */
 val LocalHapticsEnabled = androidx.compose.runtime.staticCompositionLocalOf { true }
@@ -95,22 +209,31 @@ fun AuraCard(
 ) {
     val colors = AuraTheme.colors
     val shape = RoundedCornerShape(shapeRadius)
+
+    // Glassmorphism adaptado: más oscuro y con relieve convexo
     val glassGradient = Brush.verticalGradient(
         listOf(
             colors.glassSurfaceStart,
             colors.glassSurfaceEnd
         )
     )
+    // Simular el corte del cristal (10% opacity white on top)
     val borderGradient = Brush.verticalGradient(
         listOf(
-            colors.glassBorderTop,
-            Color(0x18FFFFFF),
-            colors.glassBorderBottom
+            Color(0x1AFFFFFF),
+            Color.Transparent,
+            Color(0x05FFFFFF)
         )
     )
 
     Column(
         modifier = modifier
+            .neumorphicConvex(
+                radius = shapeRadius,
+                highlightColor = colors.neumorphicHighlight,
+                shadowColor = colors.neumorphicShadow,
+                elevation = 8.dp
+            )
             .background(glassGradient, shape)
             .border(1.dp, borderGradient, shape)
             .padding(16.dp),
@@ -157,16 +280,17 @@ fun SectionTitle(text: String, trailing: String? = null, modifier: Modifier = Mo
 @Composable
 fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
     val pillShape = RoundedCornerShape(999.dp)
+    val colors = AuraTheme.colors
     Row(
         modifier = modifier
-            .background(color.copy(alpha = 0.12f), pillShape)
-            .border(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(color.copy(alpha = 0.45f), color.copy(alpha = 0.12f))
-                ),
-                pillShape
+            // Relieve hundido tipo Dynamic Island
+            .neumorphicConcave(
+                radius = 999.dp,
+                shadowColor = colors.neumorphicCavity,
+                highlightColor = Color(0x0AFFFFFF),
+                elevation = 2.dp
             )
+            .background(Color(0xFF0F141D), pillShape)
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -174,6 +298,8 @@ fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
         Box(
             modifier = Modifier
                 .size(7.dp)
+                // Efecto brillo/neón para el LED
+                .shadow(elevation = 4.dp, shape = CircleShape, ambientColor = color)
                 .background(color, CircleShape)
         )
         Text(
@@ -205,30 +331,51 @@ fun SelectableChip(
 
     val backgroundBrush = if (selected) {
         Brush.verticalGradient(
-            listOf(accent.copy(alpha = 0.32f), accent.copy(alpha = 0.12f))
+            listOf(accent.copy(alpha = 0.20f), Color.Transparent)
         )
     } else {
         Brush.verticalGradient(
-            listOf(Color(0xFF161E2C), Color(0xFF101520))
+            listOf(colors.glassSurfaceStart, colors.glassSurfaceEnd)
         )
     }
 
     val borderBrush = if (selected) {
         Brush.verticalGradient(
-            listOf(Color(0x99FFFFFF), accent.copy(alpha = 0.8f))
+            listOf(accent.copy(alpha = 0.5f), accent.copy(alpha = 0.1f))
         )
     } else {
         Brush.verticalGradient(
-            listOf(Color(0x28FFFFFF), Color(0x08FFFFFF))
+            listOf(Color(0x1AFFFFFF), Color.Transparent)
+        )
+    }
+
+    // Inactivo = Convexo. Activo = Cóncavo + Brillo
+    val interactionModifier = if (selected) {
+        Modifier.neumorphicConcave(
+            radius = 999.dp,
+            shadowColor = colors.neumorphicCavity,
+            highlightColor = accent.copy(alpha = 0.3f),
+            elevation = 3.dp
+        )
+    } else {
+        Modifier.neumorphicConvex(
+            radius = 999.dp,
+            highlightColor = colors.neumorphicHighlight,
+            shadowColor = colors.neumorphicShadow,
+            elevation = 3.dp
         )
     }
 
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
+            .then(interactionModifier)
             .background(backgroundBrush, shape)
             .border(1.dp, borderBrush, shape)
-            .clickable {
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
                 haptic()
                 onClick()
             }
@@ -236,7 +383,7 @@ fun SelectableChip(
     ) {
         Text(
             text = text,
-            color = if (selected) colors.textPrimary else colors.textSecondary,
+            color = if (selected) accent else colors.textSecondary,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1
@@ -300,7 +447,7 @@ fun BandFader(
                         val current = currentValue.coerceIn(currentRange.start, currentRange.endInclusive)
                         val fraction = ((current - currentRange.start) / span).coerceIn(0f, 1f)
                         val thumbY = paddingPx + usablePx * (1f - fraction)
-                        if (kotlin.math.abs(down.position.y - thumbY) > 44.dp.toPx()) {
+                        if (kotlin.math.abs(down.position.y - thumbY) > 48.dp.toPx()) {
                             return@awaitEachGesture
                         }
 
@@ -335,6 +482,23 @@ fun BandFader(
                     }
                 }
         ) {
+
+            // 1. Canal profundamente hundido (Inset shadow simulada por Modifier.neumorphicConcave)
+            val cavityWidth = 14.dp
+            Box(
+                modifier = Modifier
+                    .width(cavityWidth)
+                    .fillMaxHeight()
+                    .padding(vertical = 10.dp)
+                    .neumorphicConcave(
+                        radius = cavityWidth / 2,
+                        shadowColor = colors.neumorphicCavity,
+                        highlightColor = Color(0x0AFFFFFF),
+                        elevation = 4.dp
+                    )
+                    .background(Color(0xFF0F141D), RoundedCornerShape(cavityWidth / 2))
+            )
+
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val padding = 10.dp.toPx()
                 val usable = size.height - padding * 2
@@ -342,101 +506,62 @@ fun BandFader(
                 val zeroY = padding + usable * (1f - zeroFraction)
                 val thumbY = padding + usable * (1f - normalized)
 
-                // 1. Ranura neumórfica hundida (cavidad oscura + borde reflectante sutil)
-                val cavityWidth = 6.dp.toPx()
-                drawRoundRect(
-                    color = colors.neumorphicCavity,
-                    topLeft = Offset(centerX - cavityWidth / 2f, padding),
-                    size = Size(cavityWidth, usable),
-                    cornerRadius = CornerRadius(cavityWidth / 2f, cavityWidth / 2f)
-                )
-                drawRoundRect(
-                    color = Color(0x2BFFFFFF),
-                    topLeft = Offset(centerX - cavityWidth / 2f, padding),
-                    size = Size(cavityWidth, usable),
-                    cornerRadius = CornerRadius(cavityWidth / 2f, cavityWidth / 2f),
-                    style = Stroke(width = 0.8.dp.toPx())
-                )
-
                 // 2. Marca de 0 dB fresada
                 drawLine(
                     color = Color(0x66FFFFFF),
-                    start = Offset(centerX - 8.dp.toPx(), zeroY),
-                    end = Offset(centerX + 8.dp.toPx(), zeroY),
-                    strokeWidth = 1.2.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-
-                // 3. Columna de neón activa desde 0 dB hasta el cursor
-                val fillColor = if (highlighted) accent else accent.copy(alpha = 0.9f)
-                if (kotlin.math.abs(thumbY - zeroY) > 1.5f) {
-                    // Resplandor difuso exterior (bloom)
-                    drawLine(
-                        color = fillColor.copy(alpha = 0.3f),
-                        start = Offset(centerX, zeroY),
-                        end = Offset(centerX, thumbY),
-                        strokeWidth = 8.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                    // Haz central nítido
-                    drawLine(
-                        color = fillColor,
-                        start = Offset(centerX, zeroY),
-                        end = Offset(centerX, thumbY),
-                        strokeWidth = 3.dp.toPx(),
-                        cap = StrokeCap.Round
-                    )
-                }
-
-                // 4. Cursor táctil extruido (Neumorphic Knob)
-                val thumbW = 24.dp.toPx()
-                val thumbH = 12.dp.toPx()
-                val thumbLeft = centerX - thumbW / 2f
-                val thumbTop = thumbY - thumbH / 2f
-                val thumbRadius = 6.dp.toPx()
-
-                // Sombra proyectada del cursor
-                drawRoundRect(
-                    color = Color(0x99000000),
-                    topLeft = Offset(thumbLeft, thumbTop + 2.dp.toPx()),
-                    size = Size(thumbW, thumbH),
-                    cornerRadius = CornerRadius(thumbRadius, thumbRadius)
-                )
-
-                // Superficie táctil extruida (degradado metálico / grafito)
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0xFF2E394A), Color(0xFF141924)),
-                        startY = thumbTop,
-                        endY = thumbTop + thumbH
-                    ),
-                    topLeft = Offset(thumbLeft, thumbTop),
-                    size = Size(thumbW, thumbH),
-                    cornerRadius = CornerRadius(thumbRadius, thumbRadius)
-                )
-
-                // Resalte especular en el borde superior (Apple glass highlight)
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0x80FFFFFF), Color(0x1AFFFFFF)),
-                        startY = thumbTop,
-                        endY = thumbTop + thumbH
-                    ),
-                    topLeft = Offset(thumbLeft, thumbTop),
-                    size = Size(thumbW, thumbH),
-                    cornerRadius = CornerRadius(thumbRadius, thumbRadius),
-                    style = Stroke(width = 1.dp.toPx())
-                )
-
-                // Ranura central iluminada con el acento del motor
-                val gripW = 10.dp.toPx()
-                drawLine(
-                    color = fillColor,
-                    start = Offset(centerX - gripW / 2f, thumbY),
-                    end = Offset(centerX + gripW / 2f, thumbY),
+                    start = Offset(centerX - 12.dp.toPx(), zeroY),
+                    end = Offset(centerX + 12.dp.toPx(), zeroY),
                     strokeWidth = 1.5.dp.toPx(),
                     cap = StrokeCap.Round
                 )
+            }
+
+            // 3. Thumb 3D
+            val thumbYPadding = 10.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(vertical = thumbYPadding)
+            ) {
+                // Layout en Box puro no permite offset relativo tan simple sin onSizeChanged o padding,
+                // Usamos Offset animado o calculado con Spacer y offset
+                Box(
+                    modifier = Modifier
+                        .offset(
+                            x = (faderWidth - 28.dp) / 2,
+                            y = (height - thumbYPadding * 2 - 24.dp) * (1f - normalized)
+                        )
+                        .size(width = 28.dp, height = 24.dp)
+                        // Convexo
+                        .neumorphicConvex(
+                            radius = 12.dp,
+                            highlightColor = colors.neumorphicHighlight,
+                            shadowColor = colors.neumorphicShadow,
+                            elevation = 4.dp
+                        )
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(colors.surfaceElevated, colors.background)
+                            ),
+                            RoundedCornerShape(12.dp)
+                        )
+                        .border(
+                            1.dp,
+                            Brush.verticalGradient(
+                                listOf(Color(0x26FFFFFF), Color(0x05FFFFFF))
+                            ),
+                            RoundedCornerShape(12.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val fillColor = if (highlighted) accent else accent.copy(alpha = 0.5f)
+                    // LED indicator en el thumb
+                    Box(
+                        modifier = Modifier
+                            .size(width = 12.dp, height = 3.dp)
+                            .background(fillColor, RoundedCornerShape(1.5.dp))
+                    )
+                }
             }
         }
 
@@ -498,6 +623,14 @@ fun AuraKnob(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(diameter)
+                // Anillo exterior extruido (convexo)
+                .neumorphicConvex(
+                    radius = diameter / 2,
+                    highlightColor = colors.neumorphicHighlight,
+                    shadowColor = colors.neumorphicShadow,
+                    elevation = 8.dp
+                )
+                .background(colors.background, CircleShape)
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = {
                         haptic()
@@ -518,108 +651,74 @@ fun AuraKnob(
                     )
                 }
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val stroke = 5.dp.toPx()
-                val radius = (min(this.size.width, this.size.height) / 2f) - stroke
-                val topLeft = Offset((this.size.width - radius * 2f) / 2f, (this.size.height - radius * 2f) / 2f)
-                val arcSize = Size(radius * 2f, radius * 2f)
-
-                // Canal cóncavo del arco
-                drawArc(
-                    color = colors.neumorphicCavity,
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke + 2.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                // Arco de fondo con borde sutil
-                drawArc(
-                    color = Color(0x22FFFFFF),
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-
-                // Arco activo con resplandor neón
-                drawArc(
-                    color = accent.copy(alpha = 0.35f),
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle * animated,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke + 4.dp.toPx(), cap = StrokeCap.Round)
-                )
-                drawArc(
-                    color = accent,
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle * animated,
-                    useCenter = false,
-                    topLeft = topLeft,
-                    size = arcSize,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round)
-                )
-
-                // Perilla central extruida (Neumorphic dial)
-                val knobRadius = radius - 10.dp.toPx()
-                // Sombra exterior
-                drawCircle(
-                    color = Color(0x99000000),
-                    radius = knobRadius,
-                    center = center + Offset(0f, 2.dp.toPx())
-                )
-                // Cuerpo metálico
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0xFF2E3848), Color(0xFF141924)),
-                        center = center - Offset(knobRadius * 0.3f, knobRadius * 0.3f),
-                        radius = knobRadius * 1.4f
-                    ),
-                    radius = knobRadius,
-                    center = center
-                )
-                // Borde especular de luz
-                drawCircle(
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0x80FFFFFF), Color(0x1AFFFFFF)),
-                        startY = center.y - knobRadius,
-                        endY = center.y + knobRadius
-                    ),
-                    radius = knobRadius,
-                    center = center,
-                    style = Stroke(width = 1.dp.toPx())
-                )
-
-                // Indicador de aguja en el dial
-                val angleRad = Math.toRadians((startAngle + sweepAngle * animated).toDouble())
-                val outer = knobRadius - 4.dp.toPx()
-                val inner = outer - 10.dp.toPx()
-                drawLine(
-                    color = accent,
-                    start = Offset(
-                        (center.x + inner * kotlin.math.cos(angleRad)).toFloat(),
-                        (center.y + inner * kotlin.math.sin(angleRad)).toFloat()
-                    ),
-                    end = Offset(
-                        (center.x + outer * kotlin.math.cos(angleRad)).toFloat(),
-                        (center.y + outer * kotlin.math.sin(angleRad)).toFloat()
-                    ),
-                    strokeWidth = 3.dp.toPx(),
-                    cap = StrokeCap.Round
+            // Centro cóncavo
+            Box(
+                modifier = Modifier
+                    .size(diameter - 24.dp)
+                    .neumorphicConcave(
+                        radius = (diameter - 24.dp) / 2,
+                        shadowColor = colors.neumorphicCavity,
+                        highlightColor = Color(0x0AFFFFFF),
+                        elevation = 6.dp
+                    )
+                    .background(Color(0xFF0F141D), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = valueText,
+                    color = colors.textPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
-            Text(
-                text = valueText,
-                color = colors.textPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
+
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val radius = size.width / 2f
+                val markRadiusOuter = radius - 4.dp.toPx()
+                val markRadiusInner = radius - 10.dp.toPx()
+                val numMarks = 30
+                val angleStep = sweepAngle / (numMarks - 1)
+
+                for (i in 0 until numMarks) {
+                    val angleDeg = startAngle + i * angleStep
+                    val angleRad = Math.toRadians(angleDeg.toDouble())
+
+                    val markFraction = i.toFloat() / (numMarks - 1)
+                    val isActive = markFraction <= animated
+
+                    val start = Offset(
+                        (center.x + markRadiusInner * cos(angleRad)).toFloat(),
+                        (center.y + markRadiusInner * sin(angleRad)).toFloat()
+                    )
+                    val end = Offset(
+                        (center.x + markRadiusOuter * cos(angleRad)).toFloat(),
+                        (center.y + markRadiusOuter * sin(angleRad)).toFloat()
+                    )
+
+                    val markColor = if (isActive) {
+                        accent.copy(alpha = 0.4f + (0.6f * markFraction)) // Gradiente a lo largo del volumen
+                    } else {
+                        Color(0x33FFFFFF)
+                    }
+
+                    if (isActive) {
+                         drawLine(
+                            color = markColor.copy(alpha = 0.4f),
+                            start = start,
+                            end = end,
+                            strokeWidth = 3.dp.toPx(),
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    drawLine(
+                        color = markColor,
+                        start = start,
+                        end = end,
+                        strokeWidth = 1.5.dp.toPx(),
+                        cap = StrokeCap.Round
+                    )
+                }
+            }
         }
         if (label.isNotEmpty()) {
             Text(
@@ -653,20 +752,21 @@ fun SpectrumBars(
     val accent = controlAccent()
     val shape = RoundedCornerShape(16.dp)
 
+    val colors = AuraTheme.colors
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
+            // Panel cóncavo (hundido)
+            .neumorphicConcave(
+                radius = 16.dp,
+                shadowColor = colors.neumorphicCavity,
+                highlightColor = Color(0x0AFFFFFF),
+                elevation = 6.dp
+            )
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF090D15), Color(0xFF101725))
-                ),
-                shape
-            )
-            .border(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(Color(0x35FFFFFF), Color(0x0CFFFFFF))
+                    listOf(Color(0xFF060910), Color(0xFF0B101A))
                 ),
                 shape
             )
@@ -804,86 +904,81 @@ fun AuraSliderRow(
                 },
             contentAlignment = Alignment.CenterStart
         ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val trackHeight = 7.dp.toPx()
-                val centerY = size.height / 2f
-                val thumbRadiusPx = 11.dp.toPx()
-                val usableWidth = size.width - thumbRadiusPx * 2f
-                val thumbX = thumbRadiusPx + usableWidth * fraction
+            // 1. Canal neumórfico cóncavo (ranura profunda)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .neumorphicConcave(
+                        radius = 4.dp,
+                        shadowColor = colors.neumorphicCavity,
+                        highlightColor = Color(0x0AFFFFFF),
+                        elevation = 2.dp
+                    )
+                    .background(Color(0xFF0F141D), RoundedCornerShape(4.dp))
+            )
 
-                // 1. Canal neumórfico cóncavo (ranura profunda)
-                drawRoundRect(
-                    color = colors.neumorphicCavity,
-                    topLeft = Offset(0f, centerY - trackHeight / 2f),
-                    size = Size(size.width, trackHeight),
-                    cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f)
-                )
-                drawRoundRect(
-                    color = Color(0x24FFFFFF),
-                    topLeft = Offset(0f, centerY - trackHeight / 2f),
-                    size = Size(size.width, trackHeight),
-                    cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f),
-                    style = Stroke(width = 0.8.dp.toPx())
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(accent.copy(alpha = 0.5f), accent)
+                        )
+                    )
+            )
 
-                // 2. Progreso activo con degradado neón
-                if (thumbX > 0f) {
-                    drawRoundRect(
-                        brush = Brush.horizontalGradient(
-                            listOf(accent.copy(alpha = 0.7f), accent)
+            // Layout custom para el thumb
+            var widthPx by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
+            val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+            val density = currentDensity.density
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onSizeChanged { widthPx = it.width.toFloat() }
+            ) {
+                val thumbWidth = 24.dp
+                val thumbHeight = 20.dp
+                val thumbRadiusPx = 11.dp
+                // Aproximación del offset para Box
+                val usableWidth = max(0f, widthPx - (thumbRadiusPx.value * 2 * density))
+
+                Box(
+                    modifier = Modifier
+                        .offset(
+                            x = with(androidx.compose.ui.platform.LocalDensity.current) { (thumbRadiusPx.toPx() + (usableWidth * fraction) - (thumbWidth.toPx() / 2)).toDp() },
+                            y = 8.dp
+                        )
+                        .size(width = thumbWidth, height = thumbHeight)
+                        .neumorphicConvex(
+                            radius = 10.dp,
+                            highlightColor = colors.neumorphicHighlight,
+                            shadowColor = colors.neumorphicShadow,
+                            elevation = 3.dp
+                        )
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(colors.surfaceElevated, colors.background)
+                            ),
+                            RoundedCornerShape(10.dp)
+                        )
+                        .border(
+                            1.dp,
+                            Brush.verticalGradient(
+                                listOf(Color(0x26FFFFFF), Color(0x05FFFFFF))
+                            ),
+                            RoundedCornerShape(10.dp)
                         ),
-                        topLeft = Offset(0f, centerY - trackHeight / 2f),
-                        size = Size(thumbX, trackHeight),
-                        cornerRadius = CornerRadius(trackHeight / 2f, trackHeight / 2f)
+                    contentAlignment = Alignment.Center
+                ) {
+                     Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(accent, CircleShape)
                     )
                 }
-
-                // 3. Botón deslizador de cápsula física táctil
-                val knobWidth = 24.dp.toPx()
-                val knobHeight = 20.dp.toPx()
-                val knobLeft = thumbX - knobWidth / 2f
-                val knobTop = centerY - knobHeight / 2f
-                val knobRadius = 10.dp.toPx()
-
-                // Sombra proyectada
-                drawRoundRect(
-                    color = Color(0x80000000),
-                    topLeft = Offset(knobLeft, knobTop + 2.dp.toPx()),
-                    size = Size(knobWidth, knobHeight),
-                    cornerRadius = CornerRadius(knobRadius, knobRadius)
-                )
-
-                // Cuerpo extruido
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0xFF2E3848), Color(0xFF141924)),
-                        startY = knobTop,
-                        endY = knobTop + knobHeight
-                    ),
-                    topLeft = Offset(knobLeft, knobTop),
-                    size = Size(knobWidth, knobHeight),
-                    cornerRadius = CornerRadius(knobRadius, knobRadius)
-                )
-
-                // Borde especular Apple Glass
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        listOf(Color(0x99FFFFFF), Color(0x1AFFFFFF)),
-                        startY = knobTop,
-                        endY = knobTop + knobHeight
-                    ),
-                    topLeft = Offset(knobLeft, knobTop),
-                    size = Size(knobWidth, knobHeight),
-                    cornerRadius = CornerRadius(knobRadius, knobRadius),
-                    style = Stroke(width = 1.dp.toPx())
-                )
-
-                // Punto central iluminado
-                drawCircle(
-                    color = accent,
-                    radius = 2.5.dp.toPx(),
-                    center = Offset(thumbX, centerY)
-                )
             }
         }
     }
@@ -909,16 +1004,15 @@ fun ResponseCurve(
         modifier = modifier
             .fillMaxWidth()
             .height(height)
+            .neumorphicConcave(
+                radius = 18.dp,
+                shadowColor = colors.neumorphicCavity,
+                highlightColor = Color(0x0AFFFFFF),
+                elevation = 6.dp
+            )
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF090D14), Color(0xFF0F1420))
-                ),
-                shape
-            )
-            .border(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(Color(0x38FFFFFF), Color(0x0AFFFFFF))
+                    listOf(Color(0xFF060910), Color(0xFF0B101A))
                 ),
                 shape
             )
@@ -1033,28 +1127,53 @@ fun AuraSwitch(
     )
 
     val trackBgColor by animateColorAsState(
-        targetValue = if (checked) accent else Color(0xFF141A25),
+        targetValue = if (checked) accent.copy(alpha = 0.2f) else Color.Transparent,
         animationSpec = tween(durationMillis = 180),
         label = "switchBg"
     )
+
+    // Inactivo = Convexo. Activo = Cóncavo + Brillo
+    val interactionModifier = if (checked) {
+        Modifier.neumorphicConcave(
+            radius = trackHeight / 2,
+            shadowColor = colors.neumorphicCavity,
+            highlightColor = accent.copy(alpha = 0.3f),
+            elevation = 3.dp
+        )
+    } else {
+        Modifier.neumorphicConvex(
+            radius = trackHeight / 2,
+            highlightColor = colors.neumorphicHighlight,
+            shadowColor = colors.neumorphicShadow,
+            elevation = 3.dp
+        )
+    }
 
     Box(
         modifier = modifier
             .width(trackWidth)
             .height(trackHeight)
+            .then(interactionModifier)
             .clip(RoundedCornerShape(999.dp))
-            .background(trackBgColor)
+            .background(
+                if (checked) Brush.verticalGradient(listOf(trackBgColor, Color.Transparent))
+                else Brush.verticalGradient(listOf(colors.glassSurfaceStart, colors.glassSurfaceEnd))
+            )
             .border(
                 1.dp,
                 Brush.verticalGradient(
                     listOf(
-                        if (checked) Color(0x66FFFFFF) else Color(0x28FFFFFF),
-                        Color(0x0AFFFFFF)
+                        if (checked) accent.copy(alpha = 0.5f) else Color(0x1AFFFFFF),
+                        Color.Transparent
                     )
                 ),
                 RoundedCornerShape(999.dp)
             )
-            .clickable(enabled = enabled) {
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = enabled
+            ) {
                 haptic()
                 onCheckedChange(!checked)
             },
@@ -1064,11 +1183,9 @@ fun AuraSwitch(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .size(thumbSize)
-                .shadow(elevation = 4.dp, shape = CircleShape)
+                .shadow(elevation = 2.dp, shape = CircleShape)
                 .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFFFFFFFF), Color(0xFFD6DFEC))
-                    ),
+                    if (checked) accent else Color(0xFFE2E8F0),
                     CircleShape
                 )
                 .border(
