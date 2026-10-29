@@ -14,9 +14,8 @@ class AudioEffectSessionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val sessionId = intent?.getIntExtra(AudioEffect.EXTRA_AUDIO_SESSION, 0) ?: 0
         if (sessionId == 0) return
-        val packageName = intent?.getStringExtra(AudioEffect.EXTRA_PACKAGE_NAME)
         when (intent?.action) {
-            AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION -> AuraLineEngine.onSessionOpened(sessionId, packageName)
+            AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION -> AuraLineEngine.onSessionOpened(sessionId)
             AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION -> AuraLineEngine.onSessionClosed(sessionId)
         }
     }

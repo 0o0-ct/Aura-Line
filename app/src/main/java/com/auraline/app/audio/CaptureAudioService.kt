@@ -130,7 +130,9 @@ class CaptureAudioService : Service() {
         NativeEngine.init(sampleRate)
         // Un único camino de escritura: el motor nativo recibe el estado completo desde
         // AudioParams (AudioRepository). Sin valores hardcodeados por aquí.
-        NativeEngine.setState(AuraLineModule.repository(this).getState().copy(motorEnabled = true))
+        NativeEngineBridge.syncState(
+            AuraLineModule.repository(this).getState().copy(motorEnabled = true)
+        )
 
         audioRecord = rec
         audioTrack = track
@@ -148,7 +150,7 @@ class CaptureAudioService : Service() {
                         floatBuf[i] = shortBuf[i] / 32768f
                     }
                     val frames = read / 2
-                    NativeEngine.processBlock(floatBuf, frames)
+                    NativeEngine.writeInputPcm(floatBuf, 0, frames)
                     for (i in 0 until read) {
                         val v = (floatBuf[i] * 32767f).toInt().coerceIn(-32768, 32767)
                         shortBuf[i] = v.toShort()
@@ -171,7 +173,9 @@ class CaptureAudioService : Service() {
         audioTrack = null
         runCatching { mediaProjection?.stop() }
         mediaProjection = null
-        NativeEngine.setState(AuraLineModule.repository(this).getState().copy(motorEnabled = false))
+        NativeEngineBridge.syncState(
+            AuraLineModule.repository(this).getState().copy(motorEnabled = false)
+        )
     }
 
     override fun onDestroy() {
