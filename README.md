@@ -6,10 +6,10 @@ Procesa la salida global del dispositivo con una cadena de efectos real (`Dynami
 
 | Especificación | Detalle |
 |---|---|
-| **Versión** | 2.4.0 (versionCode 6) |
+| **Versión** | 4.1.0 (versionCode 20) |
 | **minSdk / targetSdk** | 28 / 35 (Android 9.0 – 15) |
-| **Lenguaje** | Kotlin 2.0.20 · Jetpack Compose |
-| **Diseño** | Apple Neumorphism + Glassmorphism UI (30 paletas) |
+| **Lenguaje** | Kotlin 2.0.20 · Jetpack Compose · C++17 (NDK, motor DSP experimental) |
+| **Diseño** | Apple Neumorphism + Glassmorphism UI (30 paletas) · dock inferior en teléfono, riel lateral en tablet (≥ 600 dp) |
 | **APK release** | ~3,4 MB con R8 optimizado |
 
 Capturas en [`docs/capturas`](docs/capturas). APKs compilados en [`dist/`](dist/).
@@ -69,12 +69,42 @@ Capturas en [`docs/capturas`](docs/capturas). APKs compilados en [`dist/`](dist/
   - `Visualizer` en tiempo real con normalización por trama contra el pico y caída balística suave (decay 0.82), emitiendo una barra por cada una de las 25 bandas del ecualizador.
 - **Servicio en Primer Plano (`AudioForegroundService`)**:
   - Servicio `mediaPlayback` con notificación persistente y controles rápidos para garantizar que el sistema no interrumpa el motor.
+- **Limitador**: techo de −2 dBFS en `DynamicsProcessing` (constante `LIMITER_THRESHOLD_DB`), con auto-headroom que baja el preamp según el refuerzo acumulado de EQ, compresor y reverb.
+
+### Motor DSP nativo (`app/src/main/cpp`, experimental)
+
+`libauralinedsp.so` (C++17) contiene un EQ de biquads en cascada con coeficientes `double` y rampa anti-*zipper*, un limitador con *lookahead* de ~5 ms y estimación de pico inter-muestra, saneado de NaN/Inf/denormales y *soft-clip* de seguridad. Se expone vía JNI en `NativeEngine`.
+
+**Qué hace y qué no hace hoy, sin adornos:**
+
+- ✅ Compila dentro del APK y se puede invocar (`NativeEngine.processBlock`) para procesar bloques en memoria y verificar respuesta/clipping.
+- ❌ **No procesa la salida del sistema.** Sin root, Android no permite insertar un procesador propio en la mezcla global; la cadena que realmente suena sigue siendo `DynamicsProcessing`.
+- ❌ No abre streams de Oboe a propósito: un stream *Exclusive* de salida emitiendo silencio puede robar la ruta de audio.
+
+Es la base para un futuro modo de captura (`AudioPlaybackCapture`, API 29+, con las limitaciones de DRM y doble audio que impone la plataforma) o para un módulo de efecto con root.
+
+Pruebas de aceptación del motor nativo en el PC (sin Android, sólo `g++`):
+
+```bash
+tools/dsp-host-test/run.sh
+# pico salida = 0.8862 (-1.05 dBFS)   ← 0 dBFS + 25 bandas a +24 dB, bajo el techo de −1 dB
+# prueba nula (EQ plano): error max ≈ 1e-11 (-218 dB)
+```
+
+### Verificar en el dispositivo que el motor actúa
+
+```bash
+adb logcat -s AuraLine            # "Cadena global lista: N bandas + MBC + limitador"
+adb shell dumpsys media.audio_flinger | grep -iA3 "DynamicsProcessing"
+```
+
+Si `audio_flinger` muestra el efecto *enabled* en la sesión 0 y aun así no se oye cambio, el fabricante está anulando los efectos globales (frecuente en One UI, MIUI y EMUI con su propio DSP). El **diagnóstico acústico** de Ajustes (tonos 485/1771 Hz medidos por micrófono) confirma de forma objetiva si la ganancia llega a la señal real.
 
 ---
 
 ## 🚀 Tecnologías Utilizadas
 
-- **Lenguaje**: Kotlin 100% (2.0.20)
+- **Lenguaje**: Kotlin (2.0.20) + C++17 (NDK r27, CMake 3.22, Oboe 1.8.1 enlazado para el futuro camino de salida propia)
 - **UI Framework**: Jetpack Compose con renderizado directo en Canvas (`drawRoundRect`, `drawPath`, degradados verticales).
 - **Estilo Visual**: Apple Neumorphism & Glassmorphism UI.
 - **Arquitectura**: Clean Architecture modularizada.
@@ -86,7 +116,7 @@ Capturas en [`docs/capturas`](docs/capturas). APKs compilados en [`dist/`](dist/
 
 ### Requisitos
 - JDK 17 – 23
-- Android SDK (API 28 mínimo, API 35 destino)
+- Android SDK (API 28 mínimo, API 35 destino), NDK y CMake 3.22.1 (los instala Android Studio al sincronizar)
 
 ### Pasos
 ```bash

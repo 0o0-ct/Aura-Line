@@ -25,6 +25,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -82,9 +85,17 @@ private val destinations = listOf(
     Destination("Ajustes", Icons.Rounded.Settings)
 )
 
+/** Ancho a partir del cual se usa riel lateral (tablets y plegables abiertos). */
+private val ExpandedWidth = 600.dp
+
+/** Ancho máximo del contenido en pantallas grandes para que los controles no se estiren. */
+private val MaxContentWidth = 760.dp
+
 @Composable
 fun AuraLineApp(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
+    val configuration = LocalConfiguration.current
+    val expanded = configuration.screenWidthDp.dp >= ExpandedWidth
     val state by viewModel.state.collectAsState()
     val accent = if (state.motorEnabled) colors.accent else colors.textSecondary
     val settings by viewModel.settings.collectAsState()
@@ -221,114 +232,184 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                     }
                 },
                 bottomBar = {
-                    // Floating Frosted Glass Dock (Estilo macOS / iOS Dock flotante con cristal esmerilado)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp)
-                            .navigationBarsPadding(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        val dockShape = RoundedCornerShape(28.dp)
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(64.dp)
-                                .shadow(elevation = 16.dp, shape = dockShape, ambientColor = Color(0x66000000), spotColor = Color(0x80000000))
-                                .background(
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xD9161E2C),
-                                            Color(0xF20F1520)
-                                        )
-                                    ),
-                                    dockShape
-                                )
-                                .border(
-                                    1.dp,
-                                    Brush.verticalGradient(
-                                        listOf(
-                                            Color(0x4DFFFFFF),
-                                            Color(0x14FFFFFF),
-                                            Color(0x05FFFFFF)
-                                        )
-                                    ),
-                                    dockShape
-                                )
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            horizontalArrangement = Arrangement.SpaceAround,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            destinations.forEachIndexed { index, destination ->
-                                val selected = tab == index
-                                val itemBgColor by animateColorAsState(
-                                    targetValue = if (selected) accent.copy(alpha = 0.16f) else Color.Transparent,
-                                    animationSpec = tween(durationMillis = 200),
-                                    label = "tabBg"
-                                )
-                                val itemBorderColor by animateColorAsState(
-                                    targetValue = if (selected) accent.copy(alpha = 0.45f) else Color.Transparent,
-                                    animationSpec = tween(durationMillis = 200),
-                                    label = "tabBorder"
-                                )
-                                val itemTextColor by animateColorAsState(
-                                    targetValue = if (selected) accent else colors.textSecondary.copy(alpha = 0.7f),
-                                    animationSpec = tween(durationMillis = 200),
-                                    label = "tabText"
-                                )
-
-                                val itemShape = RoundedCornerShape(20.dp)
-                                Column(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(52.dp)
-                                        .clip(itemShape)
-                                        .background(itemBgColor, itemShape)
-                                        .border(if (selected) 1.dp else 0.dp, itemBorderColor, itemShape)
-                                        .clickable(
-                                            interactionSource = remember { MutableInteractionSource() },
-                                            indication = null
-                                        ) {
-                                            haptic()
-                                            tab = index
-                                        },
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = destination.icon,
-                                        contentDescription = destination.label,
-                                        tint = itemTextColor,
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = destination.label,
-                                        color = itemTextColor,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                        letterSpacing = (-0.1).sp,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-                        }
+                    if (!expanded) {
+                        FloatingDock(
+                            selected = tab,
+                            accent = accent,
+                            onSelect = { index -> haptic(); tab = index }
+                        )
                     }
                 }
             ) { innerPadding ->
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding)
                 ) {
-                    when (tab) {
-                        0 -> EqualizerScreen(viewModel = viewModel)
-                        1 -> ToneScreen(viewModel = viewModel)
-                        2 -> EffectsScreen(viewModel = viewModel)
-                        else -> SettingsScreen(viewModel = viewModel)
+                    if (expanded) {
+                        SideRail(
+                            selected = tab,
+                            accent = accent,
+                            onSelect = { index -> haptic(); tab = index }
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .widthIn(max = MaxContentWidth)
+                        ) {
+                            when (tab) {
+                                0 -> EqualizerScreen(viewModel = viewModel)
+                                1 -> ToneScreen(viewModel = viewModel)
+                                2 -> EffectsScreen(viewModel = viewModel)
+                                else -> SettingsScreen(viewModel = viewModel)
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+/** Dock flotante inferior (teléfonos): cristal esmerilado estilo iOS/macOS. */
+@Composable
+private fun FloatingDock(
+    selected: Int,
+    accent: Color,
+    onSelect: (Int) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.Center
+    ) {
+        val dockShape = RoundedCornerShape(28.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .glassDock(dockShape)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            destinations.forEachIndexed { index, destination ->
+                DockItem(
+                    destination = destination,
+                    selected = selected == index,
+                    accent = accent,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    onClick = { onSelect(index) }
+                )
+            }
+        }
+    }
+}
+
+/** Riel lateral (tablets / pantallas ≥ 600 dp): mismo cristal, orientación vertical. */
+@Composable
+private fun SideRail(
+    selected: Int,
+    accent: Color,
+    onSelect: (Int) -> Unit
+) {
+    val railShape = RoundedCornerShape(28.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .padding(start = 16.dp, top = 8.dp, bottom = 16.dp)
+            .navigationBarsPadding()
+            .width(88.dp)
+            .glassDock(railShape)
+            .padding(horizontal = 8.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        destinations.forEachIndexed { index, destination ->
+            DockItem(
+                destination = destination,
+                selected = selected == index,
+                accent = accent,
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                onClick = { onSelect(index) }
+            )
+        }
+    }
+}
+
+private fun Modifier.glassDock(shape: RoundedCornerShape): Modifier = this
+    .shadow(elevation = 16.dp, shape = shape, ambientColor = Color(0x66000000), spotColor = Color(0x80000000))
+    .background(
+        Brush.verticalGradient(listOf(Color(0xD9161E2C), Color(0xF20F1520))),
+        shape
+    )
+    .border(
+        1.dp,
+        Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x14FFFFFF), Color(0x05FFFFFF))),
+        shape
+    )
+
+@Composable
+private fun DockItem(
+    destination: Destination,
+    selected: Boolean,
+    accent: Color,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    val colors = AuraTheme.colors
+    val itemBgColor by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.16f) else Color.Transparent,
+        animationSpec = tween(durationMillis = 200),
+        label = "tabBg"
+    )
+    val itemBorderColor by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.45f) else Color.Transparent,
+        animationSpec = tween(durationMillis = 200),
+        label = "tabBorder"
+    )
+    val itemTextColor by animateColorAsState(
+        targetValue = if (selected) accent else colors.textSecondary.copy(alpha = 0.7f),
+        animationSpec = tween(durationMillis = 200),
+        label = "tabText"
+    )
+    val itemShape = RoundedCornerShape(20.dp)
+    Column(
+        modifier = modifier
+            .clip(itemShape)
+            .background(itemBgColor, itemShape)
+            .border(if (selected) 1.dp else 0.dp, itemBorderColor, itemShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = destination.icon,
+            contentDescription = destination.label,
+            tint = itemTextColor,
+            modifier = Modifier.size(22.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = destination.label,
+            color = itemTextColor,
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            letterSpacing = (-0.1).sp,
+            maxLines = 1
+        )
     }
 }
