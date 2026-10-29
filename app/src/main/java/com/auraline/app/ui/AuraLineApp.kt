@@ -70,6 +70,7 @@ import com.auraline.core.ui.components.LocalHapticsEnabled
 import com.auraline.core.ui.components.LocalPowered
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.components.hapticFeedback
+import com.auraline.core.ui.components.neumorphicConvex
 import com.auraline.core.ui.theme.AuraTheme
 import kotlinx.coroutines.launch
 
@@ -144,16 +145,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                     ),
                     radius = size.width * 0.9f,
                     center = Offset(size.width * 0.85f, size.height * 0.12f)
-                )
-                // Resplandor suave inferior izquierdo índigo
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0xFF1E2B44).copy(alpha = 0.22f), Color.Transparent),
-                        center = Offset(size.width * 0.15f, size.height * 0.88f),
-                        radius = size.width * 0.8f
-                    ),
-                    radius = size.width * 0.8f,
-                    center = Offset(size.width * 0.15f, size.height * 0.88f)
                 )
             }
 
@@ -346,17 +337,23 @@ private fun SideRail(
     }
 }
 
-private fun Modifier.glassDock(shape: RoundedCornerShape): Modifier = this
-    .shadow(elevation = 16.dp, shape = shape, ambientColor = Color(0x66000000), spotColor = Color(0x80000000))
-    .background(
-        Brush.verticalGradient(listOf(Color(0xD9161E2C), Color(0xF20F1520))),
-        shape
-    )
-    .border(
-        1.dp,
-        Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x14FFFFFF), Color(0x05FFFFFF))),
-        shape
-    )
+@Composable
+private fun Modifier.glassDock(shape: RoundedCornerShape): Modifier {
+    val colors = AuraTheme.colors
+    return this
+        .neumorphicConvex(
+            radius = 28.dp,
+            highlightColor = colors.neumorphicHighlight,
+            shadowColor = colors.neumorphicShadow,
+            elevation = 8.dp
+        )
+        .background(colors.surfaceElevated, shape)
+        .border(
+            1.dp,
+            Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x14FFFFFF), Color(0x05FFFFFF))),
+            shape
+        )
+}
 
 @Composable
 private fun DockItem(

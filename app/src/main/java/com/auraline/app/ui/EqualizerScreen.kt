@@ -92,9 +92,9 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 10.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         EngineStatusCard(engine = engine, motorEnabled = state.motorEnabled)
 
@@ -124,8 +124,9 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 FactoryPresets.forEach { preset ->
                     SelectableChip(
@@ -295,15 +296,20 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     onClick = { viewModel.setBypass(!state.bypass) }
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            AuraSliderRow(
-                label = "Nivel de preamplificación",
-                valueText = "${formatGain(state.preampDb)} dB",
-                value = state.preampDb,
-                valueRange = -15f..15f,
-                onValueChange = { viewModel.setPreamp(it) },
-                enabled = state.motorEnabled
-            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                com.auraline.core.ui.components.AuraKnob(
+                    value = state.preampDb,
+                    onValueChange = { viewModel.setPreamp(it) },
+                    valueRange = -15f..15f,
+                    label = "Preamplificación",
+                    valueText = "${formatGain(state.preampDb)} dB",
+                    diameter = 110.dp
+                )
+            }
             if (state.bypass) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
