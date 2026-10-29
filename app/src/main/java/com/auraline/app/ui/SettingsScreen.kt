@@ -16,11 +16,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -54,6 +57,7 @@ import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.StatusPill
+import com.auraline.core.ui.components.hapticFeedback
 import com.auraline.core.ui.components.neumorphicConvex
 import com.auraline.core.ui.components.neumorphicConcave
 import com.auraline.core.ui.theme.AuraPalettes
@@ -62,6 +66,7 @@ import com.auraline.core.ui.theme.AuraTheme
 @Composable
 fun SettingsScreen(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
+    val haptic = hapticFeedback()
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val eqState by viewModel.state.collectAsState()
@@ -88,9 +93,9 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 10.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Perfil de uso: ajusta rango, protección, efectos y curva base de golpe
         AuraCard(modifier = Modifier.fillMaxWidth()) {
@@ -102,8 +107,9 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 UsageProfiles.forEach { profile ->
                     SelectableChip(
@@ -123,56 +129,106 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             }
         }
 
-        // Paleta de colores con discos táctiles Neumórficos
+        // Paleta de colores con muestras de los tonos monocromáticos reales (coloresMONO)
         AuraCard(modifier = Modifier.fillMaxWidth()) {
+            val currentPalette = AuraPalettes.firstOrNull { it.key == settings.theme.paletteKey } ?: AuraPalettes.first()
             SectionTitle(
-                text = "Paleta",
-                trailing = AuraPalettes.firstOrNull { it.key == settings.theme.paletteKey }?.label ?: settings.theme.paletteKey
+                text = "Paleta monocromática",
+                trailing = currentPalette.label
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "30 paletas monocromáticas de alta fidelidad. Al pulsar una, toda la app (fondo, tarjetas, perillas y faders) se viste armónicamente con sus tonos.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
             )
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 8.dp, horizontal = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-
                 AuraPalettes.forEach { palette ->
                     val selected = settings.theme.paletteKey == palette.key
+                    val cardShape = RoundedCornerShape(14.dp)
                     Box(
-                        contentAlignment = Alignment.Center,
                         modifier = Modifier
-                            .size(44.dp)
+                            .width(120.dp)
+                            .height(68.dp)
                             .then(
                                 if (selected) Modifier.neumorphicConcave(
-                                    radius = 22.dp,
+                                    radius = 14.dp,
                                     shadowColor = colors.neumorphicCavity,
-                                    highlightColor = colors.neumorphicHighlight,
+                                    highlightColor = colors.accent.copy(alpha = 0.45f),
                                     elevation = 3.dp
                                 )
                                 else Modifier.neumorphicConvex(
-                                    radius = 22.dp,
+                                    radius = 14.dp,
                                     shadowColor = colors.neumorphicShadow,
                                     highlightColor = colors.neumorphicHighlight,
                                     elevation = 3.dp
                                 )
                             )
                             .background(
-                                if (selected) colors.background else colors.surfaceElevated,
-                                CircleShape
+                                if (selected) colors.surfaceElevated else colors.surface,
+                                cardShape
                             )
-                            .clickable { viewModel.setPalette(palette.key, palette.accent.value.toInt()) }
+                            .border(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) colors.accent else colors.outline.copy(alpha = 0.25f),
+                                shape = cardShape
+                            )
+                            .clickable {
+                                haptic()
+                                viewModel.setPalette(palette.key, palette.accent.value.toInt())
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .shadow(
-                                    elevation = if (selected) 4.dp else 0.dp,
-                                    shape = CircleShape,
-                                    ambientColor = palette.accent
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = palette.label,
+                                    color = if (selected) colors.accent else colors.textPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
                                 )
-                                .background(palette.accent, CircleShape)
-                        )
+                                if (selected) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .background(colors.accent, CircleShape)
+                                    )
+                                }
+                            }
+                            // Muestra visual con todos los tonos monocromáticos reales de la paleta
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(7.dp))
+                                    .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(7.dp))
+                            ) {
+                                palette.colors.forEach { col ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxHeight()
+                                            .background(col)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

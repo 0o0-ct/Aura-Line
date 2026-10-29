@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -25,8 +24,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -35,8 +32,6 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -140,16 +135,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                     radius = size.width * 0.9f,
                     center = Offset(size.width * 0.85f, size.height * 0.12f)
                 )
-                // Resplandor suave inferior izquierdo índigo
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        colors = listOf(Color(0xFF1E2B44).copy(alpha = 0.22f), Color.Transparent),
-                        center = Offset(size.width * 0.15f, size.height * 0.88f),
-                        radius = size.width * 0.8f
-                    ),
-                    radius = size.width * 0.8f,
-                    center = Offset(size.width * 0.15f, size.height * 0.88f)
-                )
             }
 
             Scaffold(
@@ -227,8 +212,8 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                     }
                 },
                 bottomBar = {
-                    // Floating Frosted Glass Dock con Indicador Líquido (Spring Animation)
-                    BoxWithConstraints(
+                    // Floating Frosted Glass Dock con esquinas redondeadas
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -250,32 +235,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 .background(colors.surfaceElevated, dockShape)
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
-                            val containerMaxWidth = this@BoxWithConstraints.maxWidth
-                            val itemWidth = (containerMaxWidth - 16.dp) / destinations.size
-                            val indicatorOffset by animateDpAsState(
-                                targetValue = itemWidth * tab,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                ),
-                                label = "indicatorOffset"
-                            )
-
-                            // Burbuja Líquida indicadora activa
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = indicatorOffset)
-                                    .width(itemWidth)
-                                    .height(52.dp)
-                                    .neumorphicConcave(
-                                        radius = 20.dp,
-                                        shadowColor = colors.neumorphicCavity,
-                                        highlightColor = colors.neumorphicHighlight,
-                                        elevation = 3.dp
-                                    )
-                                    .background(colors.background, RoundedCornerShape(20.dp))
-                            )
-
                             Row(
                                 modifier = Modifier.fillMaxSize(),
                                 horizontalArrangement = Arrangement.SpaceAround,

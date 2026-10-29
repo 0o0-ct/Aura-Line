@@ -50,9 +50,9 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 10.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Cadena de módulos", trailing = "orden real del motor")

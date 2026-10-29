@@ -778,7 +778,7 @@ fun SpectrumBars(
             )
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF060910), Color(0xFF0B101A))
+                    listOf(colors.neumorphicCavity, colors.background)
                 ),
                 shape
             )
@@ -1024,7 +1024,7 @@ fun ResponseCurve(
             )
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF060910), Color(0xFF0B101A))
+                    listOf(colors.neumorphicCavity, colors.background)
                 ),
                 shape
             )
@@ -1194,7 +1194,7 @@ fun AuraSwitch(
 }
 
 fun formatFrequency(hz: Float): String = when {
-    hz >= 1000f -> {
+    hz >= 1000f -> {w
         val k = hz / 1000f
         if (k % 1f == 0f) "${k.toInt()}k" else String.format(java.util.Locale.US, "%.1fk", k)
     }
