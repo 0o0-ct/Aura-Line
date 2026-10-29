@@ -54,8 +54,6 @@ import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.StatusPill
-import com.auraline.core.ui.components.neumorphicConvex
-import com.auraline.core.ui.components.neumorphicConcave
 import com.auraline.core.ui.theme.AuraPalettes
 import com.auraline.core.ui.theme.AuraTheme
 
@@ -136,43 +134,48 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-
                 AuraPalettes.forEach { palette ->
                     val selected = settings.theme.paletteKey == palette.key
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .size(44.dp)
-                            .then(
-                                if (selected) Modifier.neumorphicConcave(
-                                    radius = 22.dp,
-                                    shadowColor = colors.neumorphicCavity,
-                                    highlightColor = colors.neumorphicHighlight,
-                                    elevation = 3.dp
-                                )
-                                else Modifier.neumorphicConvex(
-                                    radius = 22.dp,
-                                    shadowColor = colors.neumorphicShadow,
-                                    highlightColor = colors.neumorphicHighlight,
-                                    elevation = 3.dp
-                                )
+                            .shadow(
+                                elevation = if (selected) 8.dp else 2.dp,
+                                shape = CircleShape,
+                                ambientColor = if (selected) palette.accent.copy(alpha = 0.5f) else Color.Black
                             )
                             .background(
-                                if (selected) colors.background else colors.surfaceElevated,
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        palette.accent,
+                                        palette.accent.copy(alpha = if (selected) 0.85f else 0.45f)
+                                    )
+                                ),
                                 CircleShape
+                            )
+                            .border(
+                                width = if (selected) 2.dp else 1.dp,
+                                brush = if (selected) {
+                                    Brush.verticalGradient(
+                                        listOf(Color.White, palette.accent)
+                                    )
+                                } else {
+                                    Brush.verticalGradient(
+                                        listOf(Color(0x33FFFFFF), Color(0x0AFFFFFF))
+                                    )
+                                },
+                                shape = CircleShape
                             )
                             .clickable { viewModel.setPalette(palette.key, palette.accent.value.toInt()) }
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(20.dp)
-                                .shadow(
-                                    elevation = if (selected) 4.dp else 0.dp,
-                                    shape = CircleShape,
-                                    ambientColor = palette.accent
-                                )
-                                .background(palette.accent, CircleShape)
-                        )
+                        if (selected) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(Color.White, CircleShape)
+                            )
+                        }
                     }
                 }
             }

@@ -17,8 +17,14 @@ android {
         versionName = "4.0.0"
 
         vectorDrawables.useSupportLibrary = true
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++17 -O3 -ffast-math -ftree-vectorize")
+                arguments("-DANDROID_STL=c++_shared")
+            }
+        }
     }
 
     buildTypes {
@@ -34,6 +40,14 @@ android {
 
     buildFeatures {
         compose = true
+        prefab = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path("CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     compileOptions {
@@ -74,4 +88,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.4")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.0")
+
+    // Add Oboe via Prefab
+    implementation("com.google.oboe:oboe:1.8.1")
 }
