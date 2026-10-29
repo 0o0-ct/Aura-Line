@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -35,8 +33,6 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -71,8 +67,6 @@ import com.auraline.core.ui.components.LocalHapticsEnabled
 import com.auraline.core.ui.components.LocalPowered
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.components.hapticFeedback
-import com.auraline.core.ui.components.neumorphicConvex
-import com.auraline.core.ui.components.neumorphicConcave
 import com.auraline.core.ui.theme.AuraTheme
 import kotlinx.coroutines.launch
 
@@ -227,8 +221,8 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                     }
                 },
                 bottomBar = {
-                    // Floating Frosted Glass Dock con Indicador Líquido (Spring Animation)
-                    BoxWithConstraints(
+                    // Floating Frosted Glass Dock (Estilo macOS / iOS Dock flotante con cristal esmerilado)
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 10.dp)
@@ -236,90 +230,86 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                         contentAlignment = Alignment.Center
                     ) {
                         val dockShape = RoundedCornerShape(28.dp)
-
-                        Box(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(64.dp)
-                                .neumorphicConvex(
-                                    radius = 28.dp,
-                                    highlightColor = colors.neumorphicHighlight,
-                                    shadowColor = colors.neumorphicShadow,
-                                    elevation = 8.dp
+                                .shadow(elevation = 16.dp, shape = dockShape, ambientColor = Color(0x66000000), spotColor = Color(0x80000000))
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0xD9161E2C),
+                                            Color(0xF20F1520)
+                                        )
+                                    ),
+                                    dockShape
                                 )
-                                .background(colors.surfaceElevated, dockShape)
-                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .border(
+                                    1.dp,
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            Color(0x4DFFFFFF),
+                                            Color(0x14FFFFFF),
+                                            Color(0x05FFFFFF)
+                                        )
+                                    ),
+                                    dockShape
+                                )
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val containerMaxWidth = this@BoxWithConstraints.maxWidth
-                            val itemWidth = (containerMaxWidth - 16.dp) / destinations.size
-                            val indicatorOffset by animateDpAsState(
-                                targetValue = itemWidth * tab,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                ),
-                                label = "indicatorOffset"
-                            )
+                            destinations.forEachIndexed { index, destination ->
+                                val selected = tab == index
+                                val itemBgColor by animateColorAsState(
+                                    targetValue = if (selected) accent.copy(alpha = 0.16f) else Color.Transparent,
+                                    animationSpec = tween(durationMillis = 200),
+                                    label = "tabBg"
+                                )
+                                val itemBorderColor by animateColorAsState(
+                                    targetValue = if (selected) accent.copy(alpha = 0.45f) else Color.Transparent,
+                                    animationSpec = tween(durationMillis = 200),
+                                    label = "tabBorder"
+                                )
+                                val itemTextColor by animateColorAsState(
+                                    targetValue = if (selected) accent else colors.textSecondary.copy(alpha = 0.7f),
+                                    animationSpec = tween(durationMillis = 200),
+                                    label = "tabText"
+                                )
 
-                            // Burbuja Líquida indicadora activa
-                            Box(
-                                modifier = Modifier
-                                    .offset(x = indicatorOffset)
-                                    .width(itemWidth)
-                                    .height(52.dp)
-                                    .neumorphicConcave(
-                                        radius = 20.dp,
-                                        shadowColor = colors.neumorphicCavity,
-                                        highlightColor = colors.neumorphicHighlight,
-                                        elevation = 3.dp
+                                val itemShape = RoundedCornerShape(20.dp)
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(52.dp)
+                                        .clip(itemShape)
+                                        .background(itemBgColor, itemShape)
+                                        .border(if (selected) 1.dp else 0.dp, itemBorderColor, itemShape)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            haptic()
+                                            tab = index
+                                        },
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = destination.icon,
+                                        contentDescription = destination.label,
+                                        tint = itemTextColor,
+                                        modifier = Modifier.size(22.dp)
                                     )
-                                    .background(colors.background, RoundedCornerShape(20.dp))
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.SpaceAround,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                destinations.forEachIndexed { index, destination ->
-                                    val selected = tab == index
-                                    val itemTextColor by animateColorAsState(
-                                        targetValue = if (selected) accent else colors.textSecondary.copy(alpha = 0.7f),
-                                        animationSpec = tween(durationMillis = 200),
-                                        label = "tabText"
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = destination.label,
+                                        color = itemTextColor,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        letterSpacing = (-0.1).sp,
+                                        maxLines = 1
                                     )
-
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .height(52.dp)
-                                            .clip(RoundedCornerShape(20.dp))
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                haptic()
-                                                tab = index
-                                            },
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        verticalArrangement = Arrangement.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = destination.icon,
-                                            contentDescription = destination.label,
-                                            tint = itemTextColor,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text(
-                                            text = destination.label,
-                                            color = itemTextColor,
-                                            fontSize = 10.sp,
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                            letterSpacing = (-0.1).sp,
-                                            maxLines = 1
-                                        )
-                                    }
                                 }
                             }
                         }
