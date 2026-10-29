@@ -45,6 +45,9 @@ object AuraLineEngine {
 
     private const val MAX_HEADROOM_DB = 6f
 
+    /** Techo del limitador de DynamicsProcessing, en dBFS. Único sitio donde se define. */
+    private const val LIMITER_THRESHOLD_DB = -2f
+
     /** Energía aproximada que añade la reverb al nivel medio, por unidad de mezcla. */
     private const val REVERB_ENERGY_DB = 3f
 
@@ -223,7 +226,7 @@ object AuraLineEngine {
 
         val limiter = DynamicsProcessing.Limiter(
             state.modules.limiter,
-            true, 0, 5f, 60f, 10f, -2f, 0f
+            true, 0, 5f, 60f, 10f, LIMITER_THRESHOLD_DB, 0f
         )
 
         val config = DynamicsProcessing.Config.Builder(
@@ -356,7 +359,7 @@ object AuraLineEngine {
             dp.setMbcBandAllChannelsTo(band, compressorBand(cutoff, state))
         }
         dp.setLimiterAllChannelsTo(
-            DynamicsProcessing.Limiter(state.modules.limiter && !state.bypass, true, 0, 5f, 60f, 10f, -2f, 0f)
+            DynamicsProcessing.Limiter(state.modules.limiter && !state.bypass, true, 0, 5f, 60f, 10f, LIMITER_THRESHOLD_DB, 0f)
         )
     }
 
@@ -527,7 +530,7 @@ object AuraLineEngine {
                 if (processing != null) "${desired.numBands.coerceIn(20, 25)} bandas · DP" else "5 bandas · EQ del dispositivo"
             ),
             EffectStage("Compresor multibanda", processing != null && desired.effectsEnabled, "3 bandas"),
-            EffectStage("Limitador", processing != null, "−1 dBFS"),
+            EffectStage("Limitador", processing != null, "${LIMITER_THRESHOLD_DB.toInt()} dBFS"),
             EffectStage(
                 "Graves / Agudos",
                 processing != null || fallbackEq != null,

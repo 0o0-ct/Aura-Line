@@ -398,16 +398,17 @@ private fun BandPage(
     range: Float,
     onGainChange: (Int, Float) -> Unit
 ) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(215.dp)
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val count = chunk.size.coerceAtLeast(1)
+        // Tablets: con más ancho los faders crecen (hasta 56 dp) y la carrera se alarga.
+        val wide = maxWidth >= 560.dp
+        val faderHeight = if (wide) 196.dp else 148.dp
         // El ancho se reparte entre las bandas visibles: con 12 no caben a 34 dp.
-        val faderWidth = ((maxWidth - 8.dp) / count).coerceIn(18.dp, 40.dp)
+        val faderWidth = ((maxWidth - 8.dp) / count).coerceIn(18.dp, if (wide) 56.dp else 40.dp)
         Row(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(faderHeight + 67.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -417,7 +418,7 @@ private fun BandPage(
                     value = band.gainDb,
                     onValueChange = { onGainChange(band.id, it) },
                     valueRange = -range..range,
-                    height = 148.dp,
+                    height = faderHeight,
                     label = formatFrequency(bandCenterHz(bands, index.coerceAtLeast(0))),
                     valueText = formatGain(band.gainDb),
                     highlighted = band.gainDb != 0f,
