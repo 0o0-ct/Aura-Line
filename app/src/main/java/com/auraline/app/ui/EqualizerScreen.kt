@@ -303,6 +303,8 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
 
         LowSourcesCard(
             bands = bands,
+            range = range,
+            onBandGain = { bandId, gain -> viewModel.setBandGain(bandId, gain) },
             onFocus = { viewModel.focusLowSource(it) }
         )
 
@@ -510,6 +512,8 @@ private fun BandPage(
 @Composable
 private fun LowSourcesCard(
     bands: List<EqBand>,
+    range: Float,
+    onBandGain: (Int, Float) -> Unit,
     onFocus: (String) -> Unit
 ) {
     val colors = AuraTheme.colors
@@ -532,7 +536,9 @@ private fun LowSourcesCard(
             val shared = role?.companions?.map { it.name }.orEmpty()
             val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
             // El botón alterna: si la banda principal ya está subida, un toque retira el foco.
-            val applied = primaryStep != null && gain >= primaryStep.second - 0.5f
+            // El foco ahora aplica una receta reforzada (×2 como mínimo), así que el
+            // umbral de "ya aplicado" sigue esa misma escala para que el botón alterne bien.
+            val applied = primaryStep != null && gain >= primaryStep.second * 2f - 0.5f
 
             Row(
                 modifier = Modifier
@@ -587,6 +593,20 @@ private fun LowSourcesCard(
                     selected = applied,
                     onClick = { onFocus(source.key) }
                 )
+            }
+            // Control deslizante dedicado: mueve directamente la banda principal del
+            // instrumento para que su tonalidad se note de forma inmediata.
+            if (primaryIndex != null) {
+                val primaryBand = bands.getOrNull(primaryIndex)
+                if (primaryBand != null) {
+                    AuraSliderRow(
+                        label = "${source.shortName} · ${formatFrequency(bandCenterHz(bands, primaryIndex))} Hz",
+                        valueText = formatGain(primaryBand.gainDb),
+                        value = primaryBand.gainDb,
+                        valueRange = -range..range,
+                        onValueChange = { onBandGain(primaryBand.id, it) }
+                    )
+                }
             }
         }
     }

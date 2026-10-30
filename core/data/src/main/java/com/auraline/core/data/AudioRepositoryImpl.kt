@@ -444,12 +444,18 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val limit = current.gainRangeDb.coerceIn(6f, 24f)
         val gains = bands.map { it.gainDb }.toMutableList()
 
+        // Escala adaptativa: las recetas base son sutiles; para que el foco se note en
+        // cualquier perfil de uso (incluido el modo 5.1 con rango ±6 dB) se duplica
+        // como mínimo, y se amplifica según el rango disponible del perfil activo.
+        val profileScale = (current.gainRangeDb / 6f).coerceAtLeast(1f)
+        val effectiveScale = (scale * profileScale * 2f).coerceAtLeast(2f)
+
         val primary = steps.first()
-        val alreadyApplied = gains[primary.first] >= primary.second * scale - 0.5f
+        val alreadyApplied = gains[primary.first] >= primary.second * effectiveScale - 0.5f
         val direction = if (alreadyApplied) -1f else 1f
 
         steps.forEach { (index, delta) ->
-            gains[index] = (gains[index] + delta * scale * direction).coerceIn(-limit, limit)
+            gains[index] = (gains[index] + delta * effectiveScale * direction).coerceIn(-limit, limit)
         }
 
         val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
