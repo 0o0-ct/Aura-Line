@@ -61,6 +61,32 @@
         <receiver
             android:name=".audio.MotorToggleReceiver"
             android:exported="false" />
+
+        <!-- Panel de efectos: cualquier reproductor compatible puede abrir AuraLine como su
+             ecualizador (ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL). -->
+        <activity
+            android:name=".ui.EffectPanelActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|uiMode|density|fontScale">
+            <intent-filter>
+                <action android:name="android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+    </application>
+
+    <!-- Android 11+: visibilidad para saber qué apps abren sesiones de audio. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+        </intent>
+        <intent>
+            <action android:name="android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+        </intent>
+    </queries>
     </application>
 
 </manifest>
