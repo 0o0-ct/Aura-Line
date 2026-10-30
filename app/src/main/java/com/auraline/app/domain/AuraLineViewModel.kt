@@ -37,6 +37,7 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setBandGain(bandId: Int, gainDb: Float) = repository.setBandGain(bandId, gainDb)
     fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) = repository.setTone(bassDb, midDb, trebleDb)
     fun setSubBass(db: Float) = repository.setSubBass(db)
+    fun setSubCutoff(hz: Float) = repository.setSubCutoff(hz)
     fun setToneFrequencies(bassHz: Float, trebleHz: Float) = repository.setToneFrequencies(bassHz, trebleHz)
     fun setBypass(enabled: Boolean) = repository.setBypass(enabled)
     fun setGainRange(db: Float) = repository.setGainRange(db)

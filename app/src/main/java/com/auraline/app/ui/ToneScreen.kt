@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
+import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.SectionTitle
@@ -45,8 +46,13 @@ import kotlin.math.log10
 fun ToneScreen(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
     val state by viewModel.state.collectAsState()
+    val settings by viewModel.settings.collectAsState()
     val tone = state.tone
     val powered = state.motorEnabled
+    // El perfil de uso decide cuánto margen de realce tiene cada equipo: en altavoz externo
+    // se puede pedir hasta ±24 dB; en la barra 5.1, que ya procesa sola, ±12 dB.
+    val boostMax = state.toneBoostMarginDb.coerceIn(12f, 24f)
+    val activeProfile = UsageProfiles.firstOrNull { it.key == settings.usageProfile }
 
     Column(
         modifier = Modifier
@@ -67,27 +73,45 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 midDb = tone.midDb,
                 trebleDb = tone.trebleDb,
                 bassHz = tone.bassFrequencyHz,
-                trebleHz = tone.trebleFrequencyHz
+                trebleHz = tone.trebleFrequencyHz,
+                maxDb = boostMax
             )
             Spacer(modifier = Modifier.height(10.dp))
             AuraSliderRow(
                 label = "Sub-bajo · 0–100 Hz",
                 valueText = db(tone.subDb),
                 value = tone.subDb,
-                valueRange = -12f..12f,
+                valueRange = -boostMax..boostMax,
                 onValueChange = { viewModel.setSubBass(it) },
                 enabled = powered
             )
+            AuraSliderRow(
+                label = "Corte del sub-bajo",
+                valueText = "${tone.subCutoffHz.toInt()} Hz",
+                value = tone.subCutoffHz,
+                valueRange = 20f..100f,
+                onValueChange = { viewModel.setSubCutoff(it) },
+                enabled = powered
+            )
             Text(
-                text = "El altavoz del teléfono no reproduce por debajo de ~150 Hz: el sub-bajo se nota con auriculares o un equipo externo.",
+                text = if (activeProfile?.key == "mobile") {
+                    "El altavoz del móvil no reproduce por debajo de ~150 Hz: aquí el refuerzo " +
+                        "se centra en 70–100 Hz, lo más grave que de verdad saca tu teléfono. " +
+                        "Con auriculares baja el corte a 30–50 Hz para sentir el sub-grave puro."
+                } else {
+                    "Por debajo del corte actúa el refuerzo extra de sub-bajo. Auriculares: " +
+                        "30–50 Hz · altavoces con subwoofer: 40–80 Hz · barra o 5.1: 80 Hz " +
+                        "(el subwoofer hace el resto)."
+                },
                 color = colors.textSecondary,
                 fontSize = 11.sp
             )
+            Spacer(modifier = Modifier.height(4.dp))
             AuraSliderRow(
                 label = "Graves",
                 valueText = db(tone.bassDb),
                 value = tone.bassDb,
-                valueRange = -12f..12f,
+                valueRange = -boostMax..boostMax,
                 onValueChange = { viewModel.setTone(it, tone.midDb, tone.trebleDb) },
                 enabled = powered
             )
@@ -195,7 +219,8 @@ private fun ToneCurve(
     midDb: Float,
     trebleDb: Float,
     bassHz: Float,
-    trebleHz: Float
+    trebleHz: Float,
+    maxDb: Float = 12f
 ) {
     val accent = controlAccent()
     val shape = RoundedCornerShape(16.dp)
@@ -228,7 +253,7 @@ private fun ToneCurve(
 
             val centerY = size.height / 2f
             val scale = size.height / 2.3f
-            fun yOf(db: Float) = centerY - (db / 12f).coerceIn(-1f, 1f) * scale
+            fun yOf(db: Float) = centerY - (db / maxDb).coerceIn(-1f, 1f) * scale
 
             // Línea central punteada de 0 dB
             drawLine(

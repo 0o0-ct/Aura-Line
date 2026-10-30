@@ -19,6 +19,8 @@ interface AudioRepository {
     fun setPreamp(db: Float)
     fun setBandGain(bandId: Int, gainDb: Float)
     fun setSubBass(db: Float)
+    /** Corte del paso bajo del sub-bajo (20–100 Hz). */
+    fun setSubCutoff(hz: Float)
     fun setTone(bassDb: Float, midDb: Float, trebleDb: Float)
     fun setToneFrequencies(bassHz: Float, trebleHz: Float)
     fun setBalance(balance: Float)
