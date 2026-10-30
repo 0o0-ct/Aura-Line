@@ -334,7 +334,7 @@ object AuraLineEngine {
         val gate = state.gate
         val compressing = state.effectsEnabled && state.modules.compressor && !state.bypass
         val gateActive = state.effectsEnabled && state.modules.gate && !state.bypass
-        val regionGain = if (state.bypass) 0f else toneRegionDb(state, bandIndex)
+        val regionGain = 0f
         return DynamicsProcessing.MbcBand(
             true,
             cutoffHz,
@@ -345,7 +345,7 @@ object AuraLineEngine {
             if (compressing) 6f else 0f,
             if (gateActive) gate.thresholdDb.coerceIn(-80f, -20f) else -80f,
             if (gateActive) gate.ratio.coerceIn(1f, 10f) else 1f,
-            (if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f) + regionGain,
+            (if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f),
             0f
         )
     }
@@ -396,18 +396,19 @@ object AuraLineEngine {
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            // El PreEq lleva la curva de bandas más el sub-bajo; Graves/Medios/Agudos viajan en
-            // el MBC con sus propios cruces configurables (ver compressorBand), sin duplicar filtros.
+            // Aplicamos Graves/Medios/Agudos (toneOffset) y Sub-bajo directamente a las bandas de PreEq
+            // para asegurar la respuesta acústica inmediata.
             val gain = if (eqActive) {
-                (bandGains[band] + subBoostAt(state, centers[band]))
+                (bandGains[band] + toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
                     .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
             } else {
-                // Con el módulo EQ apagado, el control de tono sigue actuando como estanterías.
-                toneOffset(state, centers[band]) + subBoostAt(state, centers[band])
+                // Con el módulo EQ apagado, el control de tono sigue actuando
+                (toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
+                    .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
             }
             dp.setPreEqBandAllChannelsTo(
                 band,
-                DynamicsProcessing.EqBand(true, frequencies[band], gain.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB))
+                DynamicsProcessing.EqBand(true, frequencies[band], gain)
             )
         }
 
