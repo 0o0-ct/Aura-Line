@@ -340,17 +340,13 @@ private fun SideRail(
 @Composable
 private fun Modifier.glassDock(shape: RoundedCornerShape): Modifier {
     val colors = AuraTheme.colors
+    // Barra flotante: una única capa con esquinas redondeadas. Se elimina la capa
+    // inferior de sombra neumórfica para evitar el "doble fondo" redondeado.
     return this
-        .neumorphicConvex(
-            radius = 28.dp,
-            highlightColor = colors.neumorphicHighlight,
-            shadowColor = colors.neumorphicShadow,
-            elevation = 8.dp
-        )
-        .background(colors.surfaceElevated, shape)
+        .background(colors.surfaceElevated.copy(alpha = 0.92f), shape)
         .border(
             1.dp,
-            Brush.verticalGradient(listOf(Color(0x4DFFFFFF), Color(0x14FFFFFF), Color(0x05FFFFFF))),
+            Brush.verticalGradient(listOf(colors.glassBorderTop, colors.glassBorderBottom)),
             shape
         )
 }

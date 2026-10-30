@@ -222,6 +222,7 @@ private fun ToneCurve(
     trebleHz: Float,
     maxDb: Float = 12f
 ) {
+    val colors = AuraTheme.colors
     val accent = controlAccent()
     val shape = RoundedCornerShape(16.dp)
 
@@ -232,13 +233,13 @@ private fun ToneCurve(
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF090D14), Color(0xFF0F1420))
+                    listOf(colors.background, colors.neumorphicCavity)
                 )
             )
             .border(
                 1.dp,
                 Brush.verticalGradient(
-                    listOf(Color(0x33FFFFFF), Color(0x0AFFFFFF))
+                    listOf(colors.textSecondary.copy(alpha = 0.20f), colors.textSecondary.copy(alpha = 0.04f))
                 ),
                 shape
             )
@@ -257,7 +258,7 @@ private fun ToneCurve(
 
             // Línea central punteada de 0 dB
             drawLine(
-                color = Color(0x28FFFFFF),
+                color = colors.textSecondary.copy(alpha = 0.16f),
                 start = Offset(0f, centerY),
                 end = Offset(size.width, centerY),
                 strokeWidth = 1.dp.toPx(),
@@ -268,13 +269,13 @@ private fun ToneCurve(
             val xBass = xOf(bassHz)
             val xTreble = xOf(trebleHz)
             drawLine(
-                color = Color(0x18FFFFFF),
+                color = colors.textSecondary.copy(alpha = 0.10f),
                 start = Offset(xBass, 0f),
                 end = Offset(xBass, size.height),
                 strokeWidth = 1.dp.toPx()
             )
             drawLine(
-                color = Color(0x18FFFFFF),
+                color = colors.textSecondary.copy(alpha = 0.10f),
                 start = Offset(xTreble, 0f),
                 end = Offset(xTreble, size.height),
                 strokeWidth = 1.dp.toPx()

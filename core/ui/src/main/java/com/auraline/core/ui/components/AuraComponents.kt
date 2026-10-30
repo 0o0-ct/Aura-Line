@@ -293,7 +293,7 @@ fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
                 highlightColor = Color(0x0AFFFFFF),
                 elevation = 2.dp
             )
-            .background(Color(0xFF0F141D), pillShape)
+            .background(colors.neumorphicCavity, pillShape)
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -723,8 +723,8 @@ fun AuraKnob(
                     val markColor = if (isActive) {
                         accent.copy(alpha = 0.6f + (0.4f * markFraction))
                     } else {
-                        // En fondo claro el inactivo debe ser gris claro o hundido visualmente
-                        Color(0xFFC5CBD6)
+                        // Inactivo: tono secundario de la paleta
+                        colors.textSecondary.copy(alpha = 0.55f)
                     }
 
                     if (isActive) {
@@ -814,7 +814,7 @@ fun SpectrumBars(
 
                 // 1. Ranura física empotrada de fondo (canal inactivo visible)
                 drawRoundRect(
-                    color = Color(0x0EFFFFFF),
+                    color = colors.outline.copy(alpha = 0.16f),
                     topLeft = Offset(left, 0f),
                     size = Size(barWidth, size.height),
                     cornerRadius = radius
@@ -827,8 +827,8 @@ fun SpectrumBars(
                 drawRoundRect(
                     brush = Brush.verticalGradient(
                         colors = listOf(
-                            Color(0xFF68D8FF), // Cian eléctrico Apple
-                            accent             // Azul real de AuraLine
+                            colors.textPrimary, // Tono luminoso de la paleta
+                            accent              // Acento de la paleta
                         ),
                         startY = top,
                         endY = size.height
@@ -843,7 +843,7 @@ fun SpectrumBars(
                 if (level > 0.04f) {
                     val capHeight = (barWidth * 0.55f).coerceAtLeast(1.5.dp.toPx())
                     drawRoundRect(
-                        color = Color(0xFFF2F9FF).copy(alpha = (0.50f + 0.50f * level).coerceIn(0f, 1f)),
+                        color = colors.textPrimary.copy(alpha = (0.50f + 0.50f * level).coerceIn(0f, 1f)),
                         topLeft = Offset(left, top),
                         size = Size(barWidth, capHeight),
                         cornerRadius = radius
@@ -853,7 +853,7 @@ fun SpectrumBars(
 
             // Línea sutil de referencia base
             drawLine(
-                color = Color(0x1AFFFFFF),
+                color = colors.textSecondary.copy(alpha = 0.12f),
                 start = Offset(0f, size.height),
                 end = Offset(size.width, size.height),
                 strokeWidth = 1.dp.toPx()
@@ -941,7 +941,7 @@ fun AuraSliderRow(
                         highlightColor = Color(0x0AFFFFFF),
                         elevation = 2.dp
                     )
-                    .background(Color(0xFF0F141D), RoundedCornerShape(4.dp))
+                    .background(colors.neumorphicCavity, RoundedCornerShape(4.dp))
             )
 
             Box(
@@ -1054,7 +1054,7 @@ fun ResponseCurve(
             listOf(100f, 1000f, 10000f).forEach { frequency ->
                 val x = ((log10(frequency / minF)) / spanLog) * size.width
                 drawLine(
-                    color = Color(0x14FFFFFF),
+                    color = colors.textSecondary.copy(alpha = 0.08f),
                     start = Offset(x, 0f),
                     end = Offset(x, size.height),
                     strokeWidth = 1.dp.toPx()
@@ -1063,7 +1063,7 @@ fun ResponseCurve(
 
             // Línea de referencia 0 dB
             drawLine(
-                color = Color(0x33FFFFFF),
+                color = colors.textSecondary.copy(alpha = 0.20f),
                 start = Offset(0f, centerY),
                 end = Offset(size.width, centerY),
                 strokeWidth = 1.dp.toPx(),
