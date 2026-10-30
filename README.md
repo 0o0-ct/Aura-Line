@@ -45,6 +45,12 @@ Capturas en [`docs/capturas`](docs/capturas). APKs compilados en [`dist/`](dist/
 - **Diagnóstico Acústico Objetivo**: Emisión de tonos duales (485 Hz y 1771 Hz) y medición por micrófono para verificar la ganancia real del DSP (+10 dB selectividad).
 - **Protección de Batería y Auto-arranque**: Configuración del servicio en primer plano y exención de optimización de batería en One UI / AOSP.
 
+### 🎻 5. Fuentes Graves Dedicadas
+- **Cada banda grave tiene un instrumento dueño**: sub-bajo, bombo, bajo eléctrico, contrabajo, bajo fretless, guitarrón, tuba y sousafón, clarinete bajo y fagot, Minimoog y caja de ritmos 808.
+- **Nombre del instrumento bajo el fader**: las diez bandas de graves (50 → 948 Hz) llevan el dueño de su rango, para saber qué estás moviendo.
+- **Foco de un toque por fuente**: quince recetas (sub-bajo, 808, bombo, toms, tímpanos, taiko, synth, bajo, contrabajo,…) que se **suman** a tu curva actual sin borrarla. El botón alterna: un toque prepara la fuente, otro la retira.
+- **Mapa de graves completo** dentro de la *Guía de frecuencias*, con los instrumentos que comparten banda y qué hacer con cada uno.
+
 ---
 
 ## 🏛️ Módulos del Proyecto
