@@ -334,17 +334,17 @@ object AuraLineEngine {
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            // Sumamos leftGain como fallback por si dp.setInputGainbyChannel no es compatible con el OEM
             val gain = if (eqActive) {
-                (bandGains[band] + toneOffset(state, centers[band]) + leftGain).coerceIn(-24f, 24f)
+                (bandGains[band] + toneOffset(state, centers[band])).coerceIn(-24f, 24f)
             } else {
-                leftGain.coerceIn(-24f, 24f)
+                0f
             }
             dp.setPreEqBandAllChannelsTo(
                 band,
                 DynamicsProcessing.EqBand(true, frequencies[band], gain)
             )
         }
+
 
 
         if (DEBUG_LOG_BANDS) {

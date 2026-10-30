@@ -18,64 +18,54 @@ val FactoryPresets: List<FactoryPreset> = listOf(
         gains = emptyMap()
     ),
     FactoryPreset(
+        name = "Cálido y Profundo",
+        hint = "Sub-bajo masivo, graves profundos, medios ricos y agudos suaves",
+        gains = mapOf(60f to 7f, 120f to 6f, 250f to 4f, 500f to 3f, 1000f to 2f, 2500f to 2f, 6000f to 0f, 10000f to 0f)
+    ),
+    FactoryPreset(
         name = "Voz",
-        hint = "Cuerpo 200-400 · presencia 4-5k · corta nasal y raspa",
-        gains = mapOf(60f to -6f, 250f to 3f, 400f to 2f, 1000f to -2f, 2000f to -2f, 4500f to 4f, 8000f to 2f)
+        hint = "Cuerpo cálido 200-400 · presencia natural sin estridencias",
+        gains = mapOf(60f to 2f, 120f to 2f, 250f to 4f, 500f to 3f, 1000f to 2f, 2500f to 3f, 5000f to 2f)
     ),
     FactoryPreset(
         name = "Bombo",
-        hint = "Profundidad 60-80 · ataque 2,5-5k · sin cartón 300-600",
-        gains = mapOf(60f to 5f, 140f to 4f, 450f to -4f, 650f to -3f, 2500f to 4f, 5000f to 3f)
+        hint = "Profundidad 60-80 · pegada cálida sin chillidos",
+        gains = mapOf(60f to 6f, 140f to 5f, 300f to 2f, 1000f to 1f, 3000f to 2f)
     ),
     FactoryPreset(
         name = "Bajo eléctrico",
-        hint = "Cuerpo 60-80 · gruñido 700-1100 · define notas",
-        gains = mapOf(60f to 3f, 140f to 4f, 250f to -2f, 800f to 3f, 1300f to 3f, 3000f to 1f)
+        hint = "Cuerpo masivo 60-120 · gruñido rico en medios",
+        gains = mapOf(60f to 6f, 140f to 6f, 300f to 3f, 800f to 4f, 1500f to 2f)
     ),
     FactoryPreset(
         name = "Guitarra eléctrica",
-        hint = "Cuerpo 240 · ataque 2,5-3,5k · corta retumbe",
-        gains = mapOf(140f to -3f, 250f to 3f, 1600f to -2f, 2500f to 4f, 4000f to 2f)
+        hint = "Cuerpo cálido y presencia balanceada",
+        gains = mapOf(100f to 3f, 250f to 4f, 800f to 2f, 2500f to 3f, 5000f to 1f)
     ),
     FactoryPreset(
         name = "Guitarra acústica",
-        hint = "Graves 80-120 · cuerpo 240 · claridad 2,5-5k",
-        gains = mapOf(100f to 3f, 250f to 3f, 2500f to 3f, 4000f to 2f, 8000f to 1f)
+        hint = "Graves redondos, madera y claridad natural",
+        gains = mapOf(100f to 4f, 250f to 3f, 1000f to 2f, 3000f to 3f, 6000f to 1f)
     ),
     FactoryPreset(
         name = "Piano",
-        hint = "Graves 80-120 · corta retumbe 300 y metálico 1-2k",
-        gains = mapOf(100f to 3f, 350f to -3f, 1600f to -2f, 4500f to 3f, 8000f to 2f)
-    ),
-    FactoryPreset(
-        name = "Platillos",
-        hint = "Corta gong 200 y molestia 1k · brillo 5-10k",
-        gains = mapOf(60f to -6f, 250f to -4f, 1000f to -3f, 5500f to 3f, 8000f to 3f, 12000f to 2f)
-    ),
-    FactoryPreset(
-        name = "Metales y cuerdas",
-        hint = "Cuerpo 120-240 · filo 7,5-10k",
-        gains = mapOf(140f to -3f, 650f to -2f, 3000f to 3f, 10000f to 3f)
+        hint = "Graves envolventes y medios ricos en armónicos",
+        gains = mapOf(80f to 5f, 200f to 3f, 600f to 2f, 1500f to 2f, 4000f to 2f)
     ),
     FactoryPreset(
         name = "Graves +",
-        hint = "Refuerzo fuerte de sub-bajo y graves, con medios retraídos",
-        gains = mapOf(60f to 8f, 120f to 6f, 250f to 3f, 900f to -2f, 2500f to 1f, 6000f to 2f)
+        hint = "Refuerzo total de sub-bajo y graves profundos con cuerpo denso",
+        gains = mapOf(60f to 9f, 120f to 7f, 250f to 5f, 500f to 3f, 1000f to 1f)
     ),
     FactoryPreset(
         name = "Harman",
-        hint = "Curva de referencia: graves +4/+5 · medios −1/−2 · agudos +2/+3",
-        gains = mapOf(60f to 5f, 120f to 4f, 250f to 2f, 1000f to -1f, 2000f to -2f, 4000f to 2f, 6000f to 3f, 9000f to 2f)
+        hint = "Curva equilibrada: graves cálidos, medios presentes y agudos musicales",
+        gains = mapOf(60f to 5f, 120f to 4f, 250f to 3f, 500f to 2f, 1000f to 2f, 2500f to 2f, 6000f to 1f)
     ),
     FactoryPreset(
         name = "JBL",
-        hint = "Sonido JBL: graves firmes, medios retraídos y agudos brillantes",
-        gains = mapOf(60f to 6f, 120f to 4f, 500f to -2f, 1000f to -2f, 2500f to 2f, 5000f to 4f, 8000f to 3f)
-    ),
-    FactoryPreset(
-        name = "Batería completa",
-        hint = "Bombo y caja con cuerpo, brillo sin hojalata",
-        gains = mapOf(80f to 3f, 240f to 2f, 450f to -3f, 3000f to 2f, 5000f to 3f, 9000f to 2f)
+        hint = "Sonido envolvente: graves firmes y medios cálidos sin estridencias",
+        gains = mapOf(60f to 6f, 120f to 5f, 300f to 3f, 1000f to 2f, 3000f to 3f, 7000f to 1f)
     )
 )
 
@@ -86,17 +76,17 @@ data class FrequencyGuide(
 )
 
 val FrequencyGuides: List<FrequencyGuide> = listOf(
-    FrequencyGuide("50 Hz", "Sube para saturar graves de bombo, toms o bajo. Baja para escuchar mejor los armónicos del bajo."),
-    FrequencyGuide("100 Hz", "Graves más duros y relleno de guitarras y cajas. Baja para dar claridad a la guitarra."),
-    FrequencyGuide("200 Hz", "Relleno en voces, guitarras y cajas. Baja para quitar sonido 'de hojalata' en platillos."),
-    FrequencyGuide("400 Hz", "Claridad del bajo a bajo volumen. Baja para evitar bombos y toms acartonados."),
-    FrequencyGuide("800 Hz", "Claridad y pegada del bajo. Baja para quitar hojalata en guitarras."),
-    FrequencyGuide("1,5 kHz", "Pegada y claridad en bajos. Baja para eliminar el sonido turbio de guitarras."),
-    FrequencyGuide("3 kHz", "Pegada en bajos, ataque de guitarras y voces claras. Baja en coros para suavizar."),
-    FrequencyGuide("5 kHz", "Presencia en voces y ataque de bombo y toms. Baja para alejar los fondos."),
-    FrequencyGuide("7 kHz", "Ataque metálico de percusión. Baja para atenuar sibilancias."),
-    FrequencyGuide("10 kHz", "Voces y guitarras brillantes. Baja para atenuar sibilantes."),
-    FrequencyGuide("15 kHz", "Aire y brillo en voces, platillos y cuerdas.")
+    FrequencyGuide("50 Hz", "Sube para dar profundidad masiva al sub-bajo, bombo y bajo."),
+    FrequencyGuide("100 Hz", "Graves contundentes, cuerpo de guitarras y calidez general."),
+    FrequencyGuide("200 Hz", "Relleno y cuerpo en voces y baja frecuencia de instrumentos."),
+    FrequencyGuide("400 Hz", "Cuerpo y plenitud de medios-bajos. Evita sonido hueco."),
+    FrequencyGuide("800 Hz", "Claridad y presencia cálida en bajos y guitarras."),
+    FrequencyGuide("1,5 kHz", "Cuerpo y definición en medios."),
+    FrequencyGuide("3 kHz", "Presencia vocal y claridad de instrumentos sin fatiga."),
+    FrequencyGuide("5 kHz", "Brillo natural y definición vocal limpia."),
+    FrequencyGuide("7 kHz", "Definición y presencia de platillos sin chillidos molestos."),
+    FrequencyGuide("10 kHz", "Aire y apertura suave."),
+    FrequencyGuide("15 kHz", "Extensión de brillo superior.")
 )
 
 /** Preajustes de sala para la reverb (los mismos espacios del ecualizador original). */
@@ -106,14 +96,14 @@ data class ReverbPreset(
 )
 
 val ReverbPresets: List<ReverbPreset> = listOf(
-    ReverbPreset("Ligera reverberación", ReverbParams(damping = 0.7f, filter = 0.4f, decay = 0.2f, preDelay = 0.01f, predelayMix = 0.2f, size = 0.2f, mix = 0.2f)),
-    ReverbPreset("Sala pequeña", ReverbParams(damping = 0.6f, filter = 0.35f, decay = 0.3f, preDelay = 0.02f, predelayMix = 0.25f, size = 0.3f, mix = 0.3f)),
-    ReverbPreset("Estudio", ReverbParams(damping = 0.5f, filter = 0.5f, decay = 0.35f, preDelay = 0.02f, predelayMix = 0.3f, size = 0.35f, mix = 0.35f)),
-    ReverbPreset("Auditorio", ReverbParams(damping = 0.35f, filter = 0.7f, decay = 0.75f, preDelay = 0.06f, predelayMix = 0.55f, size = 0.8f, mix = 0.55f)),
-    ReverbPreset("Escenario", ReverbParams(damping = 0.4f, filter = 0.6f, decay = 0.6f, preDelay = 0.05f, predelayMix = 0.5f, size = 0.7f, mix = 0.5f)),
-    ReverbPreset("Gran salón", ReverbParams(damping = 0.35f, filter = 0.65f, decay = 0.8f, preDelay = 0.07f, predelayMix = 0.6f, size = 0.85f, mix = 0.6f)),
-    ReverbPreset("Estadio", ReverbParams(damping = 0.2f, filter = 0.8f, decay = 0.95f, preDelay = 0.12f, predelayMix = 0.7f, size = 0.95f, mix = 0.7f)),
-    ReverbPreset("Eco", ReverbParams(damping = 0.1f, filter = 0.2f, decay = 0.9f, preDelay = 0.15f, predelayMix = 0.8f, size = 0.6f, mix = 0.75f))
+    ReverbPreset("Ligera reverberación", ReverbParams(damping = 0.7f, filter = 0.4f, decay = 0.2f, preDelay = 0.01f, predelayMix = 0.2f, size = 0.2f, mix = 0.15f)),
+    ReverbPreset("Sala pequeña", ReverbParams(damping = 0.6f, filter = 0.35f, decay = 0.3f, preDelay = 0.02f, predelayMix = 0.25f, size = 0.3f, mix = 0.2f)),
+    ReverbPreset("Estudio", ReverbParams(damping = 0.5f, filter = 0.5f, decay = 0.35f, preDelay = 0.02f, predelayMix = 0.3f, size = 0.35f, mix = 0.25f)),
+    ReverbPreset("Auditorio", ReverbParams(damping = 0.35f, filter = 0.7f, decay = 0.75f, preDelay = 0.06f, predelayMix = 0.55f, size = 0.8f, mix = 0.4f)),
+    ReverbPreset("Escenario", ReverbParams(damping = 0.4f, filter = 0.6f, decay = 0.6f, preDelay = 0.05f, predelayMix = 0.5f, size = 0.7f, mix = 0.35f)),
+    ReverbPreset("Gran salón", ReverbParams(damping = 0.35f, filter = 0.65f, decay = 0.8f, preDelay = 0.07f, predelayMix = 0.6f, size = 0.85f, mix = 0.4f)),
+    ReverbPreset("Estadio", ReverbParams(damping = 0.2f, filter = 0.8f, decay = 0.95f, preDelay = 0.12f, predelayMix = 0.7f, size = 0.95f, mix = 0.45f)),
+    ReverbPreset("Eco", ReverbParams(damping = 0.1f, filter = 0.2f, decay = 0.9f, preDelay = 0.15f, predelayMix = 0.8f, size = 0.6f, mix = 0.4f))
 )
 
 /**
@@ -135,16 +125,16 @@ val UsageProfiles: List<UsageProfile> = listOf(
     UsageProfile(
         key = "mobile",
         name = "Altavoz del móvil",
-        description = "Graves limitados por el propio altavoz. Protección activa y efectos apagados.",
+        description = "Graves ricos y medios cálidos optimizados para altavoces integrados.",
         gainRangeDb = 12f,
         levelProtection = true,
         effectsEnabled = false,
-        basePreset = "Plano"
+        basePreset = "Cálido y Profundo"
     ),
     UsageProfile(
         key = "wired",
         name = "Auriculares con cable",
-        description = "Sin códec de por medio: margen completo y curva de referencia Harman.",
+        description = "Respuesta completa con sub-bajo masivo y medios nítidos.",
         gainRangeDb = 12f,
         levelProtection = false,
         effectsEnabled = false,
@@ -153,28 +143,28 @@ val UsageProfiles: List<UsageProfile> = listOf(
     UsageProfile(
         key = "bluetooth",
         name = "Auriculares Bluetooth",
-        description = "El códec recorta: protección activa y curva Harman suavizada.",
+        description = "Sonido envolvente con graves firmes y agudos limpios.",
         gainRangeDb = 12f,
         levelProtection = true,
         effectsEnabled = false,
-        basePreset = "Harman"
+        basePreset = "JBL"
     ),
     UsageProfile(
         key = "external",
         name = "Altavoces externos",
-        description = "Equipo con amplificador propio. Curva plana y margen moderado.",
+        description = "Cuerpo completo con graves profundos y medios presentes.",
         gainRangeDb = 12f,
         levelProtection = true,
         effectsEnabled = false,
-        basePreset = "Plano"
+        basePreset = "Cálido y Profundo"
     ),
     UsageProfile(
         key = "surround",
         name = "Barra o sistema 5.1",
-        description = "El equipo aplica su propio procesado: rango ±6 dB y protección desactivada.",
+        description = "Rango equilibrado y sonido cinematográfico cálido.",
         gainRangeDb = 6f,
         levelProtection = false,
         effectsEnabled = false,
-        basePreset = "Plano"
+        basePreset = "JBL"
     )
 )
