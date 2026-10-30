@@ -811,4 +811,9 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         const val PRESET_GAIN_SCALE = 1.8f
     }
 
+
+    private fun toneBoostMarginFor(profileKey: String): Float {
+        val profile = com.auraline.core.domain.UsageProfiles.firstOrNull { it.key == profileKey }
+        return profile?.toneBoostMarginDb ?: 18f
+    }
 }

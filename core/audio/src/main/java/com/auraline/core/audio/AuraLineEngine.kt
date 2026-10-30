@@ -44,6 +44,10 @@ object AuraLineEngine {
     private const val MAX_HEADROOM_DB = 6f
 
     /** Tope por banda del PreEq y por región del MBC (Android no permite más; ver límite real). */
+    /** Techo del limitador de DynamicsProcessing, en dBFS. Único sitio donde se define. */
+    private const val LIMITER_THRESHOLD_DB = -2f
+
+    /** Tope por banda del PreEq y por región del MBC (Android no permite más; ver límite real). */
     private const val MAX_BAND_GAIN_DB = 24f
 
     /** Separación mínima entre los cruces Graves/Medios y Medios/Agudos (Hz). */
@@ -370,8 +374,6 @@ object AuraLineEngine {
         else (0 until MBC_BANDS).maxOf { toneRegionDb(state, it).coerceAtLeast(0f) }
         val effectsActive = state.effectsEnabled && !state.bypass
         val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
-        val mbcPeak = if (state.bypass) 0f
-        else (0 until MBC_BANDS).maxOf { toneRegionDb(state, it).coerceAtLeast(0f) }
         val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
         val totalBoost = peakBand + mbcPeak + makeup + reverbEnergy
         val headroom = if (state.autoPreamp) {
@@ -465,19 +467,19 @@ object AuraLineEngine {
         // ¿La orden supera lo que este Equalizer puede dar? Se registra el recorte real.
         var clippedAt = 0f
         for (band in 0 until deviceBands) {
-            val centerHz = try { eq.getCenterFreq(band.toShort()) / 1000f } catch (_: Throwable) { continue }
+            val centerHz = try { eq.getCenterFreq(band.toShort()).toFloat() / 1000.0f } catch (_: Throwable) { continue }
             val nearest = frequencies.indices.minByOrNull { abs(frequencies[it] - centerHz) }
             val base = nearest?.let { gains[it] } ?: 0f
             val ordered = regionGainForLegacyEq(state, base, centerHz) + state.preampDb
-            if (ordered > max / 100f || ordered < min / 100f) clippedAt = maxOf(clippedAt, abs(ordered))
+            if (ordered > max.toFloat() / 100f || ordered < min.toFloat() / 100f) clippedAt = maxOf(clippedAt, abs(ordered))
         }
         if (clippedAt > 0f) {
-            lastError = "EQ del sistema recorta a ±${max / 100f} dB (se pidieron %.1f dB)".format(clippedAt)
+            lastError = "EQ del sistema recorta a ±${max.toFloat() / 100f} dB (se pidieron %.1f dB)".format(clippedAt)
             Log.w(TAG, lastError!!)
         }
 
         for (band in 0 until deviceBands) {
-            val centerHz = try { eq.getCenterFreq(band.toShort()) / 1000f } catch (_: Throwable) { 1000f }
+            val centerHz = try { eq.getCenterFreq(band.toShort()).toFloat() / 1000f } catch (_: Throwable) { 1000f }
             val nearest = frequencies.indices.minByOrNull { kotlin.math.abs(frequencies[it] - centerHz) }
             val base = if (nearest != null) gains[nearest] else 0f
             // Tono + sub-bajo repartidos igual que en la cadena DynamicsProcessing.
