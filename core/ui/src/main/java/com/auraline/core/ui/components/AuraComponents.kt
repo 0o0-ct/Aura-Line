@@ -262,7 +262,9 @@ fun BandFader(
     label: String = "",
     valueText: String = "",
     highlighted: Boolean = false,
-    faderWidth: Dp = 34.dp
+    faderWidth: Dp = 34.dp,
+    /** Nombre corto del instrumento o función que posee la banda. */
+    subtitle: String = ""
 ) {
     val colors = AuraTheme.colors
     val accent = controlAccent()
@@ -461,6 +463,18 @@ fun BandFader(
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Clip
+            )
+        }
+        if (subtitle.isNotEmpty()) {
+            Text(
+                text = subtitle,
+                color = colors.textSecondary.copy(alpha = 0.7f),
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 1.dp)
             )
         }
     }

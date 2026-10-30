@@ -27,6 +27,13 @@ interface AudioRepository {
     fun setBypass(enabled: Boolean)
     fun setGainRange(db: Float)
     fun applyFactoryPreset(name: String): Boolean
+    /**
+     * Foco aditivo de una fuente grave: suma la receta de la fuente sobre la curva actual
+     * sin borrarla (a diferencia de [applyFactoryPreset], que la sustituye entera).
+     *
+     * @param scale multiplicador de la receta (1 = la receta tal cual).
+     */
+    fun focusLowSource(key: String, scale: Float = 1f): Boolean
     fun setReverb(params: ReverbParams)
     fun applyReverbPreset(name: String)
     fun setCompressor(params: CompressorParams)

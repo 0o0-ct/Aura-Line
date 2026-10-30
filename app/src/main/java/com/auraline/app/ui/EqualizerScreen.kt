@@ -39,7 +39,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -48,8 +50,15 @@ import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqBand
 import com.auraline.core.domain.FactoryPresets
 import com.auraline.core.domain.FrequencyGuides
+import com.auraline.core.domain.LowFrequencyRoles
+import com.auraline.core.domain.LowFrequencySources
+import com.auraline.core.domain.SourceCategory
 import com.auraline.core.domain.bandCenterHz
+import com.auraline.core.domain.bandRoleFor
+import com.auraline.core.domain.focusFor
 import com.auraline.core.domain.generateEqualizerBands
+import com.auraline.core.domain.ownerShortNameFor
+import com.auraline.core.domain.resolveFocus
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.BandFader
@@ -79,6 +88,13 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
 
     val bands = remember(state.bands, state.numBands) {
         state.bands.ifEmpty { generateEqualizerBands(state.numBands) }
+    }
+    // Frecuencia real de la banda que posee cada rol de graves.
+    val roleBandHz = remember(bands) {
+        val centers = bands.indices.map { bandCenterHz(bands, it) }
+        LowFrequencyRoles.associateWith { role ->
+            centers.firstOrNull { center -> bandRoleFor(center)?.owner?.key == role.owner.key }
+        }
     }
     val range = state.gainRangeDb.coerceIn(6f, 24f)
     val spectrum by com.auraline.core.audio.AuraLineSpectrum.levels.collectAsState()
@@ -228,14 +244,16 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     bands.forEachIndexed { index, band ->
+                        val center = bandCenterHz(bands, index)
                         BandFader(
                             value = band.gainDb,
                             onValueChange = { viewModel.setBandGain(band.id, it) },
                             valueRange = -range..range,
                             height = 160.dp,
-                            label = formatFrequency(bandCenterHz(bands, index)),
+                            label = formatFrequency(center),
                             valueText = formatGain(band.gainDb),
-                            highlighted = band.gainDb != 0f
+                            highlighted = band.gainDb != 0f,
+                            subtitle = ownerShortNameFor(center) ?: ""
                         )
                     }
                 }
@@ -281,6 +299,11 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 fontSize = 11.sp
             )
         }
+
+        LowSourcesCard(
+            bands = bands,
+            onFocus = { viewModel.focusLowSource(it) }
+        )
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -369,6 +392,48 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             title = { Text("Guía de frecuencias", color = colors.textPrimary) },
             text = {
                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                    item {
+                        Text(
+                            text = "Mapa de graves por banda",
+                            color = colors.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    items(LowFrequencyRoles) { role ->
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            Text(
+                                text = buildString {
+                                    roleBandHz[role]?.let { append("${formatFrequency(it)} Hz · ") }
+                                    append(role.owner.name)
+                                },
+                                color = colors.accent,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = buildString {
+                                    if (role.companions.isNotEmpty()) {
+                                        append("Comparten banda: ")
+                                        append(role.companions.joinToString(", ") { it.name })
+                                        append(". ")
+                                    }
+                                    append(role.owner.tip)
+                                },
+                                color = colors.textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "Guía de frecuencias",
+                            color = colors.textPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                     items(FrequencyGuides) { guide ->
                         Column(modifier = Modifier.padding(vertical = 6.dp)) {
                             Text(
@@ -413,19 +478,118 @@ private fun BandPage(
         ) {
             chunk.forEach { band ->
                 val index = bands.indexOf(band)
+                val center = bandCenterHz(bands, index.coerceAtLeast(0))
                 BandFader(
                     value = band.gainDb,
                     onValueChange = { onGainChange(band.id, it) },
                     valueRange = -range..range,
                     height = 148.dp,
-                    label = formatFrequency(bandCenterHz(bands, index.coerceAtLeast(0))),
+                    label = formatFrequency(center),
                     valueText = formatGain(band.gainDb),
                     highlighted = band.gainDb != 0f,
-                    faderWidth = faderWidth
+                    faderWidth = faderWidth,
+                    subtitle = ownerShortNameFor(center) ?: ""
                 )
             }
         }
     }
+}
+
+/**
+ * Tarjeta "Fuentes graves": cada banda grave tiene un instrumento dueño, y cada
+ * instrumento tiene una receta de foco de un toque que se **suma** a la curva actual
+ * en lugar de sustituirla.
+ */
+@Composable
+private fun LowSourcesCard(
+    bands: List<EqBand>,
+    onFocus: (String) -> Unit
+) {
+    val colors = AuraTheme.colors
+    AuraCard(modifier = Modifier.fillMaxWidth()) {
+        SectionTitle(text = "Fuentes graves", trailing = "${LowFrequencySources.size} instrumentos")
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Cada banda grave tiene un dueño. El botón + prepara esa fuente sobre tu " +
+                "curva actual, sin borrarla.",
+            color = colors.textSecondary,
+            fontSize = 11.sp
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        LowFrequencySources.forEach { source ->
+            val steps = focusFor(source.key)?.let { resolveFocus(bands, it) }.orEmpty()
+            val primaryStep = steps.firstOrNull()
+            val primaryIndex = primaryStep?.first
+            val role = LowFrequencyRoles.firstOrNull { it.owner.key == source.key }
+            val shared = role?.companions?.map { it.name }.orEmpty()
+            val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
+            // El botón alterna: si la banda principal ya está subida, un toque retira el foco.
+            val applied = primaryStep != null && gain >= primaryStep.second - 0.5f
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .background(categoryColor(source.category), RoundedCornerShape(50))
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = source.name,
+                        color = colors.textPrimary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = buildString {
+                            append("${source.fundamentalHz.first}–${source.fundamentalHz.last} Hz")
+                            if (shared.isNotEmpty()) append(" · con ${shared.joinToString(", ")}")
+                        },
+                        color = colors.textSecondary,
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (primaryIndex != null) {
+                    Text(
+                        text = formatFrequency(bandCenterHz(bands, primaryIndex)),
+                        color = colors.accent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${formatGain(gain)} dB",
+                        color = if (gain != 0f) colors.accent else colors.textSecondary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                SelectableChip(
+                    text = if (applied) "−" else "+",
+                    selected = applied,
+                    onClick = { onFocus(source.key) }
+                )
+            }
+        }
+    }
+}
+
+private fun categoryColor(category: SourceCategory): Color = when (category) {
+    SourceCategory.PERCUSION -> Color(0xFFFF9F43)
+    SourceCategory.ELECTRONIC -> Color(0xFF2BD9C0)
+    SourceCategory.STRING -> Color(0xFF7C9CFF)
+    SourceCategory.WIND -> Color(0xFFB388FF)
 }
 
 @Composable
