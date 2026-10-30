@@ -303,46 +303,49 @@ object AuraLineEngine {
         AuraLineSpectrum.setBandEdges(frequencies)
         val centers = bandCenters(frequencies)
 
-        // Preamp automático: si la curva sube, se baja la entrada lo mismo para no
-        // comerse el refuerzo contra el limitador.
-        // Headroom real: cuenta el refuerzo de las bandas, la compensación del compresor y la
-        // energía que añade la reverb. Sin esto el códec de Bluetooth satura y suena "quemado".
+
+        // Preamp y Headroom:
+        // En lugar de recortar todo el volumen, permitimos que el limitador haga su trabajo.
+        // Sólo reducimos la ganancia si hay un refuerzo masivo de más de 12dB.
         val peakBand = (0 until bandCount).maxOfOrNull { band ->
             (bandGains[band] + toneOffset(state, centers[band])).coerceAtLeast(0f)
         } ?: 0f
         val effectsActive = state.effectsEnabled && !state.bypass
         val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
-        val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
-        val totalBoost = peakBand + makeup + reverbEnergy
-        // Se compensa sólo la mitad del exceso: así el refuerzo se escucha y el códec
-        // no satura. El usuario puede desactivarlo del todo desde Ajustes.
-        val codecMargin = if (_status.value.route == AudioRoute.BLUETOOTH) 1.5f else 0f
+        val totalBoost = peakBand + makeup
+        
         val headroom = if (state.autoPreamp) {
-            ((totalBoost - TARGET_HEADROOM_DB - codecMargin) * 0.5f).coerceIn(0f, MAX_HEADROOM_DB)
+            ((totalBoost - 12f) * 0.2f).coerceIn(0f, 6f)
         } else {
             0f
         }
-        val maxBoost = headroom
 
         val balance = state.stereo.balance / 100f
-        val preamp = state.preampDb - maxBoost
+        val preamp = state.preampDb - headroom
         val leftGain = preamp + if (balance > 0f) -balance * 12f else 0f
         val rightGain = preamp + if (balance < 0f) balance * 12f else 0f
-        dp.setInputGainbyChannel(0, leftGain)
-        dp.setInputGainbyChannel(1, rightGain)
+        
+        // Aplicamos la ganancia global de forma segura
+        runCatching {
+            dp.setInputGainAllChannelsTo(preamp)
+            dp.setInputGainbyChannel(0, leftGain)
+            dp.setInputGainbyChannel(1, rightGain)
+        }
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
+            // Sumamos leftGain como fallback por si dp.setInputGainbyChannel no es compatible con el OEM
             val gain = if (eqActive) {
-                (bandGains[band] + toneOffset(state, centers[band])).coerceIn(-24f, 24f)
+                (bandGains[band] + toneOffset(state, centers[band]) + leftGain).coerceIn(-24f, 24f)
             } else {
-                0f
+                leftGain.coerceIn(-24f, 24f)
             }
             dp.setPreEqBandAllChannelsTo(
                 band,
                 DynamicsProcessing.EqBand(true, frequencies[band], gain)
             )
         }
+
 
         if (DEBUG_LOG_BANDS) {
             val active = (0 until bandCount).filter { kotlin.math.abs(bandGains[it]) > 0.5f || state.bypass }
