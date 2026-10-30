@@ -128,6 +128,10 @@ data class UsageProfile(
     val levelProtection: Boolean,
     val effectsEnabled: Boolean,
     val basePreset: String,
+    /** Margen extra de realce aplicado a Graves y Sub-bajo en la pantalla Tono. */
+    val toneBoostMarginDb: Float = 12f,
+    /** Corte inicial del paso bajo del sub-bajo al elegir este perfil (Hz). */
+    val subCutoffHz: Float = 60f,
     val modules: ModuleState = ModuleState()
 )
 
@@ -139,7 +143,11 @@ val UsageProfiles: List<UsageProfile> = listOf(
         gainRangeDb = 12f,
         levelProtection = true,
         effectsEnabled = false,
-        basePreset = "Plano"
+        basePreset = "Plano",
+        // El altavoz interno corta por debajo de ~150-200 Hz: se realza la banda que sí
+        // reproduce (graves altos) y el sub se centra en 70-100 Hz para que algo se note.
+        toneBoostMarginDb = 18f,
+        subCutoffHz = 90f
     ),
     UsageProfile(
         key = "wired",
@@ -148,7 +156,9 @@ val UsageProfiles: List<UsageProfile> = listOf(
         gainRangeDb = 12f,
         levelProtection = false,
         effectsEnabled = false,
-        basePreset = "Harman"
+        basePreset = "Harman",
+        toneBoostMarginDb = 18f,
+        subCutoffHz = 45f
     ),
     UsageProfile(
         key = "bluetooth",
@@ -157,7 +167,9 @@ val UsageProfiles: List<UsageProfile> = listOf(
         gainRangeDb = 12f,
         levelProtection = true,
         effectsEnabled = false,
-        basePreset = "Harman"
+        basePreset = "Harman",
+        toneBoostMarginDb = 15f,
+        subCutoffHz = 50f
     ),
     UsageProfile(
         key = "external",
@@ -166,7 +178,9 @@ val UsageProfiles: List<UsageProfile> = listOf(
         gainRangeDb = 12f,
         levelProtection = true,
         effectsEnabled = false,
-        basePreset = "Plano"
+        basePreset = "Plano",
+        toneBoostMarginDb = 24f,
+        subCutoffHz = 50f
     ),
     UsageProfile(
         key = "surround",
@@ -175,6 +189,13 @@ val UsageProfiles: List<UsageProfile> = listOf(
         gainRangeDb = 6f,
         levelProtection = false,
         effectsEnabled = false,
-        basePreset = "Plano"
+        basePreset = "Plano",
+        toneBoostMarginDb = 12f,
+        // Con .1 el subwoofer hace todo el trabajo por debajo de 80 Hz (corte estándar LFE).
+        subCutoffHz = 80f
     )
 )
+
+/** Perfil elegido por el usuario; [UsageProfiles.first] si no ha seleccionado ninguno. */
+fun usageProfileByKey(key: String): UsageProfile =
+    UsageProfiles.firstOrNull { it.key == key } ?: UsageProfiles.first()

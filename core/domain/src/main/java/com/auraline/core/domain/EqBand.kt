@@ -9,7 +9,7 @@ data class EqBand(
 )
 
 data class ToneControls(
-    /** Refuerzo extra de la banda más grave (0-100 Hz). */
+    /** Refuerzo extra de la zona sub-baja (0-100 Hz). */
     val subDb: Float = 0f,
     val bassDb: Float = 0f,
     val trebleDb: Float = 0f,
@@ -18,7 +18,12 @@ data class ToneControls(
     /** Frontera graves/medios. */
     val bassFrequencyHz: Float = 100f,
     /** Frontera medios/agudos. */
-    val trebleFrequencyHz: Float = 8000f
+    val trebleFrequencyHz: Float = 8000f,
+    /**
+     * Corte del paso bajo del sub-bajo (Hz). El refuerzo de sub no se limita ya a la primera
+     * banda del ecualizador: se aplica como shelf propio hasta esta frecuencia, ajustable.
+     */
+    val subCutoffHz: Float = 60f
 )
 
 data class StereoControls(
@@ -50,7 +55,8 @@ data class CompressorParams(
     val attackMs: Float = 10f,
     val releaseMs: Float = 200f,
     val makeupGain: Float = 3f,
-    val limiterCeiling: Float = -0.1f
+    /** Techo del limitador final en dBFS (≤ 0): ningún pico debe superarlo. */
+    val limiterCeiling: Float = -1f
 )
 
 /** Cada etapa de la cadena se puede desactivar por separado. */
@@ -89,8 +95,37 @@ data class EqualizerState(
     val bypass: Boolean = false,
     val autoPreamp: Boolean = true,
     val selectedRoute: Int = 0, // 0=speaker, 1=headphones, 2=bluetooth, 3=usb
-    val presetName: String = "Plano"
+    val presetName: String = "Plano",
+    /** Margen de realce de Graves y Sub-bajo según el perfil de uso activo. */
+    val toneBoostMarginDb: Float = 12f
 )
+
+// ---------------------------------------------------------------------------
+// Rangos seguros: la UI y el repositorio usan SIEMPRE estas funciones. Así un
+// slider no puede guardar valores imposibles y compile/aplicar recibe datos
+// válidos por construcción (dB reales, Hz reales, nunca valores normalizados).
+// ---------------------------------------------------------------------------
+
+fun clampPreampDb(db: Float): Float = db.coerceIn(-15f, 15f)
+fun clampBandGainDb(db: Float, rangeDb: Float): Float = db.coerceIn(-rangeDb, rangeDb)
+fun clampToneDb(db: Float, marginDb: Float): Float = db.coerceIn(-marginDb, marginDb)
+fun clampBassCrossHz(hz: Float): Float = hz.coerceIn(40f, 400f)
+fun clampTrebleCrossHz(hz: Float): Float = hz.coerceIn(2_000f, 16_000f)
+fun clampSubCutoffHz(hz: Float): Float = hz.coerceIn(20f, 100f)
+fun clampRatio(ratio: Float): Float = ratio.coerceIn(1f, 20f)
+fun clampThresholdDb(db: Float): Float = db.coerceIn(-60f, 0f)
+fun clampAttackMs(ms: Float): Float = ms.coerceIn(0.1f, 100f)
+fun clampReleaseMs(ms: Float): Float = ms.coerceIn(10f, 1_000f)
+fun clampMakeupDb(db: Float): Float = db.coerceIn(-12f, 24f)
+fun clampLimiterCeilingDb(db: Float): Float = db.coerceIn(-20f, 0f)
+fun clampGateThresholdDb(db: Float): Float = db.coerceIn(-90f, -20f)
+fun clampGateRatio(ratio: Float): Float = ratio.coerceIn(1f, 10f)
+fun clampReverbMix(mix: Float): Float = mix.coerceIn(0f, 1f)
+fun clampStereoExpansion(width: Float): Float = width.coerceIn(0f, 2f)
+
+/** Margen de realce de Graves/Sub que corresponde al perfil de uso elegido. */
+fun toneBoostMarginFor(usageProfileKey: String): Float =
+    usageProfileByKey(usageProfileKey).toneBoostMarginDb
 
 data class UserPreset(
     val name: String,

@@ -28,6 +28,22 @@ import com.auraline.core.domain.ToneControls
 import com.auraline.core.domain.VolumeControls
 import com.auraline.core.domain.bandCenterHz
 import com.auraline.core.domain.bandProbeHz
+import com.auraline.core.domain.clampBandGainDb
+import com.auraline.core.domain.clampGateRatio
+import com.auraline.core.domain.clampGateThresholdDb
+import com.auraline.core.domain.clampMakeupDb
+import com.auraline.core.domain.clampLimiterCeilingDb
+import com.auraline.core.domain.clampPreampDb
+import com.auraline.core.domain.clampRatio
+import com.auraline.core.domain.clampReleaseMs
+import com.auraline.core.domain.clampAttackMs
+import com.auraline.core.domain.clampReverbMix
+import com.auraline.core.domain.clampStereoExpansion
+import com.auraline.core.domain.clampSubCutoffHz
+import com.auraline.core.domain.clampThresholdDb
+import com.auraline.core.domain.clampToneDb
+import com.auraline.core.domain.clampTrebleCrossHz
+import com.auraline.core.domain.clampBassCrossHz
 import com.auraline.core.domain.generateEqualizerBands
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -173,6 +189,9 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putFloat("state_bass", state.tone.bassDb)
             .putFloat("state_treble", state.tone.trebleDb)
             .putFloat("state_mid", state.tone.midDb)
+            .putFloat("state_bass_hz", state.tone.bassFrequencyHz)
+            .putFloat("state_treble_hz", state.tone.trebleFrequencyHz)
+            .putFloat("state_sub_cutoff", state.tone.subCutoffHz)
             .putFloat("state_balance", state.stereo.balance)
             .putFloat("state_expansion", state.stereo.expansion)
             .putFloat("state_volume", state.volume.percent)
@@ -185,6 +204,10 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putFloat("state_comp_attack", state.compressor.attackMs)
             .putFloat("state_comp_release", state.compressor.releaseMs)
             .putFloat("state_comp_makeup", state.compressor.makeupGain)
+            .putFloat("state_comp_ceiling", state.compressor.limiterCeiling)
+            .putFloat("state_reverb_filter", state.reverb.filter)
+            .putFloat("state_reverb_predelay", state.reverb.preDelay)
+            .putFloat("state_reverb_predelay_mix", state.reverb.predelayMix)
             .putFloat("gate_threshold", state.gate.thresholdDb)
             .putFloat("gate_ratio", state.gate.ratio)
             .putBoolean("module_eq", state.modules.equalizer)
@@ -241,23 +264,30 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             autoPreamp = p.getBoolean("state_auto_preamp", true),
             selectedRoute = p.getInt("state_route", 0),
             presetName = p.getString("state_preset", "Plano") ?: "Plano",
+            toneBoostMarginDb = toneBoostMarginFor(_settings.value.usageProfile),
             tone = ToneControls(
                 subDb = p.getFloat("state_sub", 0f),
                 bassDb = p.getFloat("state_bass", 0f),
                 trebleDb = p.getFloat("state_treble", 0f),
-                midDb = p.getFloat("state_mid", 0f)
+                midDb = p.getFloat("state_mid", 0f),
+                bassFrequencyHz = p.getFloat("state_bass_hz", 100f).coerceIn(40f, 400f),
+                trebleFrequencyHz = p.getFloat("state_treble_hz", 8000f).coerceIn(2000f, 16000f),
+                subCutoffHz = p.getFloat("state_sub_cutoff", 60f).coerceIn(20f, 100f)
             ),
             stereo = StereoControls(
                 balance = p.getFloat("state_balance", 0f),
                 expansion = p.getFloat("state_expansion", 1f)
             ),
             volume = VolumeControls(percent = p.getFloat("state_volume", 100f)),
-            reverb = ReverbParams(
+            reverb = sanitize(ReverbParams(
                 decay = p.getFloat("state_reverb_decay", 0.5f),
                 mix = p.getFloat("state_reverb_mix", 0.25f),
                 damping = p.getFloat("state_reverb_damping", 0.5f),
-                size = p.getFloat("state_reverb_size", 0.5f)
-            ),
+                size = p.getFloat("state_reverb_size", 0.5f),
+                filter = p.getFloat("state_reverb_filter", 0.5f),
+                preDelay = p.getFloat("state_reverb_predelay", 0f),
+                predelayMix = p.getFloat("state_reverb_predelay_mix", 0.5f)
+            )),
             gate = GateParams(
                 thresholdDb = p.getFloat("gate_threshold", -60f),
                 ratio = p.getFloat("gate_ratio", 2f)
@@ -270,13 +300,14 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
                 reverb = p.getBoolean("module_reverb", true),
                 width = p.getBoolean("module_width", true)
             ),
-            compressor = CompressorParams(
+            compressor = sanitize(CompressorParams(
                 threshold = p.getFloat("state_comp_threshold", -18f),
                 ratio = p.getFloat("state_comp_ratio", 3f),
                 attackMs = p.getFloat("state_comp_attack", 10f),
                 releaseMs = p.getFloat("state_comp_release", 120f),
-                makeupGain = p.getFloat("state_comp_makeup", 0f)
-            )
+                makeupGain = p.getFloat("state_comp_makeup", 0f),
+                limiterCeiling = p.getFloat("state_comp_ceiling", -1f)
+            ))
         )
     }
 
@@ -311,24 +342,41 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     override fun setEffectsEnabled(enabled: Boolean) = saveState(_state.value.copy(effectsEnabled = enabled))
 
-    override fun setPreamp(db: Float) = saveState(_state.value.copy(preampDb = db))
+    override fun setPreamp(db: Float) = saveState(_state.value.copy(preampDb = clampPreampDb(db)))
 
     override fun setBandGain(bandId: Int, gainDb: Float) {
         val current = _state.value
         val bands = current.bands.map { band ->
-            if (band.id == bandId) band.copy(gainDb = gainDb) else band
+            if (band.id == bandId) band.copy(gainDb = clampBandGainDb(gainDb, current.gainRangeDb)) else band
         }
         saveState(current.copy(bands = bands, presetName = "Personalizado"))
     }
 
     override fun setSubBass(db: Float) {
         val tone = _state.value.tone
-        saveState(_state.value.copy(tone = tone.copy(subDb = db)))
+        val margin = _state.value.toneBoostMarginDb.coerceIn(12f, 24f)
+        saveState(_state.value.copy(tone = tone.copy(subDb = clampToneDb(db, margin))))
+    }
+
+    /** Corte del paso bajo del sub-bajo (20–100 Hz). */
+    override fun setSubCutoff(hz: Float) {
+        val tone = _state.value.tone
+        saveState(_state.value.copy(tone = tone.copy(subCutoffHz = clampSubCutoffHz(hz))))
     }
 
     override fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) {
-        val tone = _state.value.tone
-        saveState(_state.value.copy(tone = tone.copy(bassDb = bassDb, midDb = midDb, trebleDb = trebleDb)))
+        val current = _state.value
+        val tone = current.tone
+        val margin = current.toneBoostMarginDb.coerceIn(12f, 24f)
+        saveState(
+            current.copy(
+                tone = tone.copy(
+                    bassDb = clampToneDb(bassDb, margin),
+                    midDb = clampToneDb(midDb, 12f),
+                    trebleDb = clampToneDb(trebleDb, 12f)
+                )
+            )
+        )
     }
 
     override fun setToneFrequencies(bassHz: Float, trebleHz: Float) {
@@ -336,8 +384,9 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         saveState(
             _state.value.copy(
                 tone = tone.copy(
-                    bassFrequencyHz = bassHz.coerceIn(40f, 400f),
-                    trebleFrequencyHz = trebleHz.coerceIn(2000f, 16000f)
+                    bassFrequencyHz = clampBassCrossHz(bassHz),
+                    // El cruce Medios/Agudos nunca puede quedar por debajo del Graves/Medios.
+                    trebleFrequencyHz = clampTrebleCrossHz(trebleHz).coerceAtLeast(clampBassCrossHz(bassHz) + 800f)
                 )
             )
         )
@@ -374,10 +423,10 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     }
 
     override fun setBalance(balance: Float) =
-        saveState(_state.value.copy(stereo = _state.value.stereo.copy(balance = balance)))
+        saveState(_state.value.copy(stereo = _state.value.stereo.copy(balance = balance.coerceIn(-100f, 100f))))
 
     override fun setExpansion(expansion: Float) =
-        saveState(_state.value.copy(stereo = _state.value.stereo.copy(expansion = expansion)))
+        saveState(_state.value.copy(stereo = _state.value.stereo.copy(expansion = clampStereoExpansion(expansion))))
 
     override fun setVolume(percent: Float) {
         val current = _state.value
@@ -392,16 +441,41 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         }
     }
 
-    override fun setReverb(params: ReverbParams) = saveState(_state.value.copy(reverb = params))
+    override fun setReverb(params: ReverbParams) = saveState(_state.value.copy(reverb = sanitize(params)))
+
+    /** Todos los parámetros pasan por aquí antes de llegar al motor: rangos seguros garantizados. */
+    private fun sanitize(params: ReverbParams): ReverbParams = params.copy(
+        damping = params.damping.coerceIn(0f, 1f),
+        filter = params.filter.coerceIn(0f, 1f),
+        decay = params.decay.coerceIn(0f, 1f),
+        preDelay = params.preDelay.coerceIn(0f, 1f),
+        predelayMix = params.predelayMix.coerceIn(0f, 1f),
+        size = params.size.coerceIn(0f, 1f),
+        mix = clampReverbMix(params.mix)
+    )
+
+    private fun sanitize(params: CompressorParams): CompressorParams = params.copy(
+        threshold = clampThresholdDb(params.threshold),
+        ratio = clampRatio(params.ratio),
+        attackMs = clampAttackMs(params.attackMs),
+        releaseMs = clampReleaseMs(params.releaseMs),
+        makeupGain = clampMakeupDb(params.makeupGain),
+        limiterCeiling = clampLimiterCeilingDb(params.limiterCeiling)
+    )
+
+    private fun sanitize(params: GateParams): GateParams = params.copy(
+        thresholdDb = clampGateThresholdDb(params.thresholdDb),
+        ratio = clampGateRatio(params.ratio)
+    )
 
     override fun applyReverbPreset(name: String) {
         val preset = ReverbPresets.firstOrNull { it.name == name } ?: return
         saveState(_state.value.copy(reverb = preset.params, effectsEnabled = true))
     }
 
-    override fun setCompressor(params: CompressorParams) = saveState(_state.value.copy(compressor = params))
+    override fun setCompressor(params: CompressorParams) = saveState(_state.value.copy(compressor = sanitize(params)))
 
-    override fun setGate(params: GateParams) = saveState(_state.value.copy(gate = params))
+    override fun setGate(params: GateParams) = saveState(_state.value.copy(gate = sanitize(params)))
 
     override fun setModules(modules: ModuleState) = saveState(_state.value.copy(modules = modules))
 
@@ -414,13 +488,24 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val clamped = current.bands.map {
             it.copy(gainDb = it.gainDb.coerceIn(-profile.gainRangeDb, profile.gainRangeDb))
         }
+        // El perfil fija el corte del sub-bajo y traslada los realces de Graves/Sub al
+        // margen de ese equipo (p. ej. en altavoz externo se puede pedir hasta ±24 dB).
+        val oldBassMax = current.toneBoostMarginDb
+        val bassScale = if (oldBassMax > 0f) profile.toneBoostMarginDb / oldBassMax else 1f
+        val newTone = current.tone.copy(
+            subCutoffHz = profile.subCutoffHz,
+            bassDb = (current.tone.bassDb * bassScale).coerceIn(-profile.toneBoostMarginDb, profile.toneBoostMarginDb),
+            subDb = (current.tone.subDb * bassScale).coerceIn(-profile.toneBoostMarginDb, profile.toneBoostMarginDb)
+        )
         saveState(
             current.copy(
                 gainRangeDb = profile.gainRangeDb,
+                toneBoostMarginDb = profile.toneBoostMarginDb,
                 autoPreamp = profile.levelProtection,
                 effectsEnabled = profile.effectsEnabled,
                 modules = profile.modules,
                 bands = clamped,
+                tone = newTone,
                 bypass = false
             )
         )
