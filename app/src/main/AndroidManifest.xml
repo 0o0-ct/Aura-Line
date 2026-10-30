@@ -87,6 +87,4 @@
             <action android:name="android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
     </queries>
-    </application>
-
 </manifest>
