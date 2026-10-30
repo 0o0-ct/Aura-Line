@@ -42,6 +42,7 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setBypass(enabled: Boolean) = repository.setBypass(enabled)
     fun setGainRange(db: Float) = repository.setGainRange(db)
     fun applyFactoryPreset(name: String) = repository.applyFactoryPreset(name)
+    fun focusLowSource(key: String) = repository.focusLowSource(key)
     fun setBalance(balance: Float) = repository.setBalance(balance)
     fun setExpansion(expansion: Float) = repository.setExpansion(expansion)
     fun setMono(mono: Boolean) = repository.saveState(repository.getState().copy(stereo = repository.getState().stereo.copy(mono = mono)))

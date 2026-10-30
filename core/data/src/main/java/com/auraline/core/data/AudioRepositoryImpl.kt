@@ -44,7 +44,9 @@ import com.auraline.core.domain.clampThresholdDb
 import com.auraline.core.domain.clampToneDb
 import com.auraline.core.domain.clampTrebleCrossHz
 import com.auraline.core.domain.clampBassCrossHz
+import com.auraline.core.domain.focusFor
 import com.auraline.core.domain.generateEqualizerBands
+import com.auraline.core.domain.resolveFocus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -419,6 +421,39 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
         val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
         saveState(current.copy(bands = tuned, presetName = preset.name))
+        return true
+    }
+
+    /**
+     * Foco aditivo de una fuente grave: suma la receta de esa fuente sobre la curva
+     * que ya tiene el usuario, **sin borrarla**. Al revés que [applyFactoryPreset],
+     * que sustituye la curva entera.
+     *
+     * Si la banda principal ya está subida al menos tanto como la receta, un toque la
+     * retira en vez de sumarla: el botón alterna.
+     *
+     * @param scale multiplicador de la receta (1 = la receta tal cual).
+     */
+    override fun focusLowSource(key: String, scale: Float): Boolean {
+        val focus = focusFor(key) ?: return false
+        val current = _state.value
+        val bands = current.bands.ifEmpty { generateEqualizerBands(current.numBands) }
+        val steps = resolveFocus(bands, focus)
+        if (steps.isEmpty()) return false
+
+        val limit = current.gainRangeDb.coerceIn(6f, 24f)
+        val gains = bands.map { it.gainDb }.toMutableList()
+
+        val primary = steps.first()
+        val alreadyApplied = gains[primary.first] >= primary.second * scale - 0.5f
+        val direction = if (alreadyApplied) -1f else 1f
+
+        steps.forEach { (index, delta) ->
+            gains[index] = (gains[index] + delta * scale * direction).coerceIn(-limit, limit)
+        }
+
+        val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
+        saveState(current.copy(bands = tuned, presetName = "Personalizado"))
         return true
     }
 
