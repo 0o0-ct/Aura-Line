@@ -1031,14 +1031,14 @@ fun ResponseCurve(
     ) {
         Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 10.dp)) {
             if (bands.isEmpty()) return@Canvas
-            val minF = 20f
-            val maxF = 20000f
+            val minF = bands.minOf { it.frequencyHz }.coerceAtLeast(20f)
+            val maxF = bands.maxOf { it.frequencyHz }.coerceAtLeast(minF * 1.01f)
             val spanLog = log10(maxF / minF)
             val centerY = size.height / 2f
 
-            // Retícula de frecuencias (100 Hz, 1 kHz, 10 kHz)
-            listOf(100f, 1000f, 10000f).forEach { frequency ->
-                val x = ((log10(frequency / minF)) / spanLog) * size.width
+            // Retícula proporcional al rango real de las bandas configuradas.
+            listOf(0.25f, 0.5f, 0.75f).forEach { fraction ->
+                val x = fraction * size.width
                 drawLine(
                     color = colors.textSecondary.copy(alpha = 0.08f),
                     start = Offset(x, 0f),
