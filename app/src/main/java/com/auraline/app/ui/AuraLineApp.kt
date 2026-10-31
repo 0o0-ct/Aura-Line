@@ -296,17 +296,18 @@ private fun FloatingDock(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
             .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
-        val dockShape = RoundedCornerShape(28.dp)
+        val dockShape = RoundedCornerShape(32.dp)
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(64.dp)
+                .widthIn(max = 460.dp)
+                .fillMaxWidth(0.94f)
+                .height(68.dp)
                 .glassDock(dockShape)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -315,7 +316,7 @@ private fun FloatingDock(
                     destination = destination,
                     selected = selected == index,
                     accent = accent,
-                    modifier = Modifier.weight(1f).height(52.dp),
+                    modifier = Modifier.weight(1f).height(54.dp),
                     onClick = { onSelect(index) }
                 )
             }
@@ -357,12 +358,10 @@ private fun SideRail(
 @Composable
 private fun Modifier.glassDock(shape: RoundedCornerShape): Modifier {
     val colors = AuraTheme.colors
-    // Barra flotante: una única capa con esquinas redondeadas. Se elimina la capa
-    // inferior de sombra neumórfica para evitar el "doble fondo" redondeado.
     return this
-        .background(colors.surfaceElevated.copy(alpha = 0.92f), shape)
+        .background(colors.surface.copy(alpha = 0.82f), shape)
         .border(
-            1.dp,
+            1.2.dp,
             Brush.verticalGradient(listOf(colors.glassBorderTop, colors.glassBorderBottom)),
             shape
         )
