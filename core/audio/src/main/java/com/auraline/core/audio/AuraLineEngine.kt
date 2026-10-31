@@ -122,8 +122,11 @@ object AuraLineEngine {
         runCatching { latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
     }
 
-    fun onSessionOpened(sessionId: Int) {
+    fun onSessionOpened(sessionId: Int, packageName: String? = null) {
         if (sessionId == GLOBAL_SESSION) return
+        if (!packageName.isNullOrBlank()) {
+            Log.i(TAG, "Sesión $sessionId asociada a la aplicación: $packageName")
+        }
         executor.execute {
             if (!desired.motorEnabled) return@execute
             if (sessionChain.containsKey(sessionId)) return@execute
