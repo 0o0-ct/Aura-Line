@@ -1070,19 +1070,32 @@ fun ResponseCurve(
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
             )
 
-            val edge = { index: Int ->
-                val cutoff = bands[index].frequencyHz.coerceIn(minF, maxF)
-                ((log10(cutoff / minF)) / spanLog) * size.width
-            }
-            val level = { index: Int ->
-                centerY - (bands[index].gainDb / gainRangeDb).coerceIn(-1f, 1f) * (size.height / 2.2f)
-            }
+            val steps = 90
+            val path = Path()
+            val points = ArrayList<Offset>(steps)
 
-            val path = Path().apply {
-                moveTo(0f, level(0))
-                for (index in bands.indices) {
-                    lineTo(edge(index), level(index))
-                    if (index < bands.lastIndex) lineTo(edge(index), level(index + 1))
+            for (i in 0..steps) {
+                val fraction = i.toFloat() / steps
+                val freq = minF * Math.pow((maxF / minF).toDouble(), fraction.toDouble()).toFloat()
+                var totalGainDb = 0f
+
+                for (band in bands) {
+                    if (kotlin.math.abs(band.gainDb) >= 0.05f) {
+                        totalGainDb += calculateBiquadMagnitudeDb(freq, band.frequencyHz, band.gainDb, band.q)
+                    }
+                }
+
+                val x = fraction * size.width
+                val y = centerY - (totalGainDb / gainRangeDb).coerceIn(-1.2f, 1.2f) * (size.height / 2.2f)
+                val pt = Offset(x, y)
+                points.add(pt)
+
+                if (i == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    val prev = points[i - 1]
+                    val cx = (prev.x + x) / 2f
+                    path.cubicTo(cx, prev.y, cx, y, x, y)
                 }
             }
 
@@ -1115,15 +1128,54 @@ fun ResponseCurve(
             )
 
             // Nodos en cada banda
-            bands.indices.forEach { index ->
+            bands.forEach { band ->
+                val cutoff = band.frequencyHz.coerceIn(minF, maxF)
+                val x = ((log10(cutoff / minF)) / spanLog) * size.width
+                val y = centerY - (band.gainDb / gainRangeDb).coerceIn(-1f, 1f) * (size.height / 2.2f)
                 drawCircle(
                     color = accent,
                     radius = 2.dp.toPx(),
-                    center = Offset(edge(index), level(index))
+                    center = Offset(x, y)
                 )
             }
         }
     }
+}
+
+/**
+ * Respuesta en frecuencia de un Biquad Peaking Filter (fórmula RBJ cookbook en dB).
+ */
+fun calculateBiquadMagnitudeDb(f: Float, f0: Float, gainDb: Float, q: Float = 1.41f, fs: Float = 48000f): Float {
+    if (kotlin.math.abs(gainDb) < 0.05f) return 0f
+    val A = Math.pow(10.0, gainDb / 40.0)
+    val w0 = 2.0 * Math.PI * f0 / fs
+    val w = 2.0 * Math.PI * f / fs
+    val alpha = Math.sin(w0) / (2.0 * q)
+    val cosW0 = Math.cos(w0)
+
+    val b0 = 1.0 + alpha * A
+    val b1 = -2.0 * cosW0
+    val b2 = 1.0 - alpha * A
+    val a0 = 1.0 + alpha / A
+    val a1 = -2.0 * cosW0
+    val a2 = 1.0 - alpha / A
+
+    val cosW = Math.cos(w)
+    val cos2W = Math.cos(2.0 * w)
+    val sinW = Math.sin(w)
+    val sin2W = Math.sin(2.0 * w)
+
+    val numReal = (b0 + b1 * cosW + b2 * cos2W) / a0
+    val numImag = (-b1 * sinW - b2 * sin2W) / a0
+    val denReal = (a0 + a1 * cosW + a2 * cos2W) / a0
+    val denImag = (-a1 * sinW - a2 * sin2W) / a0
+
+    val numMagSq = numReal * numReal + numImag * numImag
+    val denMagSq = denReal * denReal + denImag * denImag
+
+    if (denMagSq < 1e-12) return 0f
+    val magSq = numMagSq / denMagSq
+    return (10.0 * Math.log10(Math.max(magSq, 1e-12))).toFloat()
 }
 
 /**
