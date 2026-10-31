@@ -607,7 +607,8 @@ fun AuraKnob(
     modifier: Modifier = Modifier,
     diameter: Dp = 84.dp,
     label: String = "",
-    valueText: String = ""
+    valueText: String = "",
+    enabled: Boolean = true
 ) {
     val colors = AuraTheme.colors
     val accent = controlAccent()
@@ -634,17 +635,19 @@ fun AuraKnob(
                     elevation = 8.dp
                 )
                 .background(colors.surfaceElevated, CircleShape)
-                .pointerInput(Unit) {
+                .pointerInput(enabled) {
                     detectTapGestures(onDoubleTap = {
+                        if (!enabled) return@detectTapGestures
                         haptic()
                         currentOnChange(((currentRange.start + currentRange.endInclusive) / 2f))
                     })
                 }
-                .pointerInput(Unit) {
+                .pointerInput(enabled) {
                     var accumulated = 0f
                     detectDragGestures(
                         onDragStart = { accumulated = 0f },
                         onDrag = { change, drag ->
+                            if (!enabled) return@detectDragGestures
                             change.consume()
                             accumulated -= drag.y
                             val delta = (accumulated / 220f) * span

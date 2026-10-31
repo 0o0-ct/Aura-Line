@@ -35,6 +35,7 @@ import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraDepth
+import com.auraline.core.ui.components.AuraKnob
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.components.SectionTitle
@@ -174,33 +175,42 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Imagen estéreo y volumen")
             Spacer(modifier = Modifier.height(6.dp))
-            AuraSliderRow(
-                label = "Balance",
-                valueText = when {
-                    state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
-                    state.stereo.balance < -1f -> "I ${(-state.stereo.balance).toInt()}%"
-                    else -> "Centro"
-                },
-                value = state.stereo.balance,
-                valueRange = -100f..100f,
-                onValueChange = { viewModel.setBalance(it) },
-                enabled = powered
-            )
-            AuraSliderRow(
-                label = "Anchura estéreo",
-                valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
-                value = state.stereo.expansion,
-                valueRange = 1f..2f,
-                onValueChange = { viewModel.setExpansion(it) },
-                enabled = powered
-            )
-            AuraSliderRow(
-                label = "Volumen multimedia",
-                valueText = "${state.volume.percent.toInt()}%",
-                value = state.volume.percent,
-                valueRange = 0f..100f,
-                onValueChange = { viewModel.setVolume(it) }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Top
+            ) {
+                AuraKnob(
+                    value = state.stereo.balance,
+                    onValueChange = { viewModel.setBalance(it) },
+                    valueRange = -100f..100f,
+                    diameter = 92.dp,
+                    label = "Balance",
+                    valueText = when {
+                        state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
+                        state.stereo.balance < -1f -> "I ${(-state.stereo.balance).toInt()}%"
+                        else -> "Centro"
+                    },
+                    enabled = powered
+                )
+                AuraKnob(
+                    value = state.stereo.expansion,
+                    onValueChange = { viewModel.setExpansion(it) },
+                    valueRange = 1f..2f,
+                    diameter = 92.dp,
+                    label = "Anchura",
+                    valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
+                    enabled = powered
+                )
+                AuraKnob(
+                    value = state.volume.percent,
+                    onValueChange = { viewModel.setVolume(it) },
+                    valueRange = 0f..100f,
+                    diameter = 92.dp,
+                    label = "Volumen",
+                    valueText = "${state.volume.percent.toInt()}%"
+                )
+            }
         }
 
         Row(
