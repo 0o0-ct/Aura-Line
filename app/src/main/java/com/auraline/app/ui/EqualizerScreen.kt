@@ -60,6 +60,10 @@ import com.auraline.core.domain.generateEqualizerBands
 import com.auraline.core.domain.ownerShortNameFor
 import com.auraline.core.domain.resolveFocus
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraChip
+import com.auraline.core.ui.components.AuraChipState
+import com.auraline.core.ui.components.AuraDepth
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.BandFader
 import com.auraline.core.ui.components.ResponseCurve
@@ -114,7 +118,10 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
     ) {
         EngineStatusCard(engine = engine, motorEnabled = state.motorEnabled)
 
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle(
                     text = "Curva de respuesta",
@@ -145,14 +152,19 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 FactoryPresets.forEach { preset ->
-                    SelectableChip(
-                        text = preset.name,
-                        selected = state.presetName == preset.name,
+                    AuraChip(
+                        label = preset.name,
+                        state = if (state.presetName == preset.name) {
+                            AuraChipState.Selected
+                        } else {
+                            AuraChipState.Default
+                        },
                         onClick = {
                             if (preset.name == "Plano") viewModel.resetAll()
                             else viewModel.applyFactoryPreset(preset.name)
                             scope.launch { pagerState.animateScrollToPage(0) }
-                        }
+                        },
+                        modifier = Modifier.height(40.dp)
                     )
                 }
             }
