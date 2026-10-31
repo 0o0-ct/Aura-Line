@@ -182,7 +182,7 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "AuraLine",
+                                    text = destinations[tab].label,
                                     color = colors.textPrimary,
                                     fontSize = 24.sp,
                                     fontWeight = FontWeight.Bold,
