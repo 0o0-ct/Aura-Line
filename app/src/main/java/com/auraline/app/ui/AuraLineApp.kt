@@ -159,77 +159,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                 containerColor = Color.Transparent,
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 snackbarHost = { SnackbarHost(snackbar) },
-                topBar = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    listOf(
-                                        colors.background.copy(alpha = 0.34f),
-                                        colors.background.copy(alpha = 0.12f),
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                            .statusBarsPadding()
-                            .padding(horizontal = 20.dp, vertical = 14.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = destinations[tab].label,
-                                    color = colors.textPrimary,
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-1.1).sp,
-                                    lineHeight = 38.sp
-                                )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.padding(top = 4.dp)
-                                ) {
-                                    StatusPill(
-                                        text = if (state.motorEnabled) "Motor activo" else "Motor apagado",
-                                        color = if (state.motorEnabled) colors.positive else colors.textSecondary
-                                    )
-                                    Text(
-                                        text = buildString {
-                                            append(engine.route.label)
-                                            engine.outputName?.let { append(" · ").append(it) }
-                                            if (engine.sampleRateHz > 0) {
-                                                append(" · ").append(engine.sampleRateHz).append(" Hz")
-                                            }
-                                            append(" · ").append(engine.channels).append(" canales")
-                                        },
-                                        color = colors.textSecondary.copy(alpha = 0.85f),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        maxLines = 1
-                                    )
-                                }
-                            }
-
-                            // Interruptor táctil de estilo Apple Neumorphism
-                            AuraSwitch(
-                                checked = state.motorEnabled,
-                                onCheckedChange = { enabled ->
-                                    viewModel.toggleMotor(enabled)
-                                    scope.launch {
-                                        snackbar.showSnackbar(
-                                            if (enabled) "Motor de audio encendido" else "Motor de audio apagado"
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-                },
             ) { innerPadding ->
                 Row(
                     modifier = Modifier
@@ -271,18 +200,97 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 }
                             }
 
-                            if (!expanded) {
-                                FloatingDock(
-                                    selected = tab,
-                                    accent = accent,
-                                    onSelect = { index -> haptic(); tab = index },
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                )
-                            }
                         }
                     }
+
                 }
             }
+
+            FloatingHeader(
+                title = destinations[tab].label,
+                state = state,
+                engine = engine,
+                onMotorChanged = { enabled ->
+                    viewModel.toggleMotor(enabled)
+                    scope.launch {
+                        snackbar.showSnackbar(
+                            if (enabled) "Motor de audio encendido" else "Motor de audio apagado"
+                        )
+                    }
+                },
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+
+            if (!expanded) {
+                FloatingDock(
+                    selected = tab,
+                    accent = accent,
+                    onSelect = { index -> haptic(); tab = index },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingHeader(
+    title: String,
+    state: com.auraline.core.domain.EqualizerState,
+    engine: com.auraline.core.domain.EngineStatus,
+    onMotorChanged: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = AuraTheme.colors
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 20.dp, vertical = 14.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = colors.textPrimary,
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-1.1).sp,
+                    lineHeight = 38.sp
+                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 4.dp)
+                ) {
+                    StatusPill(
+                        text = if (state.motorEnabled) "Motor activo" else "Motor apagado",
+                        color = if (state.motorEnabled) colors.positive else colors.textSecondary
+                    )
+                    Text(
+                        text = buildString {
+                            append(engine.route.label)
+                            engine.outputName?.let { append(" · ").append(it) }
+                            if (engine.sampleRateHz > 0) {
+                                append(" · ").append(engine.sampleRateHz).append(" Hz")
+                            }
+                            append(" · ").append(engine.channels).append(" canales")
+                        },
+                        color = colors.textSecondary.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+            AuraSwitch(
+                checked = state.motorEnabled,
+                onCheckedChange = onMotorChanged
+            )
         }
     }
 }
