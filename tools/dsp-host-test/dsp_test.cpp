@@ -1,6 +1,19 @@
 #include "../../app/src/main/cpp/dsp_engine.cpp"
 #include <cstdio>
 #include <vector>
+#include <cmath>
+static double goertzelMag(const float* x, int frames, float freq, float fs){
+    double w = 2.0*M_PI*freq/fs;
+    double coeff = 2.0*std::cos(w);
+    double s0=0.0, s1=0.0;
+    for(int i=0;i<frames;i++){ double xi = (double)x[2*i]; double s2=s1; s1=s0; s0=xi+coeff*s1-s2; }
+    double p = s1*s1+s0*s0-coeff*s1*s0;
+    return std::sqrt(p);
+}
+static double goertzelGainDb(const float* out, int frames, const float* in, float freq, float fs){
+    double mo = goertzelMag(out,frames,freq,fs), mi = goertzelMag(in,frames,freq,fs);
+    return 20.0*log10(mo/mi);
+}
 int main(){
   JNIEnv env; const int frames=4800*4; std::vector<float> buf(frames*2);
   env.data=buf.data(); env.len=buf.size();
@@ -35,5 +48,36 @@ int main(){
   Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(&env,nullptr,&buf,frames);
   double err=0; for(int i=kLookahead+100;i<frames;i++){ err=std::max(err,(double)std::fabs(buf[2*i]-in[2*(i-kLookahead)])); }
   printf("prueba nula (EQ plano): error max = %.3g (%.1f dB)\n",err,20*log10(err+1e-30));
+
+  // ---------------- Fase 3: prueba vertical ----------------
+  // Sonda: seno 60 Hz a 0.25 FS (=-12 dBFS) con el band de 60 Hz a +12 dB.
+  // Ganancia medida = pico de salida / pico de entrada (sin techo de limitador que recorte:
+  // el techo se deja en 0 dB para medir la ganancia pura del EQ).
+  {
+    Java_com_auraline_app_audio_NativeEngine_nativeInit(&env,nullptr,48000);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetEnabled(&env,nullptr,1);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetLimiterCeiling(&env,nullptr,0.0f);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetBandCount(&env,nullptr,25);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetEqBand(&env,nullptr,0,60.f,12.f,1.41f);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetPreamp(&env,nullptr,0.f);
+    std::fill(buf.begin(),buf.end(),0.f);
+    std::vector<float> inBuf(frames*2);
+    for(int k=0;k<10;k++) Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(&env,nullptr,&buf,frames);
+    float vout=0.f;
+    for(int blk=0;blk<5;blk++){
+      for(int i=0;i<frames;i++){ float t=(blk*frames+i)/48000.f;
+        float v=0.25f*std::sin(2*M_PI*60*t);
+        buf[2*i]=v; buf[2*i+1]=v; inBuf[2*i]=v; inBuf[2*i+1]=v; }
+      Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(&env,nullptr,&buf,frames);
+      for(int i=0;i<frames*2;i++) vout=std::max(vout,std::fabs(buf[i]));
+    }
+    const float vin=0.25f;
+    float gainDb=20*log10(vout/vin);
+    // Medicion por Goertzel (Modo B): magnitud en 60 Hz de la salida y de la entrada.
+    float goertzelGainDbVal = goertzelGainDb(buf.data(), frames, inBuf.data(), 60.f, 48000.f);
+    printf("prueba vertical 60Hz +12dB: pico in=%.4f pico out=%.4f ganancia=%.2f dB (esperado +10..+13) | goertzel=%.2f dB\n",vin,vout,gainDb,goertzelGainDbVal);
+    if (!(gainDb >= 10.0f && gainDb <= 13.0f)) { printf("FALLO: ganancia fuera de rango\n"); return 3; }
+  }
+
   return maxOut<=1.0f?0:2;
 }
