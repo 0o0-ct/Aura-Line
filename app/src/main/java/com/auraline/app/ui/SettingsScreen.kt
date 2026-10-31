@@ -305,23 +305,10 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             )
             if (settings.captureMode) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = {
-                        mediaProjectionManager?.createScreenCaptureIntent()?.let { captureLauncher.launch(it) }
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = colors.accent,
-                        contentColor = colors.background
-                    ),
-                    modifier = Modifier.height(40.dp)
-                ) {
-                    Text("Iniciar captura (experimental)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Al iniciar se pedirá permiso de proyección de medios. Detén el servicio desde la notificación para volver al modo clásico.",
-                    color = colors.textSecondary,
+                    text = "Modo captura experimental desactivado por seguridad: Android no permite silenciar la salida original, por lo que la captura duplica el audio. " +
+                        "El modo clásico (DynamicsProcessing) sigue siendo el motor activo. El código de captura queda disponible para futuras pruebas en dispositivos con root.",
+                    color = colors.warning,
                     fontSize = 11.sp
                 )
             }

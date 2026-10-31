@@ -42,6 +42,13 @@ class CaptureAudioService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            stopCapture()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         startForeground(NOTIFICATION_ID, buildNotification("Modo captura activo"))
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, android.app.Activity.RESULT_CANCELED)
@@ -183,18 +190,26 @@ class CaptureAudioService : Service() {
         }
     }
 
-    private fun buildNotification(text: String): Notification =
-        NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun buildNotification(text: String): Notification {
+        val stopIntent = Intent(this, CaptureAudioService::class.java).apply { action = ACTION_STOP }
+        val stopPending = android.app.PendingIntent.getService(
+            this, 0, stopIntent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("AuraLine")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
+            .addAction(android.R.drawable.ic_delete, "Detener", stopPending)
             .build()
+    }
 
     companion object {
         const val CHANNEL_ID = "auraline_capture"
         const val NOTIFICATION_ID = 42
         const val EXTRA_RESULT_CODE = "resultCode"
         const val EXTRA_DATA = "data"
+        const val ACTION_STOP = "com.auraline.app.audio.CaptureAudioService.STOP"
     }
 }
