@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -94,6 +95,8 @@ fun SettingsScreen(
     val checkResult by viewModel.checkResult.collectAsState()
 
     var permissionDenied by remember { mutableStateOf(false) }
+    var showAllPalettes by remember { mutableStateOf(false) }
+    var previewPalette by remember { mutableStateOf<com.auraline.core.ui.theme.AuraPalette?>(null) }
 
     val powerManager = context.getSystemService(PowerManager::class.java)
     val batteryExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
@@ -148,108 +151,58 @@ fun SettingsScreen(
             }
         }
 
-        // Paleta de colores con muestras de los tonos monocromáticos reales (coloresMONO)
+        // Paleta curada con acceso opcional a las 30 variantes existentes.
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             val currentPalette = AuraPalettes.firstOrNull { it.key == settings.theme.paletteKey } ?: AuraPalettes.first()
+            val featuredKeys = listOf("p25", "p20", "p1", "p9", "p15", "p4")
+            val visiblePalettes = if (showAllPalettes) {
+                AuraPalettes
+            } else {
+                featuredKeys.mapNotNull { key -> AuraPalettes.firstOrNull { it.key == key } }
+            }
+
             SectionTitle(
-                text = "Paleta monocromática",
+                text = "Identidad visual",
                 trailing = currentPalette.label
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "30 paletas monocromáticas de alta fidelidad. Al pulsar una, toda la app (fondo, tarjetas, perillas y faders) se viste armónicamente con sus tonos.",
+                text = "Elige una atmósfera para toda la experiencia. Puedes previsualizarla antes de aplicarla.",
                 color = colors.textSecondary,
-                fontSize = 11.sp
+                fontSize = 12.sp
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(vertical = 8.dp, horizontal = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                AuraPalettes.forEach { palette ->
-                    val selected = settings.theme.paletteKey == palette.key
-                    val cardShape = RoundedCornerShape(14.dp)
-                    Box(
-                        modifier = Modifier
-                            .width(120.dp)
-                            .height(68.dp)
-                            .then(
-                                if (selected) Modifier.neumorphicConcave(
-                                    radius = 14.dp,
-                                    shadowColor = colors.neumorphicCavity,
-                                    highlightColor = colors.accent.copy(alpha = 0.45f),
-                                    elevation = 3.dp
-                                )
-                                else Modifier.neumorphicConvex(
-                                    radius = 14.dp,
-                                    shadowColor = colors.neumorphicShadow,
-                                    highlightColor = colors.neumorphicHighlight,
-                                    elevation = 3.dp
-                                )
-                            )
-                            .background(
-                                if (selected) colors.surfaceElevated else colors.surface,
-                                cardShape
-                            )
-                            .border(
-                                width = if (selected) 1.5.dp else 1.dp,
-                                color = if (selected) colors.accent else colors.outline.copy(alpha = 0.25f),
-                                shape = cardShape
-                            )
-                            .clickable {
-                                haptic()
-                                viewModel.setPalette(palette.key, palette.accent.value.toInt())
-                            }
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
+            Spacer(modifier = Modifier.height(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                visiblePalettes.chunked(2).forEach { rowPalettes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = palette.label,
-                                    color = if (selected) colors.accent else colors.textPrimary,
-                                    fontSize = 10.sp,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                if (selected) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(7.dp)
-                                            .background(colors.accent, CircleShape)
-                                    )
-                                }
-                            }
-                            // Muestra visual con todos los tonos monocromáticos reales de la paleta
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(7.dp))
-                            ) {
-                                palette.colors.forEach { col ->
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .fillMaxHeight()
-                                            .background(col)
-                                    )
-                                }
-                            }
+                        rowPalettes.forEach { palette ->
+                            PalettePreviewCard(
+                                palette = palette,
+                                selected = settings.theme.paletteKey == palette.key,
+                                onClick = {
+                                    haptic()
+                                    previewPalette = palette
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
                         }
+                        if (rowPalettes.size == 1) Spacer(modifier = Modifier.weight(1f))
                     }
                 }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = { showAllPalettes = !showAllPalettes },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(
+                    text = if (showAllPalettes) "Mostrar selección curada" else "Explorar las 30 paletas",
+                    color = colors.accent,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
@@ -491,6 +444,63 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 4.dp)
         )
     }
+
+    previewPalette?.let { palette ->
+        AlertDialog(
+            onDismissRequest = { previewPalette = null },
+            containerColor = colors.surfaceElevated,
+            title = {
+                Text(
+                    text = palette.label,
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Así se verán el fondo, las tarjetas y los controles de AuraLine.",
+                        color = colors.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    ) {
+                        palette.colors.forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .background(color)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.setPalette(palette.key, palette.accent.value.toInt())
+                        previewPalette = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Aplicar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { previewPalette = null }) {
+                    Text("Cancelar", color = colors.accent)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -515,5 +525,78 @@ private fun SettingSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange
         )
+    }
+
+}
+
+@Composable
+private fun PalettePreviewCard(
+    palette: com.auraline.core.ui.theme.AuraPalette,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = AuraTheme.colors
+    val shape = RoundedCornerShape(18.dp)
+
+    Column(
+        modifier = modifier
+            .height(94.dp)
+            .then(
+                if (selected) Modifier.neumorphicConcave(
+                    radius = 18.dp,
+                    shadowColor = colors.neumorphicCavity,
+                    highlightColor = colors.accent.copy(alpha = 0.45f),
+                    elevation = 3.dp
+                ) else Modifier.neumorphicConvex(
+                    radius = 18.dp,
+                    shadowColor = colors.neumorphicShadow,
+                    highlightColor = colors.neumorphicHighlight,
+                    elevation = 3.dp
+                )
+            )
+            .background(if (selected) colors.surfaceElevated else colors.surface, shape)
+            .border(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) colors.accent else colors.outline.copy(alpha = 0.25f),
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = palette.label.substringAfter(": ").ifBlank { palette.label },
+                color = if (selected) colors.accent else colors.textPrimary,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
+            if (selected) {
+                Box(modifier = Modifier.size(7.dp).background(colors.accent, CircleShape))
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(24.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(10.dp))
+        ) {
+            palette.colors.forEach { color ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(color)
+                )
+            }
+        }
     }
 }
