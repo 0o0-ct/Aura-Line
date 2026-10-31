@@ -1,6 +1,8 @@
 package com.auraline.app.audio
 
 import android.util.Log
+import com.auraline.core.domain.EqualizerState
+import com.auraline.core.domain.generateEqualizerBands
 
 /**
  * Puente JNI con el motor DSP nativo (`libauralinedsp.so`).
@@ -13,6 +15,10 @@ import android.util.Log
  *  - y servir de base al futuro modo de captura + salida propia.
  *
  * Nunca abre streams de audio, así que es inofensivo llamarlo.
+ *
+ * Un único punto de escritura: [setState] recibe el estado completo desde AudioParams
+ * (`EqualizerState`). Cualquier otro valor de audio sale de aquí; ningún caller escribe
+ * parámetros sueltos del motor.
  */
 object NativeEngine {
 
@@ -28,12 +34,27 @@ object NativeEngine {
     }
 
     fun init(sampleRate: Int) { if (isAvailable) nativeInit(sampleRate) }
-    fun setEnabled(enabled: Boolean) { if (isAvailable) nativeSetEnabled(enabled) }
-    fun setPreamp(db: Float) { if (isAvailable) nativeSetPreamp(db) }
-    fun setLimiterCeiling(db: Float) { if (isAvailable) nativeSetLimiterCeiling(db) }
-    fun setBandCount(count: Int) { if (isAvailable) nativeSetBandCount(count) }
-    fun setEqBand(index: Int, freqHz: Float, gainDb: Float, q: Float = 1.41f) {
-        if (isAvailable) nativeSetEqBand(index, freqHz, gainDb, q)
+
+    /**
+     * Aplica un estado completo desde AudioParams.
+     *
+     * - El bypass (A/B) se traduce a cadena plana: el motor se desactiva (paso por alto),
+     *   que es la referencia comparativa de la curva procesada.
+     * - Los valores por defecto de la rejilla se generan si el estado no trae bandas.
+     */
+    fun setState(state: EqualizerState) {
+        if (!isAvailable) return
+        val bypassed = state.bypass
+        nativeSetEnabled(state.motorEnabled && !bypassed)
+        nativeSetPreamp(if (bypassed) 0f else state.preampDb)
+        nativeSetLimiterCeiling(state.compressor.limiterCeiling.coerceIn(-20f, 0f))
+        val bands = if (state.bands.isNotEmpty()) state.bands else generateEqualizerBands(state.numBands.coerceIn(20, 25))
+        val bandCount = bands.size.coerceIn(20, 25)
+        nativeSetBandCount(bandCount)
+        for (index in 0 until bandCount) {
+            val band = bands[index]
+            nativeSetEqBand(index, band.frequencyHz, band.gainDb, band.q)
+        }
     }
 
     /**

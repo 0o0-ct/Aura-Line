@@ -17,6 +17,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.auraline.app.R
+import com.auraline.app.di.AuraLineModule
 
 /**
  * Servicio experimental de "Modo captura": captura el audio de otras apps con
@@ -127,9 +128,9 @@ class CaptureAudioService : Service() {
             .build()
 
         NativeEngine.init(sampleRate)
-        NativeEngine.setEnabled(true)
-        NativeEngine.setBandCount(25)
-        NativeEngine.setLimiterCeiling(-2f)
+        // Un único camino de escritura: el motor nativo recibe el estado completo desde
+        // AudioParams (AudioRepository). Sin valores hardcodeados por aquí.
+        NativeEngine.setState(AuraLineModule.repository(this).getState().copy(motorEnabled = true))
 
         audioRecord = rec
         audioTrack = track
@@ -170,7 +171,7 @@ class CaptureAudioService : Service() {
         audioTrack = null
         runCatching { mediaProjection?.stop() }
         mediaProjection = null
-        NativeEngine.setEnabled(false)
+        NativeEngine.setState(AuraLineModule.repository(this).getState().copy(motorEnabled = false))
     }
 
     override fun onDestroy() {
