@@ -681,14 +681,33 @@ fun AuraKnob(
                     .background(colors.background, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
+                if (valueText.isNotEmpty()) {
+                    Text(
+                        text = valueText,
+                        color = colors.textPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
             }
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val radius = size.width / 2f
-                val markRadiusOuter = radius - 8.dp.toPx() // Alejar las lineas un poco del borde
-                val markRadiusInner = radius - 14.dp.toPx()
-                val numMarks = 36 // Más densidad de lineas pequeñas
+                val markRadiusOuter = radius - 8.dp.toPx()
+                val markRadiusInner = radius - 15.dp.toPx()
+                val numMarks = 36
                 val angleStep = sweepAngle / (numMarks - 1)
+
+                drawArc(
+                    color = accent.copy(alpha = 0.18f),
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
+                    size = Size(size.width - 16.dp.toPx(), size.height - 16.dp.toPx()),
+                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                )
 
                 for (i in 0 until numMarks) {
                     val angleDeg = startAngle + i * angleStep
@@ -696,9 +715,11 @@ fun AuraKnob(
 
                     val markFraction = i.toFloat() / (numMarks - 1)
                     val isActive = markFraction <= animated
+                    val isMajor = i % 5 == 0
+                    val innerRadius = if (isMajor) markRadiusInner - 3.dp.toPx() else markRadiusInner
 
                     val start = Offset(
-                        (center.x + markRadiusInner * cos(angleRad)).toFloat(),
+                        (center.x + innerRadius * cos(angleRad)).toFloat(),
                         (center.y + markRadiusInner * sin(angleRad)).toFloat()
                     )
                     val end = Offset(
@@ -726,10 +747,47 @@ fun AuraKnob(
                         color = markColor,
                         start = start,
                         end = end,
-                        strokeWidth = 1.5.dp.toPx(),
+                        strokeWidth = if (isMajor) 2.5.dp.toPx() else 1.5.dp.toPx(),
                         cap = StrokeCap.Round
                     )
                 }
+
+                val pointerAngle = Math.toRadians(
+                    (startAngle + sweepAngle * animated).toDouble()
+                )
+                val pointerStartRadius = diameter.toPx() / 2f - 43.dp.toPx()
+                val pointerEndRadius = diameter.toPx() / 2f - 25.dp.toPx()
+                drawLine(
+                    color = colors.neumorphicShadow.copy(alpha = 0.75f),
+                    start = Offset(
+                        center.x + (pointerStartRadius * cos(pointerAngle)).toFloat() + 1.dp.toPx(),
+                        center.y + (pointerStartRadius * sin(pointerAngle)).toFloat() + 1.dp.toPx()
+                    ),
+                    end = Offset(
+                        center.x + (pointerEndRadius * cos(pointerAngle)).toFloat() + 1.dp.toPx(),
+                        center.y + (pointerEndRadius * sin(pointerAngle)).toFloat() + 1.dp.toPx()
+                    ),
+                    strokeWidth = 4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = accent,
+                    start = Offset(
+                        center.x + (pointerStartRadius * cos(pointerAngle)).toFloat(),
+                        center.y + (pointerStartRadius * sin(pointerAngle)).toFloat()
+                    ),
+                    end = Offset(
+                        center.x + (pointerEndRadius * cos(pointerAngle)).toFloat(),
+                        center.y + (pointerEndRadius * sin(pointerAngle)).toFloat()
+                    ),
+                    strokeWidth = 2.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(
+                    color = accent,
+                    radius = 2.5.dp.toPx(),
+                    center = center
+                )
             }
         }
         if (label.isNotEmpty()) {

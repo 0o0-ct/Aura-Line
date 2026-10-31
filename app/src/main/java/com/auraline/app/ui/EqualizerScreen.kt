@@ -366,7 +366,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     valueRange = -15f..15f,
                     label = "Preamplificación",
                     valueText = "${formatGain(state.preampDb)} dB",
-                    diameter = 110.dp
+                    diameter = 132.dp
                 )
             }
             if (state.bypass) {
