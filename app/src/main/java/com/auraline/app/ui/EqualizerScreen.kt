@@ -187,11 +187,33 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     presets.forEach { name ->
+                        var showDeleteDialog by remember { mutableStateOf(false) }
                         SelectableChip(
                             text = name,
                             selected = state.presetName == name,
-                            onClick = { viewModel.applyPreset(name) }
+                            onClick = { viewModel.applyPreset(name) },
+                            onLongClick = { showDeleteDialog = true }
                         )
+
+                        if (showDeleteDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showDeleteDialog = false },
+                                containerColor = colors.surface,
+                                title = { Text("Eliminar preajuste", color = colors.textPrimary) },
+                                text = { Text("¿Deseas eliminar el preajuste de usuario '$name'?", color = colors.textSecondary) },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        viewModel.deletePreset(name)
+                                        showDeleteDialog = false
+                                    }) { Text("Eliminar", color = colors.danger) }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDeleteDialog = false }) {
+                                        Text("Cancelar", color = colors.textPrimary)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }

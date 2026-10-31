@@ -325,6 +325,7 @@ fun SelectableChip(
     text: String,
     selected: Boolean,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = AuraTheme.colors
@@ -375,12 +376,17 @@ fun SelectableChip(
             .then(interactionModifier)
             .background(backgroundBrush, shape)
             .border(1.dp, borderBrush, shape)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                haptic()
-                onClick()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = {
+                        haptic()
+                        onClick()
+                    },
+                    onLongPress = {
+                        haptic()
+                        onLongClick?.invoke()
+                    }
+                )
             }
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
