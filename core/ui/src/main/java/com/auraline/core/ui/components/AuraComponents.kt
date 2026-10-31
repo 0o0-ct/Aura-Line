@@ -231,12 +231,6 @@ fun AuraCard(
 
     Column(
         modifier = modifier
-            .neumorphicConvex(
-                radius = shapeRadius,
-                highlightColor = colors.neumorphicHighlight,
-                shadowColor = colors.neumorphicShadow,
-                elevation = 8.dp
-            )
             .background(glassGradient, shape)
             .border(1.dp, borderGradient, shape)
             .padding(16.dp),
