@@ -385,8 +385,8 @@ object AuraLineEngine {
             0f
         }
 
-        val balance = state.stereo.balance / 100f
-        val preamp = state.preampDb - headroom
+        val balance = if (state.bypass) 0f else state.stereo.balance / 100f
+        val preamp = if (state.bypass) 0f else state.preampDb - headroom
         val leftGain = preamp + if (balance > 0f) -balance * 12f else 0f
         val rightGain = preamp + if (balance < 0f) balance * 12f else 0f
         
@@ -399,15 +399,19 @@ object AuraLineEngine {
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            // Aplicamos Graves/Medios/Agudos (toneOffset) y Sub-bajo directamente a las bandas de PreEq
-            // para asegurar la respuesta acústica inmediata.
             val gain = if (eqActive) {
+                // Modulo EQ activo y no hay bypass: aplicar curva completa
                 (bandGains[band] + toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
                     .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
-            } else {
-                // Con el módulo EQ apagado, el control de tono sigue actuando
+            } else if (!state.bypass && !state.modules.equalizer) {
+                // Módulo EQ apagado manualmente, pero SIN bypass general:
+                // Solo se aplican los controles de Tono (se comportan como estanterías) y el sub-bajo.
                 (toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
                     .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+            } else {
+                // Bypass activo (A/B) o curva completamente apagada:
+                // El filtro devuelve 0 absoluto. Todo el procesamiento de frecuencias queda nulo.
+                0f
             }
             dp.setPreEqBandAllChannelsTo(
                 band,
