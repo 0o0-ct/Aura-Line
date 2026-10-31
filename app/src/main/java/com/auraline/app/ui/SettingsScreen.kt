@@ -1,6 +1,8 @@
 package com.auraline.app.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -68,6 +70,20 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
     val colors = AuraTheme.colors
     val haptic = hapticFeedback()
     val context = LocalContext.current
+    val activity = context as? Activity
+    val mediaProjectionManager =
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
+    val captureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val intent = Intent(context, com.auraline.app.audio.CaptureAudioService::class.java).apply {
+                putExtra(com.auraline.app.audio.CaptureAudioService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(com.auraline.app.audio.CaptureAudioService.EXTRA_DATA, result.data)
+            }
+            ContextCompat.startForegroundService(context, intent)
+        }
+    }
     val settings by viewModel.settings.collectAsState()
     val eqState by viewModel.state.collectAsState()
     val engine by viewModel.engine.collectAsState()
@@ -281,6 +297,34 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 checked = settings.autoStart,
                 onCheckedChange = { viewModel.setAutoStart(it) }
             )
+            SettingSwitch(
+                title = "Modo captura (experimental)",
+                subtitle = "Captura el audio de otras apps y lo procesa con el motor nativo. Requiere permiso de proyección de medios. El modo clásico sigue activo hasta que el motor de captura esté listo.",
+                checked = settings.captureMode,
+                onCheckedChange = { viewModel.setCaptureMode(it) }
+            )
+            if (settings.captureMode) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        mediaProjectionManager?.createScreenCaptureIntent()?.let { captureLauncher.launch(it) }
+                    },
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.accent,
+                        contentColor = colors.background
+                    ),
+                    modifier = Modifier.height(40.dp)
+                ) {
+                    Text("Iniciar captura (experimental)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Al iniciar se pedirá permiso de proyección de medios. Detén el servicio desde la notificación para volver al modo clásico.",
+                    color = colors.textSecondary,
+                    fontSize = 11.sp
+                )
+            }
         }
 
         // Protección de batería

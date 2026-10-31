@@ -156,7 +156,9 @@ data class AppSettings(
     /** Perfil de uso elegido por el usuario (ver [UsageProfiles]). */
     val usageProfile: String = "",
     val language: String = "system",
-    val theme: AppTheme = AppTheme()
+    val theme: AppTheme = AppTheme(),
+    /** Modo captura (experimental): captura el audio de otras apps y lo procesa con el motor nativo. */
+    val captureMode: Boolean = false
 )
 
 /**

@@ -170,6 +170,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putBoolean("theme_dark", settings.theme.isDark)
             .putBoolean("theme_follow", settings.theme.followSystem)
             .putBoolean("high_contrast", settings.theme.highContrast)
+            .putBoolean("capture_mode", settings.captureMode)
             .apply()
     }
 
@@ -242,7 +243,8 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
                 isDark = p.getBoolean("theme_dark", true),
                 followSystem = p.getBoolean("theme_follow", true),
                 highContrast = p.getBoolean("high_contrast", false)
-            )
+            ),
+            captureMode = p.getBoolean("capture_mode", false)
         )
     }
 

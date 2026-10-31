@@ -66,6 +66,9 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setProfilesByOutput(enabled: Boolean) =
         repository.saveSettings(repository.getSettings().copy(profilesByOutput = enabled))
 
+    fun setCaptureMode(enabled: Boolean) =
+        repository.saveSettings(repository.getSettings().copy(captureMode = enabled))
+
     fun setAutoStart(enabled: Boolean) = repository.setAutoStart(enabled)
 
     fun setAutoCheck(enabled: Boolean) =
