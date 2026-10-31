@@ -443,54 +443,40 @@ fun BandFader(
                 .width(faderWidth)
                 .height(height)
                 .pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = {
-                        haptic()
-                        currentOnChange(0f)
-                    })
+                    detectTapGestures(
+                        onTap = { offset ->
+                            haptic()
+                            val paddingPx = 10.dp.toPx()
+                            val usablePx = size.height - paddingPx * 2f
+                            if (usablePx > 0f) {
+                                val yPx = (offset.y - paddingPx).coerceIn(0f, usablePx)
+                                val pct = 1f - (yPx / usablePx)
+                                val span = currentRange.endInclusive - currentRange.start
+                                val newValue = currentRange.start + (pct * span)
+                                currentOnChange(newValue.coerceIn(currentRange.start, currentRange.endInclusive))
+                            }
+                        },
+                        onDoubleTap = {
+                            haptic()
+                            currentOnChange(0f)
+                        }
+                    )
                 }
                 .pointerInput(Unit) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val paddingPx = 10.dp.toPx()
-                        val usablePx = size.height - paddingPx * 2f
-                        if (usablePx <= 0f) return@awaitEachGesture
-
-                        val current = currentValue.coerceIn(currentRange.start, currentRange.endInclusive)
-                        val fraction = ((current - currentRange.start) / span).coerceIn(0f, 1f)
-                        val thumbY = paddingPx + usablePx * (1f - fraction)
-                        if (kotlin.math.abs(down.position.y - thumbY) > 48.dp.toPx()) {
-                            return@awaitEachGesture
-                        }
-
-                        val startX = down.position.x
-                        val startY = down.position.y
-                        var vertical = false
-                        while (!vertical) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id }
-                                ?: return@awaitEachGesture
-                            if (!change.pressed) return@awaitEachGesture
-                            val dx = kotlin.math.abs(change.position.x - startX)
-                            val dy = kotlin.math.abs(change.position.y - startY)
-                            val slop = viewConfiguration.touchSlop
-                            if (dy > slop || dx > slop) {
-                                if (dy <= dx) return@awaitEachGesture
-                                change.consume()
-                                vertical = true
+                    detectDragGestures(
+                        onDragStart = { _ -> haptic() },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            val paddingPx = 10.dp.toPx()
+                            val usablePx = size.height - paddingPx * 2f
+                            if (usablePx > 0f) {
+                                val deltaPct = -dragAmount.y / usablePx
+                                val span = currentRange.endInclusive - currentRange.start
+                                val newValue = (currentValue + deltaPct * span).coerceIn(currentRange.start, currentRange.endInclusive)
+                                currentOnChange(newValue)
                             }
                         }
-
-                        var previousY = startY
-                        drag(down.id) { change ->
-                            change.consume()
-                            val deltaPx = previousY - change.position.y
-                            previousY = change.position.y
-                            val delta = (deltaPx / usablePx) * span
-                            currentOnChange(
-                                (currentValue + delta).coerceIn(currentRange.start, currentRange.endInclusive)
-                            )
-                        }
-                    }
+                    )
                 }
         ) {
 
