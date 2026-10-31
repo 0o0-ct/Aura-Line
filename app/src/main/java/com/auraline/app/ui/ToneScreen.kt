@@ -59,7 +59,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(top = 10.dp, bottom = 32.dp),
+            .padding(top = 10.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         AuraCard(modifier = Modifier.fillMaxWidth()) {

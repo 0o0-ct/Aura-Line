@@ -231,11 +231,18 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                 },
                 bottomBar = {
                     if (!expanded) {
-                        FloatingDock(
-                            selected = tab,
-                            accent = accent,
-                            onSelect = { index -> haptic(); tab = index }
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.Transparent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            FloatingDock(
+                                selected = tab,
+                                accent = accent,
+                                onSelect = { index -> haptic(); tab = index }
+                            )
+                        }
                     }
                 }
             ) { innerPadding ->
