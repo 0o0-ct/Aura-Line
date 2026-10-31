@@ -229,22 +229,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                         }
                     }
                 },
-                bottomBar = {
-                    if (!expanded) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.Transparent),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            FloatingDock(
-                                selected = tab,
-                                accent = accent,
-                                onSelect = { index -> haptic(); tab = index }
-                            )
-                        }
-                    }
-                }
             ) { innerPadding ->
                 Row(
                     modifier = Modifier
@@ -285,6 +269,15 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                     )
                                 }
                             }
+
+                            if (!expanded) {
+                                FloatingDock(
+                                    selected = tab,
+                                    accent = accent,
+                                    onSelect = { index -> haptic(); tab = index },
+                                    modifier = Modifier.align(Alignment.BottomCenter)
+                                )
+                            }
                         }
                     }
                 }
@@ -298,10 +291,11 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
 private fun FloatingDock(
     selected: Int,
     accent: Color,
-    onSelect: (Int) -> Unit
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .navigationBarsPadding(),
