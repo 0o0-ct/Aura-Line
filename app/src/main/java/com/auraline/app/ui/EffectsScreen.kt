@@ -51,9 +51,9 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(top = 148.dp, bottom = 120.dp),
+            .padding(top = 148.dp, bottom = 120.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Indicador de compatibilidad: muestra si el dispositivo expone realmente
