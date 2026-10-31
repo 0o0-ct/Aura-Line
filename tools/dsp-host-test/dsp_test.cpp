@@ -132,5 +132,27 @@ int main(){
     printf("prueba compresor (thr -12dB ratio2 makeup0): pico in=0.9 pico out=%.4f ganancia=%.2f dB (esperado ~-5)\n",vout,compGainDb);
   }
 
+  // ---------------- Fase 4: modulo Puerta (gate) ----------------
+  {
+    Java_com_auraline_app_audio_NativeEngine_nativeInit(&env,nullptr,48000);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetEnabled(&env,nullptr,1);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetLimiterCeiling(&env,nullptr,0.0f);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetBandCount(&env,nullptr,0);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetPreamp(&env,nullptr,0.f);
+    Java_com_auraline_app_audio_NativeEngine_nativeSetGate(&env,nullptr, -30.0f, 1.0f, 10.0f, 100.0f, 6.0f);
+    std::fill(buf.begin(),buf.end(),0.f);
+    for(int k=0;k<10;k++) Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(&env,nullptr,&buf,frames);
+    float vout=0.f;
+    for(int blk=0;blk<5;blk++){
+      for(int i=0;i<frames;i++){ float t=(blk*frames+i)/48000.f;
+        float v=0.01f*std::sin(2*M_PI*1000*t);
+        buf[2*i]=v; buf[2*i+1]=v; }
+      Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(&env,nullptr,&buf,frames);
+      for(int i=0;i<frames*2;i++) vout=std::max(vout,std::fabs(buf[i]));
+    }
+    float gateGainDb=20*log10(vout/0.01f);
+    printf("prueba gate (thr -30dB makeup6): pico in=0.01 pico out=%.4f ganancia=%.2f dB (esperado ~+6)\n",vout,gateGainDb);
+  }
+
   return maxOut<=1.0f?0:2;
 }

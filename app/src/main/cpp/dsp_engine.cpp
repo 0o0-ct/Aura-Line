@@ -323,6 +323,97 @@ private:
     float prevL_ = 0.0f, prevR_ = 0.0f;
 };
 
+/**
+ * Puerta (gate) dinamico con lookahead, umbral y makeup: cuando el pico de la ventana esta
+ * por debajo del umbral se aplica el makeup (puerta cerrada); por encima se abre con ganancia
+ * unitaria. Es el modulacion de dinamica que opera en las bandas del compresor.
+ */
+class Gate {
+public:
+    void setSampleRate(float fs) {
+        attackCoef_ = 1.0f - std::exp(-1.0f / (0.001f * attackMs_ * fs));
+        releaseCoef_ = 1.0f - std::exp(-1.0f / (0.001f * releaseMs_ * fs));
+    }
+    void setParams(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
+        thresholdDb_ = thresholdDb;
+        ratio_ = std::max(1.0f, ratio);
+        attackMs_ = attackMs;
+        releaseMs_ = releaseMs;
+        makeupLin_ = dbToLinear(makeupDb);
+        setSampleRate(48000.0f);
+    }
+    void reset() {
+        delay_.fill(0.0f);
+        peaks_.fill(0.0f);
+        write_ = 0;
+        env_ = 1.0;
+        prevL_ = prevR_ = 0.0f;
+        dqHead_ = dqTail_ = 0;
+        sampleIndex_ = 0;
+    }
+    void process(float* interleaved, int frames) {
+        const float threshold = dbToLinear(thresholdDb_);
+        for (int i = 0; i < frames; ++i) {
+            const float inL = interleaved[2 * i];
+            const float inR = interleaved[2 * i + 1];
+            const float outL = delay_[write_ * 2];
+            const float outR = delay_[write_ * 2 + 1];
+            delay_[write_ * 2] = inL;
+            delay_[write_ * 2 + 1] = inR;
+            write_ = (write_ + 1 == kLookahead) ? 0 : write_ + 1;
+            const float pk = std::max(interPeak(prevL_, inL), interPeak(prevR_, inR));
+            prevL_ = inL; prevR_ = inR;
+            pushPeak(pk);
+            const float windowPeak = frontPeak();
+            float g = (windowPeak > threshold) ? 1.0f : makeupLin_;
+            if (g < env_) env_ += (g - env_) * releaseCoef_;
+            else       env_ += (g - env_) * attackCoef_;
+            if (env_ > g) env_ = g;
+            interleaved[2 * i] = outL * env_;
+            interleaved[2 * i + 1] = outR * env_;
+        }
+    }
+private:
+    static inline float interPeak(float a, float b) {
+        const float fa = std::fabs(a), fb = std::fabs(b);
+        const float m = std::max(fa, fb);
+        if ((a > 0.0f) == (b > 0.0f)) return m + 0.25f * std::fabs(fb - fa);
+        return m;
+    }
+    static constexpr int kDq = kLookahead + 1;
+    inline void pushPeak(float pk) {
+        while (dqHead_ != dqTail_) {
+            const int last = (dqTail_ == 0 ? kDq : dqTail_) - 1;
+            if (peaks_[last] > pk) break;
+            dqTail_ = last;
+        }
+        peaks_[dqTail_] = pk;
+        peakIdx_[dqTail_] = sampleIndex_;
+        dqTail_ = (dqTail_ + 1 == kDq) ? 0 : dqTail_ + 1;
+        while (dqHead_ != dqTail_ &&
+               sampleIndex_ - peakIdx_[dqHead_] >= static_cast<uint32_t>(kLookahead)) {
+            dqHead_ = (dqHead_ + 1 == kDq) ? 0 : dqHead_ + 1;
+        }
+        ++sampleIndex_;
+    }
+    inline float frontPeak() const { return dqHead_ != dqTail_ ? peaks_[dqHead_] : 0.0f; }
+    std::atomic<float> thresholdDb_{-6.0f};
+    std::atomic<float> gain_{1.0f};
+    float ratio_ = 20.0f;
+    float attackMs_ = 10.0f;
+    float releaseMs_ = 200.0f;
+    float makeupLin_ = 1.0f;
+    float attackCoef_ = 0.04f, releaseCoef_ = 0.00026f;
+    std::array<float, kLookahead * kChannels> delay_{};
+    std::array<float, kDq> peaks_{};
+    std::array<uint32_t, kDq> peakIdx_{};
+    int dqHead_ = 0, dqTail_ = 0;
+    uint32_t sampleIndex_ = 0;
+    int write_ = 0;
+    double env_ = 1.0;
+    float prevL_ = 0.0f, prevR_ = 0.0f;
+};
+
 struct Engine {
     std::atomic<float> sampleRate{48000.0f};
     std::atomic<float> preampLin{1.0f};
@@ -338,6 +429,8 @@ struct Engine {
     SmoothedBiquad toneSubShelf;
     Compressor compressor;
     bool compressorActive_ = false;
+    Gate gate;
+    bool gateActive_ = false;
     float toneBassDb = 0.0f, toneBassHz = 100.0f;
     float toneTrebleDb = 0.0f, toneTrebleHz = 8000.0f;
     float toneSubDb = 0.0f, toneSubHz = 60.0f;
@@ -348,6 +441,7 @@ struct Engine {
         toneTrebleShelf.reset();
         toneSubShelf.reset();
         compressor.reset();
+        gate.reset();
         limiter.reset();
     }
 
@@ -379,6 +473,13 @@ struct Engine {
         compressorActive_ = (ratio > 1.0f) || (makeupDb > 0.0f);
     }
 
+    void setGate(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
+        gate.setSampleRate(sampleRate.load(std::memory_order_relaxed));
+        gate.setParams(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
+        // La puerta se aplica cuando pide actuacion (makeup>0 o ratio>1).
+        gateActive_ = (makeupDb > 0.0f) || (ratio > 1.0f);
+    }
+
     /** Procesa in situ un bloque estéreo intercalado. Sin asignaciones, sin locks. */
     void processBlock(float* buf, int frames) {
         if (!enabled.load(std::memory_order_relaxed)) return;
@@ -396,6 +497,7 @@ struct Engine {
 
         // Compresor: lookahead + ratio + makeup, antes del limitador final.
         if (compressorActive_) compressor.process(buf, frames);
+        if (gateActive_) gate.process(buf, frames);
         limiter.process(buf, frames);
 
         float pk = 0.0f;
@@ -507,4 +609,11 @@ Java_com_auraline_app_audio_NativeEngine_nativeSetCompressor(
     // Compresor: umbral, ratio, attack/release y makeup. El lookahead es identico al del
     // limitador (ventana maxima); el ratio<inf convierte la reduction en compresion.
     g_engine.setCompressor(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_nativeSetGate(
+        JNIEnv*, jobject, jfloat thresholdDb, jfloat ratio, jfloat attackMs, jfloat releaseMs, jfloat makeupDb) {
+    // Puerta: umbral, ratio, attack/release y makeup; se aplica cuando pide actuacion.
+    g_engine.setGate(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
 }
