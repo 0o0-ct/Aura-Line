@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraDepth
 import com.auraline.core.ui.components.AuraSliderRow
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.controlAccent
@@ -62,7 +64,10 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             .padding(top = 10.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             SectionTitle(
                 text = "Tono",
                 trailing = "graves ${tone.bassFrequencyHz.toInt()} · agudos ${kilo(tone.trebleFrequencyHz)}"
