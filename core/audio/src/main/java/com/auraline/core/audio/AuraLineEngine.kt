@@ -102,8 +102,11 @@ object AuraLineEngine {
         if (!scheduled.compareAndSet(false, true)) return
         executor.execute {
             scheduled.set(false)
+            // Se lee `desired` en el momento de ejecución para no aplicar un estado
+            // obsoleto si llegaron cambios mientras la tarea estaba encolada.
+            val current = desired
             try {
-                if (state.motorEnabled) applyEngine(state) else releaseChain()
+                if (current.motorEnabled) applyEngine(current) else releaseChain()
             } catch (error: Throwable) {
                 lastError = error.message ?: error.javaClass.simpleName
                 Log.e(TAG, "No se pudo aplicar el estado: ${error.message}")
