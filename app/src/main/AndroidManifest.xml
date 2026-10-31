@@ -68,6 +68,15 @@
             android:name=".audio.MotorToggleReceiver"
             android:exported="false" />
 
+        <service
+            android:name=".audio.AuraLineTileService"
+            android:exported="true"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <!-- Panel de efectos: cualquier reproductor compatible puede abrir AuraLine como su
              ecualizador (ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL). -->
         <activity
