@@ -10,8 +10,8 @@
 //     emite silencio puede robar la ruta de audio y dejar el teléfono mudo.
 //   * Todo lo que toca el camino de audio está libre de asignaciones, locks y logging.
 //
-// Cadena: EQ (biquads en cascada, coeficientes double con rampa) → limitador con lookahead
-// y detección de pico inter-muestra → saneado de NaN/Inf → soft-clip de seguridad.
+// Cadena: EQ (biquads en cascada, coeficientes double con rampa) → Tono (shelves) → Compresor
+// → Puerta → Anchura Estéreo (Mid/Side) → Limitador → Reverb → soft-clip de seguridad.
 
 #include <jni.h>
 #include <cmath>
@@ -92,15 +92,7 @@ private:
 
 /**
  * Limitador con lookahead real: la señal se retrasa kLookahead muestras y la ganancia se
- * calcula sobre el pico MÁXIMO de la ventana que está por salir, de modo que la reducción
- * llega antes que el transitorio. El pico se estima con interpolación parabólica entre
- * muestras consecutivas (aproximación barata al true-peak; un oversampling 4x con FIR
- * polifásico es la mejora pendiente).
- *
- * La ganancia nunca queda por encima de lo que exige la ventana (clamp tras el ataque): así
- * una señal a 0 dBFS con +24 dB en todas las bandas sigue saliendo bajo el techo. El máximo
- * deslizante se calcula con una cola monótona de tamaño fijo: O(1) amortizado por muestra,
- * sin asignaciones.
+ * calcula sobre el pico MÁXIMO de la ventana que está por salir.
  */
 class LookaheadLimiter {
 public:
@@ -130,22 +122,17 @@ public:
             const float inL = interleaved[2 * i];
             const float inR = interleaved[2 * i + 1];
 
-            // 1) La muestra que sale ahora es la escrita hace exactamente kLookahead muestras.
             const float outL = delay_[write_ * 2];
             const float outR = delay_[write_ * 2 + 1];
             delay_[write_ * 2]     = inL;
             delay_[write_ * 2 + 1] = inR;
             write_ = (write_ + 1 == kLookahead) ? 0 : write_ + 1;
 
-            // 2) Pico inter-muestra de la entrada y máximo deslizante de la ventana.
             const float pk = std::max(interPeak(prevL_, inL), interPeak(prevR_, inR));
             prevL_ = inL; prevR_ = inR;
             pushPeak(pk);
             const float windowPeak = frontPeak();
 
-            // 3) Ganancia objetivo y envolvente. El clamp garantiza que nunca se supere el techo.
-            // env_ es double: en float la liberación se estanca a ~1e-4 del objetivo (epsilon)
-            // y la prueba nula deja de ser transparente.
             const double target = windowPeak > ceiling ? static_cast<double>(ceiling / windowPeak) : 1.0;
             if (target < env_) env_ += (target - env_) * attackCoef_;
             else               env_ += (target - env_) * releaseCoef_;
@@ -160,18 +147,14 @@ public:
 
 private:
     static inline float interPeak(float a, float b) {
-        // Máximo de la parábola que pasa por |a| y |b| con vértice entre ambos.
         const float fa = std::fabs(a), fb = std::fabs(b);
         const float m = std::max(fa, fb);
-        // Si ambos tienen el mismo signo y son grandes, el pico real puede superar a ambos.
         if ((a > 0.0f) == (b > 0.0f)) return m + 0.25f * std::fabs(fb - fa);
         return m;
     }
 
-    // --- máximo deslizante (cola monótona decreciente sobre un anillo fijo) ---
     static constexpr int kDq = kLookahead + 1;
     inline void pushPeak(float pk) {
-        // Expulsa por el final todo lo que sea menor o igual: nunca volverá a ser el máximo.
         while (dqHead_ != dqTail_) {
             const int last = (dqTail_ == 0 ? kDq : dqTail_) - 1;
             if (peaks_[last] > pk) break;
@@ -180,7 +163,6 @@ private:
         peaks_[dqTail_] = pk;
         peakIdx_[dqTail_] = sampleIndex_;
         dqTail_ = (dqTail_ + 1 == kDq) ? 0 : dqTail_ + 1;
-        // Expulsa por el frente lo que ya salió de la ventana.
         while (dqHead_ != dqTail_ &&
                sampleIndex_ - peakIdx_[dqHead_] >= static_cast<uint32_t>(kLookahead)) {
             dqHead_ = (dqHead_ + 1 == kDq) ? 0 : dqHead_ + 1;
@@ -222,11 +204,7 @@ static void setPeakingTarget(SmoothedBiquad& b, float fs, float freq, float gain
     b.setTarget((1.0 + alpha * A) / a0, (-2.0 * cosw) / a0, (1.0 - alpha * A) / a0, (-2.0 * cosw) / a0, (1.0 - alpha / A) / a0);
 }
 
-/**
- * Compresor dinamico con lookahead (ventana maxima como el limitador) y makeup posterior.
- * Modo: si el pico de la ventana supera el umbral, se comprime con ratio (1 = limite con
- * makeup); el makeup sube el post-gain despues de la reduction. attack/release en ms.
- */
+/** Compresor dinámico con lookahead. */
 class Compressor {
 public:
     void setSampleRate(float fs) {
@@ -323,11 +301,7 @@ private:
     float prevL_ = 0.0f, prevR_ = 0.0f;
 };
 
-/**
- * Puerta (gate) dinamico con lookahead, umbral y makeup: cuando el pico de la ventana esta
- * por debajo del umbral se aplica el makeup (puerta cerrada); por encima se abre con ganancia
- * unitaria. Es el modulacion de dinamica que opera en las bandas del compresor.
- */
+/** Puerta de ruido. */
 class Gate {
 public:
     void setSampleRate(float fs) {
@@ -414,6 +388,69 @@ private:
     float prevL_ = 0.0f, prevR_ = 0.0f;
 };
 
+/**
+ * Anchura estéreo (Mid/Side processing):
+ * M = (L+R)/2, S = (L-R)/2
+ * L' = M + width * S
+ * R' = M - width * S
+ * width = 1.0 -> sin cambios (100%)
+ * width = 0.0 -> mono (0%)
+ * width > 1.0 -> expansión estéreo (hasta 200%)
+ */
+class StereoWidth {
+public:
+    void setWidth(float factor) {
+        width_.store(std::clamp(factor, 0.0f, 2.0f), std::memory_order_relaxed);
+    }
+    void process(float* interleaved, int frames) {
+        const float w = width_.load(std::memory_order_relaxed);
+        if (std::fabs(w - 1.0f) < 0.001f) return; // 100% sin cambios
+        for (int i = 0; i < frames; ++i) {
+            const float L = interleaved[2 * i];
+            const float R = interleaved[2 * i + 1];
+            const float M = (L + R) * 0.5f;
+            const float S = (L - R) * 0.5f;
+            interleaved[2 * i]     = M + S * w;
+            interleaved[2 * i + 1] = M - S * w;
+        }
+    }
+private:
+    std::atomic<float> width_{1.0f};
+};
+
+/** Reverb simplificada. */
+class Reverb {
+public:
+    void setParams(float mix, float decaySeconds) {
+        mix_ = std::min(1.0f, std::max(0.0f, mix));
+        decay_ = std::max(0.01f, decaySeconds);
+        fb_ = std::exp(-1.0 / (decay_ * 48000.0f));
+    }
+    void reset() {
+        ylHist_ = 0.0f;
+        yrHist_ = 0.0f;
+    }
+    void process(float* interleaved, int frames) {
+        if (mix_ <= 0.001f) return; // 0% mezclado = idéntico al original
+        const float dry = 1.0f - mix_;
+        for (int i = 0; i < frames; ++i) {
+            const float inL = interleaved[2 * i];
+            const float inR = interleaved[2 * i + 1];
+            const float yl = inL + fb_ * ylHist_;
+            const float yr = inR + fb_ * yrHist_;
+            ylHist_ = yl;
+            yrHist_ = yr;
+            interleaved[2 * i] = inL * dry + yl * mix_;
+            interleaved[2 * i + 1] = inR * dry + yr * mix_;
+        }
+    }
+private:
+    float mix_ = 0.25f;
+    float decay_ = 0.3f;
+    float fb_ = 0.0f;
+    float ylHist_ = 0.0f, yrHist_ = 0.0f;
+};
+
 struct Engine {
     std::atomic<float> sampleRate{48000.0f};
     std::atomic<float> preampLin{1.0f};
@@ -422,8 +459,6 @@ struct Engine {
     std::atomic<float> peakOut{0.0f};
     SmoothedBiquad bands[kMaxBands];
     LookaheadLimiter limiter;
-    // Tono (Fase 4): estanterías Graves/Medios (crossover graves) y Medios/Agudos (crossover
-    // agudos) + paso bajo del sub-bajo. Se aplican tras el PreEq y antes del limitador.
     SmoothedBiquad toneBassShelf;
     SmoothedBiquad toneTrebleShelf;
     SmoothedBiquad toneSubShelf;
@@ -431,6 +466,8 @@ struct Engine {
     bool compressorActive_ = false;
     Gate gate;
     bool gateActive_ = false;
+    StereoWidth stereoWidth;
+    Reverb reverb;
     float toneBassDb = 0.0f, toneBassHz = 100.0f;
     float toneTrebleDb = 0.0f, toneTrebleHz = 8000.0f;
     float toneSubDb = 0.0f, toneSubHz = 60.0f;
@@ -442,14 +479,10 @@ struct Engine {
         toneSubShelf.reset();
         compressor.reset();
         gate.reset();
+        reverb.reset();
         limiter.reset();
     }
 
-    /**
-     * Tono completo: estanterías (Graves/Medios y Medios/Agudos) y sub-bajo. Las estanterías
-     * se aproximan con peaking EQ de Q alta en el crossover (misma aproximación de banda que el
-     * MBC del camino de Android). Los rangos son los publicados por la UI.
-     */
     void setTone(float bassDb, float bassHz, float trebleDb, float trebleHz, float subDb, float subHz) {
         bassDb = std::min(30.0f, std::max(-30.0f, bassDb));
         trebleDb = std::min(30.0f, std::max(-30.0f, trebleDb));
@@ -469,15 +502,21 @@ struct Engine {
     void setCompressor(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
         compressor.setSampleRate(sampleRate.load(std::memory_order_relaxed));
         compressor.setParams(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
-        // El stage compresor solo se aplica cuando la reduccion lo pide (ratio>1 o makeup>0).
         compressorActive_ = (ratio > 1.0f) || (makeupDb > 0.0f);
     }
 
     void setGate(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
         gate.setSampleRate(sampleRate.load(std::memory_order_relaxed));
         gate.setParams(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
-        // La puerta se aplica cuando pide actuacion (makeup>0 o ratio>1).
         gateActive_ = (makeupDb > 0.0f) || (ratio > 1.0f);
+    }
+
+    void setStereoWidth(float widthFactor) {
+        stereoWidth.setWidth(widthFactor);
+    }
+
+    void setReverb(float mix, float decaySeconds) {
+        reverb.setParams(mix, decaySeconds);
     }
 
     /** Procesa in situ un bloque estéreo intercalado. Sin asignaciones, sin locks. */
@@ -495,10 +534,18 @@ struct Engine {
         toneTrebleShelf.process(buf, frames);
         toneSubShelf.process(buf, frames);
 
-        // Compresor: lookahead + ratio + makeup, antes del limitador final.
+        // Compresor y Gate
         if (compressorActive_) compressor.process(buf, frames);
         if (gateActive_) gate.process(buf, frames);
+
+        // Anchura Estéreo (Mid/Side)
+        stereoWidth.process(buf, frames);
+
+        // Limitador
         limiter.process(buf, frames);
+
+        // Reverb
+        reverb.process(buf, frames);
 
         float pk = 0.0f;
         for (int i = 0; i < n; ++i) {
@@ -555,7 +602,6 @@ Java_com_auraline_app_audio_NativeEngine_nativeSetEqBand(
     const double f  = std::clamp(static_cast<double>(freq), 10.0, fs * 0.45);
     const double Q  = std::clamp(static_cast<double>(q), 0.1, 10.0);
 
-    // Peaking EQ (RBJ cookbook), double.
     const double A     = std::pow(10.0, static_cast<double>(gainDb) / 40.0);
     const double w0    = 2.0 * M_PI * f / fs;
     const double alpha = std::sin(w0) / (2.0 * Q);
@@ -570,19 +616,12 @@ Java_com_auraline_app_audio_NativeEngine_nativeSetEqBand(
             (1.0 - alpha / A) / a0);
 }
 
-/**
- * Procesa un bloque estéreo intercalado float32 in situ. Pensado para pruebas (señal a
- * 0 dBFS con todas las bandas al máximo no debe superar el techo) y para el futuro camino
- * de captura. Devuelve el pico de salida lineal.
- */
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(
         JNIEnv* env, jobject, jfloatArray interleaved, jint frames) {
     if (interleaved == nullptr || frames <= 0) return 0.0f;
     const jsize len = env->GetArrayLength(interleaved);
     if (len < frames * kChannels) return 0.0f;
-    // Nota: GetPrimitiveArrayCritical puede bloquear el GC; aceptable aquí porque este camino
-    // no es el callback de audio en tiempo real.
     auto* buf = static_cast<float*>(env->GetPrimitiveArrayCritical(interleaved, nullptr));
     if (buf == nullptr) return 0.0f;
     g_engine.processBlock(buf, frames);
@@ -598,22 +637,29 @@ Java_com_auraline_app_audio_NativeEngine_nativeGainReductionDb(JNIEnv*, jobject)
 extern "C" JNIEXPORT void JNICALL
 Java_com_auraline_app_audio_NativeEngine_nativeSetTone(
         JNIEnv*, jobject, jfloat bassDb, jfloat bassHz, jfloat trebleDb, jfloat trebleHz, jfloat subDb, jfloat subHz) {
-    // Tono completo: estanterías Graves/Medios (crossover graves) y Medios/Agudos (crossover
-    // agudos) + sub-bajo (paso bajo). Rangos saneados a los publicados por la UI.
     g_engine.setTone(bassDb, bassHz, trebleDb, trebleHz, subDb, subHz);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_auraline_app_audio_NativeEngine_nativeSetCompressor(
         JNIEnv*, jobject, jfloat thresholdDb, jfloat ratio, jfloat attackMs, jfloat releaseMs, jfloat makeupDb) {
-    // Compresor: umbral, ratio, attack/release y makeup. El lookahead es identico al del
-    // limitador (ventana maxima); el ratio<inf convierte la reduction en compresion.
     g_engine.setCompressor(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
 }
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_auraline_app_audio_NativeEngine_nativeSetGate(
         JNIEnv*, jobject, jfloat thresholdDb, jfloat ratio, jfloat attackMs, jfloat releaseMs, jfloat makeupDb) {
-    // Puerta: umbral, ratio, attack/release y makeup; se aplica cuando pide actuacion.
     g_engine.setGate(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_nativeSetStereoWidth(
+        JNIEnv*, jobject, jfloat widthFactor) {
+    g_engine.setStereoWidth(widthFactor);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_nativeSetReverb(
+        JNIEnv*, jobject, jfloat mix, jfloat decaySeconds) {
+    g_engine.setReverb(mix, decaySeconds);
 }

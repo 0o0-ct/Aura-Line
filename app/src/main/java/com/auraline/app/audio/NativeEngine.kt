@@ -53,8 +53,44 @@ object NativeEngine {
         nativeSetBandCount(bandCount)
         for (index in 0 until bandCount) {
             val band = bands[index]
-            nativeSetEqBand(index, band.frequencyHz, band.gainDb, band.q)
+            nativeSetEqBand(index, band.frequencyHz, if (bypassed) 0f else band.gainDb, band.q)
         }
+
+        // Tone
+        val tone = state.tone
+        if (bypassed) {
+            nativeSetTone(0f, tone.bassFrequencyHz, 0f, tone.trebleFrequencyHz, 0f, tone.subCutoffHz)
+        } else {
+            nativeSetTone(tone.bassDb, tone.bassFrequencyHz, tone.trebleDb, tone.trebleFrequencyHz, tone.subDb, tone.subCutoffHz)
+        }
+
+        // Compressor
+        val comp = state.compressor
+        if (bypassed || !state.effectsEnabled || !state.modules.compressor) {
+            nativeSetCompressor(-60f, 1f, 10f, 100f, 0f)
+        } else {
+            nativeSetCompressor(comp.threshold, comp.ratio, comp.attackMs, comp.releaseMs, comp.makeupGain)
+        }
+
+        // Gate
+        val gate = state.gate
+        if (bypassed || !state.effectsEnabled || !state.modules.gate) {
+            nativeSetGate(-80f, 1f, 10f, 100f, 0f)
+        } else {
+            nativeSetGate(gate.thresholdDb, gate.ratio, 10f, 100f, 0f)
+        }
+
+        // Reverb
+        val rev = state.reverb
+        if (bypassed || !state.effectsEnabled || !state.modules.reverb) {
+            nativeSetReverb(0f, 0.3f)
+        } else {
+            nativeSetReverb(rev.mix, rev.decay)
+        }
+
+        // Stereo Width
+        val width = if (bypassed || !state.modules.width) 1.0f else state.stereo.expansion
+        nativeSetStereoWidth(width)
     }
 
     /**
@@ -72,6 +108,11 @@ object NativeEngine {
     private external fun nativeSetLimiterCeiling(db: Float)
     private external fun nativeSetBandCount(count: Int)
     private external fun nativeSetEqBand(index: Int, freqHz: Float, gainDb: Float, q: Float)
+    private external fun nativeSetTone(bassDb: Float, bassHz: Float, trebleDb: Float, trebleHz: Float, subDb: Float, subHz: Float)
+    private external fun nativeSetCompressor(thresholdDb: Float, ratio: Float, attackMs: Float, releaseMs: Float, makeupDb: Float)
+    private external fun nativeSetGate(thresholdDb: Float, ratio: Float, attackMs: Float, releaseMs: Float, makeupDb: Float)
+    private external fun nativeSetStereoWidth(widthFactor: Float)
+    private external fun nativeSetReverb(mix: Float, decaySeconds: Float)
     private external fun nativeProcessBlock(interleaved: FloatArray, frames: Int): Float
     private external fun nativeGainReductionDb(): Float
 }
