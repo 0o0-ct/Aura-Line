@@ -212,6 +212,16 @@ inline float softClip(float x) {
     return x < 0.0f ? -y : y;
 }
 
+/** Estantería vía peaking EQ de Q alta en el crossover (aproximación shelf por paso). */
+static void setPeakingTarget(SmoothedBiquad& b, float fs, float freq, float gainDb, float q) {
+    const double A = std::pow(10.0, gainDb / 40.0);
+    const double w0 = 2.0 * M_PI * freq / fs;
+    const double alpha = std::sin(w0) / (2.0 * q);
+    const double cosw = std::cos(w0);
+    const double a0 = 1.0 + alpha / A;
+    b.setTarget((1.0 + alpha * A) / a0, (-2.0 * cosw) / a0, (1.0 - alpha * A) / a0, (-2.0 * cosw) / a0, (1.0 - alpha / A) / a0);
+}
+
 struct Engine {
     std::atomic<float> sampleRate{48000.0f};
     std::atomic<float> preampLin{1.0f};
@@ -220,10 +230,42 @@ struct Engine {
     std::atomic<float> peakOut{0.0f};
     SmoothedBiquad bands[kMaxBands];
     LookaheadLimiter limiter;
+    // Tono (Fase 4): estanterías Graves/Medios (crossover graves) y Medios/Agudos (crossover
+    // agudos) + paso bajo del sub-bajo. Se aplican tras el PreEq y antes del limitador.
+    SmoothedBiquad toneBassShelf;
+    SmoothedBiquad toneTrebleShelf;
+    SmoothedBiquad toneSubShelf;
+    float toneBassDb = 0.0f, toneBassHz = 100.0f;
+    float toneTrebleDb = 0.0f, toneTrebleHz = 8000.0f;
+    float toneSubDb = 0.0f, toneSubHz = 60.0f;
 
     void reset() {
         for (auto& b : bands) b.reset();
+        toneBassShelf.reset();
+        toneTrebleShelf.reset();
+        toneSubShelf.reset();
         limiter.reset();
+    }
+
+    /**
+     * Tono completo: estanterías (Graves/Medios y Medios/Agudos) y sub-bajo. Las estanterías
+     * se aproximan con peaking EQ de Q alta en el crossover (misma aproximación de banda que el
+     * MBC del camino de Android). Los rangos son los publicados por la UI.
+     */
+    void setTone(float bassDb, float bassHz, float trebleDb, float trebleHz, float subDb, float subHz) {
+        bassDb = std::min(30.0f, std::max(-30.0f, bassDb));
+        trebleDb = std::min(30.0f, std::max(-30.0f, trebleDb));
+        subDb = std::min(30.0f, std::max(-30.0f, subDb));
+        bassHz = std::min(400.0f, std::max(20.0f, bassHz));
+        trebleHz = std::min(16000.0f, std::max(2000.0f, trebleHz));
+        subHz = std::min(100.0f, std::max(20.0f, subHz));
+        toneBassDb = bassDb; toneBassHz = bassHz;
+        toneTrebleDb = trebleDb; toneTrebleHz = trebleHz;
+        toneSubDb = subDb; toneSubHz = subHz;
+        const float fs = sampleRate.load(std::memory_order_relaxed);
+        setPeakingTarget(toneBassShelf, fs, toneBassHz, toneBassDb, 8.0f);
+        setPeakingTarget(toneTrebleShelf, fs, toneTrebleHz, toneTrebleDb, 8.0f);
+        setPeakingTarget(toneSubShelf, fs, toneSubHz, toneSubDb, 8.0f);
     }
 
     /** Procesa in situ un bloque estéreo intercalado. Sin asignaciones, sin locks. */
@@ -235,6 +277,11 @@ struct Engine {
 
         const int count = std::min(activeBands.load(std::memory_order_relaxed), kMaxBands);
         for (int b = 0; b < count; ++b) bands[b].process(buf, frames);
+
+        // Tono: estanterías + sub-bajo (Fase 4).
+        toneBassShelf.process(buf, frames);
+        toneTrebleShelf.process(buf, frames);
+        toneSubShelf.process(buf, frames);
 
         limiter.process(buf, frames);
 
@@ -331,4 +378,12 @@ Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(
 extern "C" JNIEXPORT jfloat JNICALL
 Java_com_auraline_app_audio_NativeEngine_nativeGainReductionDb(JNIEnv*, jobject) {
     return g_engine.limiter.gainReductionDb();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_nativeSetTone(
+        JNIEnv*, jobject, jfloat bassDb, jfloat bassHz, jfloat trebleDb, jfloat trebleHz, jfloat subDb, jfloat subHz) {
+    // Tono completo: estanterías Graves/Medios (crossover graves) y Medios/Agudos (crossover
+    // agudos) + sub-bajo (paso bajo). Rangos saneados a los publicados por la UI.
+    g_engine.setTone(bassDb, bassHz, trebleDb, trebleHz, subDb, subHz);
 }
