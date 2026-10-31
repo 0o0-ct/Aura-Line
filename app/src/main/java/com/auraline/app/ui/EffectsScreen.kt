@@ -25,11 +25,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraDepth
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.StatusPill
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.ui.theme.AuraTheme
 import java.util.Locale
@@ -56,7 +58,10 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
     ) {
         // Indicador de compatibilidad: muestra si el dispositivo expone realmente
         // el compresor multibanda y la reverb del sistema.
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             SectionTitle(text = "Compatibilidad del dispositivo")
             Spacer(modifier = Modifier.height(6.dp))
             if (!state.motorEnabled) {
