@@ -55,6 +55,7 @@ import androidx.core.content.ContextCompat
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraDepth
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SelectableChip
@@ -63,6 +64,7 @@ import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.components.hapticFeedback
 import com.auraline.core.ui.components.neumorphicConvex
 import com.auraline.core.ui.components.neumorphicConcave
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.theme.AuraPalettes
 import com.auraline.core.ui.theme.AuraTheme
 
@@ -120,7 +122,10 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Perfil de uso: ajusta rango, protección, efectos y curva base de golpe
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             SectionTitle(
                 text = "Perfil de uso",
                 trailing = UsageProfiles.firstOrNull { it.key == settings.usageProfile }?.name ?: "sin elegir"

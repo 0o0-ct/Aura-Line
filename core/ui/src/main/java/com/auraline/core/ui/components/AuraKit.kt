@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -76,7 +77,7 @@ fun AuraSurface(
     modifier: Modifier = Modifier,
     depth: AuraDepth = AuraDepth.Surface,
     shapeRadius: Dp = 20.dp,
-    content: @Composable () -> Unit
+    content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = AuraTheme.colors
     val shape = RoundedCornerShape(shapeRadius)
@@ -91,16 +92,14 @@ fun AuraSurface(
         AuraDepth.Raised, AuraDepth.Floating, AuraDepth.Overlay -> colors.glassBorderTop
     }
 
-    Box(
+    Column(
         modifier = modifier
             .clip(shape)
             .background(surface, shape)
             .border(1.dp, border, shape)
             .padding(16.dp),
-        contentAlignment = Alignment.TopStart
-    ) {
-        content()
-    }
+        content = content
+    )
 }
 
 @Composable
