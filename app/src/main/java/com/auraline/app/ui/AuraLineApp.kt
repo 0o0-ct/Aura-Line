@@ -166,14 +166,14 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                             .background(
                                 Brush.verticalGradient(
                                     listOf(
-                                        colors.background.copy(alpha = 0.85f),
-                                        colors.background.copy(alpha = 0.40f),
+                                        colors.background.copy(alpha = 0.34f),
+                                        colors.background.copy(alpha = 0.12f),
                                         Color.Transparent
                                     )
                                 )
                             )
                             .statusBarsPadding()
-                            .padding(horizontal = 20.dp, vertical = 12.dp)
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -184,9 +184,10 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 Text(
                                     text = destinations[tab].label,
                                     color = colors.textPrimary,
-                                    fontSize = 24.sp,
+                                    fontSize = 34.sp,
                                     fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.5).sp
+                                    letterSpacing = (-1.1).sp,
+                                    lineHeight = 38.sp
                                 )
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
@@ -207,7 +208,7 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                             append(" · ").append(engine.channels).append(" canales")
                                         },
                                         color = colors.textSecondary.copy(alpha = 0.85f),
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium,
                                         maxLines = 1
                                     )
