@@ -66,7 +66,10 @@ import com.auraline.core.ui.theme.AuraPalettes
 import com.auraline.core.ui.theme.AuraTheme
 
 @Composable
-fun SettingsScreen(viewModel: AuraLineViewModel) {
+fun SettingsScreen(
+    viewModel: AuraLineViewModel,
+    onOpenDiagnostics: () -> Unit = {}
+) {
     val colors = AuraTheme.colors
     val haptic = hapticFeedback()
     val context = LocalContext.current
@@ -454,8 +457,35 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             }
         }
 
+        // Diagnóstico e Informe del Sistema
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Diagnóstico del Sistema")
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Verifica el estado del motor DSP, sesiones activas, generador de tonos sintéticos (60Hz, 1kHz, 8kHz, Ruido) e informe técnico.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = onOpenDiagnostics,
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+            ) {
+                Text(
+                    text = "Abrir Pantalla de Diagnóstico",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
         Text(
-            text = "AuraLine 2.0 · ${engine.sampleRateHz} Hz · ${if (engine.globalScope) "procesado global" else "sin cadena activa"}",
+            text = "AuraLine 4.1.0 · ${engine.sampleRateHz} Hz · ${if (engine.globalScope) "procesado global" else "sin cadena activa"}",
             color = colors.textSecondary.copy(alpha = 0.7f),
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp)

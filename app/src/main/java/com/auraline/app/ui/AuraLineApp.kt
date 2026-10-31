@@ -107,6 +107,7 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
     val scope = rememberCoroutineScope()
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var autoChecked by rememberSaveable { mutableStateOf(false) }
+    var showDiagnostics by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.motorEnabled) {
         if (state.motorEnabled) {
@@ -126,7 +127,13 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
         if (granted) viewModel.runAudioCheck()
     }
 
-    BackHandler(enabled = tab != 0) { tab = 0 }
+    BackHandler(enabled = tab != 0 || showDiagnostics) {
+        if (showDiagnostics) {
+            showDiagnostics = false
+        } else {
+            tab = 0
+        }
+    }
 
     CompositionLocalProvider(
         LocalHapticsEnabled provides settings.hapticFeedback,
@@ -255,11 +262,21 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 .fillMaxHeight()
                                 .widthIn(max = MaxContentWidth)
                         ) {
-                            when (tab) {
-                                0 -> EqualizerScreen(viewModel = viewModel)
-                                1 -> ToneScreen(viewModel = viewModel)
-                                2 -> EffectsScreen(viewModel = viewModel)
-                                else -> SettingsScreen(viewModel = viewModel)
+                            if (showDiagnostics) {
+                                DiagnosticsScreen(
+                                    viewModel = viewModel,
+                                    onBack = { showDiagnostics = false }
+                                )
+                            } else {
+                                when (tab) {
+                                    0 -> EqualizerScreen(viewModel = viewModel)
+                                    1 -> ToneScreen(viewModel = viewModel)
+                                    2 -> EffectsScreen(viewModel = viewModel)
+                                    else -> SettingsScreen(
+                                        viewModel = viewModel,
+                                        onOpenDiagnostics = { showDiagnostics = true }
+                                    )
+                                }
                             }
                         }
                     }
