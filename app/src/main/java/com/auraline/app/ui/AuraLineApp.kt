@@ -90,7 +90,7 @@ private val destinations = listOf(
 private val ExpandedWidth = 600.dp
 
 /** Ancho máximo del contenido en pantallas grandes para que los controles no se estiren. */
-private val MaxContentWidth = 760.dp
+private val MaxContentWidth = 960.dp
 
 @Composable
 fun AuraLineApp(viewModel: AuraLineViewModel) {
@@ -169,6 +169,7 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                         SideRail(
                             selected = tab,
                             accent = accent,
+                            modifier = Modifier.align(Alignment.CenterVertically),
                             onSelect = { index -> haptic(); tab = index }
                         )
                     }
@@ -339,26 +340,26 @@ private fun FloatingDock(
 private fun SideRail(
     selected: Int,
     accent: Color,
+    modifier: Modifier = Modifier,
     onSelect: (Int) -> Unit
 ) {
     val railShape = RoundedCornerShape(28.dp)
     Column(
-        modifier = Modifier
-            .fillMaxHeight()
-            .padding(start = 16.dp, top = 8.dp, bottom = 16.dp)
+        modifier = modifier
+            .padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
             .navigationBarsPadding()
-            .width(88.dp)
+            .width(112.dp)
             .glassDock(railShape)
-            .padding(horizontal = 8.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         destinations.forEachIndexed { index, destination ->
             DockItem(
                 destination = destination,
                 selected = selected == index,
                 accent = accent,
-                modifier = Modifier.fillMaxWidth().height(64.dp),
+                modifier = Modifier.fillMaxWidth().height(76.dp),
                 onClick = { onSelect(index) }
             )
         }
@@ -419,13 +420,13 @@ private fun DockItem(
             imageVector = destination.icon,
             contentDescription = destination.label,
             tint = itemTextColor,
-            modifier = Modifier.size(22.dp)
+            modifier = Modifier.size(26.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = destination.label,
             color = itemTextColor,
-            fontSize = 10.sp,
+            fontSize = 11.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             letterSpacing = (-0.1).sp,
             maxLines = 1
