@@ -398,6 +398,8 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 }
             )
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 
     if (showSaveDialog) {

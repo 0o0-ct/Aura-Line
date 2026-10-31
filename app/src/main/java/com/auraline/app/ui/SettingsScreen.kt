@@ -448,6 +448,8 @@ fun SettingsScreen(
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp)
         )
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 
     previewPalette?.let { palette ->

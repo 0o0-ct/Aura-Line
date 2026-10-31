@@ -357,6 +357,8 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                 fontSize = 11.sp
             )
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 

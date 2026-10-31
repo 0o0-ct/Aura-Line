@@ -214,6 +214,8 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onClick = { viewModel.resetControls() }
             )
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
