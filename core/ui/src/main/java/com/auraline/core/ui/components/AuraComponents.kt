@@ -494,6 +494,9 @@ fun BandFader(
                                 val deltaPct = -dragAmount.y / usablePx
                                 val span = currentRange.endInclusive - currentRange.start
                                 val newValue = (currentValue + deltaPct * span).coerceIn(currentRange.start, currentRange.endInclusive)
+                                if (newValue.toInt() != currentValue.toInt()) {
+                                    haptic()
+                                }
                                 currentOnChange(newValue)
                             }
                         }
@@ -672,13 +675,20 @@ fun AuraKnob(
                 .pointerInput(enabled) {
                     var accumulated = 0f
                     detectDragGestures(
-                        onDragStart = { accumulated = 0f },
+                        onDragStart = {
+                            haptic()
+                            accumulated = 0f
+                        },
                         onDrag = { change, drag ->
                             if (!enabled) return@detectDragGestures
                             change.consume()
                             accumulated -= drag.y
                             val delta = (accumulated / 220f) * span
-                            currentOnChange((currentValue + delta).coerceIn(currentRange.start, currentRange.endInclusive))
+                            val newValue = (currentValue + delta).coerceIn(currentRange.start, currentRange.endInclusive)
+                            if (newValue.toInt() != currentValue.toInt()) {
+                                haptic()
+                            }
+                            currentOnChange(newValue)
                             accumulated = 0f
                         }
                     )
@@ -992,14 +1002,21 @@ fun AuraSliderRow(
                 }
                 .pointerInput(enabled) {
                     if (!enabled) return@pointerInput
-                    detectDragGestures { change, _ ->
-                        change.consume()
-                        val thumbRadiusPx = 11.dp.toPx()
-                        val usable = (size.width - thumbRadiusPx * 2f).coerceAtLeast(1f)
-                        val pos = (change.position.x - thumbRadiusPx).coerceIn(0f, usable)
-                        val newValue = currentRange.start + (pos / usable) * span
-                        currentOnChange(newValue.coerceIn(currentRange.start, currentRange.endInclusive))
-                    }
+                    detectDragGestures(
+                        onDragStart = { _ -> haptic() },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            val thumbRadiusPx = 11.dp.toPx()
+                            val usable = (size.width - thumbRadiusPx * 2f).coerceAtLeast(1f)
+                            val pos = (change.position.x - thumbRadiusPx).coerceIn(0f, usable)
+                            val newValue = currentRange.start + (pos / usable) * span
+                            val clamped = newValue.coerceIn(currentRange.start, currentRange.endInclusive)
+                            if (clamped.toInt() != currentValue.toInt()) {
+                                haptic()
+                            }
+                            currentOnChange(clamped)
+                        }
+                    )
                 },
             contentAlignment = Alignment.CenterStart
         ) {
