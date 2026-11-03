@@ -41,8 +41,8 @@ object AuraLineEngine {
     /** Objetivo de nivel de salida: deja margen para que el códec no sature. */
     private const val TARGET_HEADROOM_DB = 3.0f
 
-    /** Rango máximo de atenuación de headroom para proteger salidas digitales (Bluetooth A2DP/LE). */
-    private const val MAX_HEADROOM_DB = 36f
+    /** La protección no debe cancelar por completo los controles tonales del usuario. */
+    private const val MAX_AUTO_PREAMP_DB = 12f
 
     /** Tope por banda del PreEq y por región del MBC (permite más de 24 dB sin clipping). */
     private const val MAX_BAND_GAIN_DB = 36f
@@ -376,7 +376,7 @@ object AuraLineEngine {
         val headroom = if (state.autoPreamp) {
             if (totalBoost > TARGET_HEADROOM_DB) {
                 // Compensación exacta y suave: evita clipping sin destruir el carácter tonal
-                (totalBoost - TARGET_HEADROOM_DB + codecMargin).coerceIn(0f, MAX_HEADROOM_DB)
+                (totalBoost - TARGET_HEADROOM_DB + codecMargin).coerceIn(0f, MAX_AUTO_PREAMP_DB)
             } else {
                 0f
             }
