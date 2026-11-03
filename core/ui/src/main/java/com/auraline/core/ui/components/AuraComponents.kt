@@ -439,8 +439,7 @@ fun BandFader(
     label: String = "",
     valueText: String = "",
     highlighted: Boolean = false,
-    faderWidth: Dp = 34.dp,
-    /** Nombre corto del instrumento o función que posee la banda. */
+    faderWidth: Dp = 36.dp,
     subtitle: String = ""
 ) {
     val colors = AuraTheme.colors
@@ -467,7 +466,7 @@ fun BandFader(
                     detectTapGestures(
                         onTap = { offset ->
                             haptic()
-                            val paddingPx = 10.dp.toPx()
+                            val paddingPx = 12.dp.toPx()
                             val usablePx = size.height - paddingPx * 2f
                             if (usablePx > 0f) {
                                 val yPx = (offset.y - paddingPx).coerceIn(0f, usablePx)
@@ -488,7 +487,7 @@ fun BandFader(
                         onDragStart = { _ -> haptic() },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            val paddingPx = 10.dp.toPx()
+                            val paddingPx = 12.dp.toPx()
                             val usablePx = size.height - paddingPx * 2f
                             if (usablePx > 0f) {
                                 val deltaPct = -dragAmount.y / usablePx
@@ -503,57 +502,59 @@ fun BandFader(
                     )
                 }
         ) {
-
-            // 1. Canal profundamente hundido (Inset shadow simulada por Modifier.neumorphicConcave)
-            val cavityWidth = 12.dp
+            // Canal profundamente hundido 3D
+            val cavityWidth = 14.dp
             Box(
                 modifier = Modifier
                     .width(cavityWidth)
                     .fillMaxHeight()
-                    .padding(vertical = 10.dp)
+                    .padding(vertical = 12.dp)
                     .neumorphicConcave(
                         radius = cavityWidth / 2,
                         shadowColor = colors.neumorphicCavity,
                         highlightColor = colors.neumorphicHighlight,
-                        elevation = 3.dp
+                        elevation = 5.dp
                     )
                     .background(colors.background, RoundedCornerShape(cavityWidth / 2))
             )
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val padding = 10.dp.toPx()
+                val padding = 12.dp.toPx()
                 val usable = size.height - padding * 2
                 val centerX = size.width / 2f
                 val zeroY = padding + usable * (1f - zeroFraction)
                 val thumbY = padding + usable * (1f - normalized)
 
-                // Progreso Activo (Pintura Rosa/Accent) desde 0 dB hasta el thumb
                 val fillColor = if (highlighted) accent else accent.copy(alpha = 0.9f)
                 val topY = min(zeroY, thumbY)
                 val bottomY = max(zeroY, thumbY)
-                val barWidth = 6.dp.toPx()
+                val barWidth = 8.dp.toPx()
 
                 if (kotlin.math.abs(thumbY - zeroY) > 1.5f) {
-                     drawRoundRect(
-                        color = fillColor,
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(fillColor, fillColor.copy(alpha = 0.6f)),
+                            startY = topY,
+                            endY = bottomY
+                        ),
                         topLeft = Offset(centerX - barWidth / 2f, topY),
                         size = Size(barWidth, bottomY - topY),
                         cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
                     )
                 }
 
-                // 2. Marca de 0 dB fresada sutil
+                // Marca de 0 dB
                 drawLine(
-                    color = colors.textSecondary.copy(alpha = 0.3f),
+                    color = colors.textSecondary.copy(alpha = 0.4f),
                     start = Offset(centerX - 16.dp.toPx(), zeroY),
                     end = Offset(centerX + 16.dp.toPx(), zeroY),
-                    strokeWidth = 2.dp.toPx(),
+                    strokeWidth = 2.5.dp.toPx(),
                     cap = StrokeCap.Round
                 )
             }
 
-            // 3. Thumb 3D rectangular (como en el mockup)
-            val thumbYPadding = 10.dp
+            // Thumb 3D Fader (mayor volumen y relieve 3D)
+            val thumbYPadding = 12.dp
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -562,26 +563,34 @@ fun BandFader(
                 Box(
                     modifier = Modifier
                         .offset(
-                            x = (faderWidth - 28.dp) / 2,
-                            y = (height - thumbYPadding * 2 - 16.dp) * (1f - normalized)
+                            x = (faderWidth - 32.dp) / 2,
+                            y = (height - thumbYPadding * 2 - 20.dp) * (1f - normalized)
                         )
-                        .size(width = 28.dp, height = 16.dp)
-                        // Convexo
+                        .size(width = 32.dp, height = 20.dp)
+                        .shadow(elevation = 8.dp, shape = RoundedCornerShape(8.dp))
                         .neumorphicConvex(
-                            radius = 6.dp,
+                            radius = 8.dp,
                             highlightColor = colors.neumorphicHighlight,
                             shadowColor = colors.neumorphicShadow,
-                            elevation = 4.dp
+                            elevation = 6.dp
                         )
-                        .background(colors.surfaceElevated, RoundedCornerShape(6.dp)),
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    colors.surfaceElevated,
+                                    colors.background
+                                )
+                            ),
+                            RoundedCornerShape(8.dp)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    val fillColor = if (highlighted) accent else colors.textSecondary.copy(alpha=0.5f)
-                    // Pequeña franja / LED en el centro
+                    // Franja LED central brillante
                     Box(
                         modifier = Modifier
-                            .size(width = 8.dp, height = 2.dp)
-                            .background(fillColor, RoundedCornerShape(1.dp))
+                            .size(width = 16.dp, height = 3.dp)
+                            .shadow(elevation = 2.dp, shape = RoundedCornerShape(1.5.dp))
+                            .background(if (highlighted) accent else colors.textSecondary, RoundedCornerShape(1.5.dp))
                     )
                 }
             }
@@ -626,8 +635,9 @@ fun BandFader(
 }
 
 /**
- * Control rotativo neumórfico tipo consola de estudio (AuraKnob):
- * Bisel cóncavo exterior, arco de progreso iluminado y perilla central extruida.
+ * Control rotativo 3D de alta precisión tipo consola de estudio de gama alta (AuraKnob):
+ * Diseño minimalista profesional con canal cóncavo, arco LED de progreso limpio,
+ * marcas cardinales sutiles y perilla central 3D con indicador de orientación.
  */
 @Composable
 fun AuraKnob(
@@ -635,7 +645,7 @@ fun AuraKnob(
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
     modifier: Modifier = Modifier,
-    diameter: Dp = 84.dp,
+    diameter: Dp = 92.dp,
     label: String = "",
     valueText: String = "",
     enabled: Boolean = true
@@ -647,11 +657,12 @@ fun AuraKnob(
     val currentRange by rememberUpdatedState(valueRange)
     val currentOnChange by rememberUpdatedState(onValueChange)
 
-    val startAngle = 140f
-    val sweepAngle = 260f
+    val startAngle = 135f
+    val sweepAngle = 270f
     val span = (valueRange.endInclusive - valueRange.start).takeIf { it > 0f } ?: 1f
     val normalized = ((value - valueRange.start) / span).coerceIn(0f, 1f)
     val animated = animateFloatAsState(targetValue = normalized, label = "knob").value
+    val currentAngle = startAngle + sweepAngle * animated
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Box(
@@ -683,7 +694,7 @@ fun AuraKnob(
                             if (!enabled) return@detectDragGestures
                             change.consume()
                             accumulated -= drag.y
-                            val delta = (accumulated / 220f) * span
+                            val delta = (accumulated / 200f) * span
                             val newValue = (currentValue + delta).coerceIn(currentRange.start, currentRange.endInclusive)
                             if (newValue.toInt() != currentValue.toInt()) {
                                 haptic()
@@ -694,140 +705,122 @@ fun AuraKnob(
                     )
                 }
         ) {
-
-            // Relieve intermedio (como en el mockup: dial de perilla extruida suave)
+            // Fondo cóncavo exterior (pista del dial)
             Box(
                 modifier = Modifier
-                    .size(diameter - 28.dp)
-                    .neumorphicConvex(
-                        radius = (diameter - 28.dp) / 2,
+                    .size(diameter - 20.dp)
+                    .neumorphicConcave(
+                        radius = (diameter - 20.dp) / 2,
+                        shadowColor = colors.neumorphicCavity,
                         highlightColor = colors.neumorphicHighlight,
-                        shadowColor = colors.neumorphicShadow,
                         elevation = 4.dp
                     )
                     .background(colors.background, CircleShape)
             )
 
-            // Centro cóncavo (hendidura central)
-            Box(
-                modifier = Modifier
-                    .size(diameter - 56.dp)
-                    .neumorphicConcave(
-                        radius = (diameter - 56.dp) / 2,
-                        shadowColor = colors.neumorphicCavity,
-                        highlightColor = colors.neumorphicHighlight,
-                        elevation = 3.dp
+            // Arco LED de progreso y marcas cardinales
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidth = 5.dp.toPx()
+                val topLeft = Offset(10.dp.toPx(), 10.dp.toPx())
+                val sizeArc = Size(size.width - 20.dp.toPx(), size.height - 20.dp.toPx())
+
+                // Pista de fondo del arco
+                drawArc(
+                    color = accent.copy(alpha = 0.12f),
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = sizeArc,
+                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                )
+
+                // Arco de progreso activo
+                if (animated > 0.01f) {
+                    drawArc(
+                        color = accent,
+                        startAngle = startAngle,
+                        sweepAngle = sweepAngle * animated,
+                        useCenter = false,
+                        topLeft = topLeft,
+                        size = sizeArc,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
                     )
-                    .background(colors.background, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                if (valueText.isNotEmpty()) {
-                    Text(
-                        text = valueText,
-                        color = colors.textPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
+                }
+
+                // 5 marcas cardinales sutiles
+                val cardinalSteps = listOf(0f, 0.25f, 0.5f, 0.75f, 1f)
+                for (step in cardinalSteps) {
+                    val deg = startAngle + sweepAngle * step
+                    val rad = Math.toRadians(deg.toDouble())
+                    val rOuter = size.width / 2f - 4.dp.toPx()
+                    val rInner = rOuter - 4.dp.toPx()
+                    val start = Offset(
+                        (center.x + rInner * cos(rad)).toFloat(),
+                        (center.y + rInner * sin(rad)).toFloat()
+                    )
+                    val end = Offset(
+                        (center.x + rOuter * cos(rad)).toFloat(),
+                        (center.y + rOuter * sin(rad)).toFloat()
+                    )
+                    drawLine(
+                        color = colors.textSecondary.copy(alpha = 0.5f),
+                        start = start,
+                        end = end,
+                        strokeWidth = 1.5.dp.toPx(),
+                        cap = StrokeCap.Round
                     )
                 }
             }
 
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val radius = size.width / 2f
-                val markRadiusOuter = radius - 8.dp.toPx()
-                val markRadiusInner = radius - 15.dp.toPx()
-                val numMarks = 36
-                val angleStep = sweepAngle / (numMarks - 1)
-
-                drawArc(
-                    color = accent.copy(alpha = 0.18f),
-                    startAngle = startAngle,
-                    sweepAngle = sweepAngle,
-                    useCenter = false,
-                    topLeft = Offset(8.dp.toPx(), 8.dp.toPx()),
-                    size = Size(size.width - 16.dp.toPx(), size.height - 16.dp.toPx()),
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+            // Perilla central 3D giratoria (Dial Cap)
+            Box(
+                modifier = Modifier
+                    .size(diameter - 40.dp)
+                    .shadow(elevation = 6.dp, shape = CircleShape)
+                    .neumorphicConvex(
+                        radius = (diameter - 40.dp) / 2,
+                        highlightColor = colors.neumorphicHighlight,
+                        shadowColor = colors.neumorphicShadow,
+                        elevation = 5.dp
+                    )
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                colors.surfaceElevated,
+                                colors.background
+                            )
+                        ),
+                        CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // Indicador visual 3D (punto indicador en el borde de la perilla)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawBehind {
+                            val rad = Math.toRadians(currentAngle.toDouble())
+                            val distFromCenter = (size.width / 2f) - 10.dp.toPx()
+                            val dotX = center.x + distFromCenter * cos(rad).toFloat()
+                            val dotY = center.y + distFromCenter * sin(rad).toFloat()
+                            drawCircle(
+                                color = accent,
+                                radius = 3.5.dp.toPx(),
+                                center = Offset(dotX, dotY)
+                            )
+                        }
                 )
 
-                for (i in 0 until numMarks) {
-                    val angleDeg = startAngle + i * angleStep
-                    val angleRad = Math.toRadians(angleDeg.toDouble())
-
-                    val markFraction = i.toFloat() / (numMarks - 1)
-                    val isActive = markFraction <= animated
-                    val isMajor = i % 5 == 0
-                    val innerRadius = if (isMajor) markRadiusInner - 3.dp.toPx() else markRadiusInner
-
-                    val start = Offset(
-                        (center.x + innerRadius * cos(angleRad)).toFloat(),
-                        (center.y + markRadiusInner * sin(angleRad)).toFloat()
-                    )
-                    val end = Offset(
-                        (center.x + markRadiusOuter * cos(angleRad)).toFloat(),
-                        (center.y + markRadiusOuter * sin(angleRad)).toFloat()
-                    )
-
-                    val markColor = if (isActive) {
-                        accent.copy(alpha = 0.6f + (0.4f * markFraction))
-                    } else {
-                        // Inactivo: tono secundario de la paleta
-                        colors.textSecondary.copy(alpha = 0.55f)
-                    }
-
-                    if (isActive) {
-                         drawLine(
-                            color = markColor.copy(alpha = 0.3f),
-                            start = start,
-                            end = end,
-                            strokeWidth = 3.dp.toPx(),
-                            cap = StrokeCap.Round
-                        )
-                    }
-                    drawLine(
-                        color = markColor,
-                        start = start,
-                        end = end,
-                        strokeWidth = if (isMajor) 2.5.dp.toPx() else 1.5.dp.toPx(),
-                        cap = StrokeCap.Round
+                if (valueText.isNotEmpty()) {
+                    Text(
+                        text = valueText,
+                        color = colors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
                 }
-
-                val pointerAngle = Math.toRadians(
-                    (startAngle + sweepAngle * animated).toDouble()
-                )
-                val pointerStartRadius = diameter.toPx() / 2f - 43.dp.toPx()
-                val pointerEndRadius = diameter.toPx() / 2f - 25.dp.toPx()
-                drawLine(
-                    color = colors.neumorphicShadow.copy(alpha = 0.75f),
-                    start = Offset(
-                        center.x + (pointerStartRadius * cos(pointerAngle)).toFloat() + 1.dp.toPx(),
-                        center.y + (pointerStartRadius * sin(pointerAngle)).toFloat() + 1.dp.toPx()
-                    ),
-                    end = Offset(
-                        center.x + (pointerEndRadius * cos(pointerAngle)).toFloat() + 1.dp.toPx(),
-                        center.y + (pointerEndRadius * sin(pointerAngle)).toFloat() + 1.dp.toPx()
-                    ),
-                    strokeWidth = 4.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                drawLine(
-                    color = accent,
-                    start = Offset(
-                        center.x + (pointerStartRadius * cos(pointerAngle)).toFloat(),
-                        center.y + (pointerStartRadius * sin(pointerAngle)).toFloat()
-                    ),
-                    end = Offset(
-                        center.x + (pointerEndRadius * cos(pointerAngle)).toFloat(),
-                        center.y + (pointerEndRadius * sin(pointerAngle)).toFloat()
-                    ),
-                    strokeWidth = 2.dp.toPx(),
-                    cap = StrokeCap.Round
-                )
-                drawCircle(
-                    color = accent,
-                    radius = 2.5.dp.toPx(),
-                    center = center
-                )
             }
         }
         if (label.isNotEmpty()) {
@@ -988,11 +981,12 @@ fun AuraSliderRow(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(36.dp)
+                .height(40.dp)
+                .padding(top = 4.dp)
                 .pointerInput(enabled) {
                     if (!enabled) return@pointerInput
                     detectTapGestures { offset ->
-                        val thumbRadiusPx = 11.dp.toPx()
+                        val thumbRadiusPx = 14.dp.toPx()
                         val usable = (size.width - thumbRadiusPx * 2f).coerceAtLeast(1f)
                         val pos = (offset.x - thumbRadiusPx).coerceIn(0f, usable)
                         val newValue = currentRange.start + (pos / usable) * span
@@ -1006,7 +1000,7 @@ fun AuraSliderRow(
                         onDragStart = { _ -> haptic() },
                         onDrag = { change, _ ->
                             change.consume()
-                            val thumbRadiusPx = 11.dp.toPx()
+                            val thumbRadiusPx = 14.dp.toPx()
                             val usable = (size.width - thumbRadiusPx * 2f).coerceAtLeast(1f)
                             val pos = (change.position.x - thumbRadiusPx).coerceIn(0f, usable)
                             val newValue = currentRange.start + (pos / usable) * span
@@ -1020,33 +1014,35 @@ fun AuraSliderRow(
                 },
             contentAlignment = Alignment.CenterStart
         ) {
-            // 1. Canal neumórfico cóncavo (ranura profunda)
+            // 1. Canal neumórfico cóncavo 3D horizontal (ranura profunda)
+            val trackHeight = 12.dp
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp)
+                    .height(trackHeight)
                     .neumorphicConcave(
-                        radius = 4.dp,
+                        radius = trackHeight / 2,
                         shadowColor = colors.neumorphicCavity,
-                        highlightColor = Color(0x0AFFFFFF),
-                        elevation = 2.dp
+                        highlightColor = colors.neumorphicHighlight,
+                        elevation = 4.dp
                     )
-                    .background(colors.neumorphicCavity, RoundedCornerShape(4.dp))
+                    .background(colors.background, RoundedCornerShape(trackHeight / 2))
             )
 
+            // Progreso LED activo con gradiente horizontal
             Box(
                 modifier = Modifier
                     .fillMaxWidth(fraction)
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .height(trackHeight)
+                    .clip(RoundedCornerShape(trackHeight / 2))
                     .background(
                         Brush.horizontalGradient(
-                            listOf(accent.copy(alpha = 0.5f), accent)
+                            listOf(accent.copy(alpha = 0.6f), accent)
                         )
                     )
             )
 
-            // Layout custom para el thumb
+            // Layout custom para el thumb 3D deslizante
             var widthPx by remember { androidx.compose.runtime.mutableFloatStateOf(1f) }
             val currentDensity = androidx.compose.ui.platform.LocalDensity.current
             val density = currentDensity.density
@@ -1055,44 +1051,39 @@ fun AuraSliderRow(
                     .fillMaxSize()
                     .onSizeChanged { widthPx = it.width.toFloat() }
             ) {
-                val thumbWidth = 24.dp
-                val thumbHeight = 20.dp
-                val thumbRadiusPx = 11.dp
-                // Aproximación del offset para Box
+                val thumbWidth = 30.dp
+                val thumbHeight = 22.dp
+                val thumbRadiusPx = 15.dp
                 val usableWidth = max(0f, widthPx - (thumbRadiusPx.value * 2 * density))
 
                 Box(
                     modifier = Modifier
                         .offset(
                             x = with(androidx.compose.ui.platform.LocalDensity.current) { (thumbRadiusPx.toPx() + (usableWidth * fraction) - (thumbWidth.toPx() / 2)).toDp() },
-                            y = 8.dp
+                            y = 9.dp
                         )
                         .size(width = thumbWidth, height = thumbHeight)
+                        .shadow(elevation = 6.dp, shape = RoundedCornerShape(8.dp))
                         .neumorphicConvex(
-                            radius = 10.dp,
+                            radius = 8.dp,
                             highlightColor = colors.neumorphicHighlight,
                             shadowColor = colors.neumorphicShadow,
-                            elevation = 3.dp
+                            elevation = 5.dp
                         )
                         .background(
                             Brush.verticalGradient(
                                 listOf(colors.surfaceElevated, colors.background)
                             ),
-                            RoundedCornerShape(10.dp)
-                        )
-                        .border(
-                            1.dp,
-                            Brush.verticalGradient(
-                                listOf(Color(0x26FFFFFF), Color(0x05FFFFFF))
-                            ),
-                            RoundedCornerShape(10.dp)
+                            RoundedCornerShape(8.dp)
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                     Box(
+                    // Franja LED central vertical en el thumb horizontal
+                    Box(
                         modifier = Modifier
-                            .size(6.dp)
-                            .background(accent, CircleShape)
+                            .size(width = 3.dp, height = 12.dp)
+                            .shadow(elevation = 1.dp, shape = RoundedCornerShape(1.5.dp))
+                            .background(accent, RoundedCornerShape(1.5.dp))
                     )
                 }
             }

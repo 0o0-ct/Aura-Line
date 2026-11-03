@@ -1,14 +1,18 @@
 package com.auraline.core.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -237,24 +241,54 @@ fun AuraLineTheme(
     accentColor: Color = AuraPalettes.first().accent,
     paletteKey: String = "",
     darkTheme: Boolean = true,
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val context = LocalContext.current
     val palette = paletteFor(paletteKey)
     val colors = buildMonochromaticTheme(palette)
 
-    val scheme = darkColorScheme(
-        primary = colors.accent,
-        onPrimary = Color.Black,
-        secondary = colors.accent,
-        background = colors.background,
-        onBackground = colors.textPrimary,
-        surface = colors.surface,
-        onSurface = colors.textPrimary,
-        surfaceVariant = colors.surfaceElevated,
-        onSurfaceVariant = colors.textSecondary,
-        outline = colors.outline,
-        error = colors.danger
-    )
+    val scheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        darkTheme -> darkColorScheme(
+            primary = colors.accent,
+            onPrimary = Color.Black,
+            primaryContainer = blendColors(colors.accent, colors.surface, 0.3f),
+            onPrimaryContainer = colors.textPrimary,
+            secondary = colors.accent,
+            onSecondary = Color.Black,
+            secondaryContainer = colors.surfaceElevated,
+            onSecondaryContainer = colors.textPrimary,
+            background = colors.background,
+            onBackground = colors.textPrimary,
+            surface = colors.surface,
+            onSurface = colors.textPrimary,
+            surfaceVariant = colors.surfaceElevated,
+            onSurfaceVariant = colors.textSecondary,
+            outline = colors.outline,
+            outlineVariant = colors.outline.copy(alpha = 0.5f),
+            error = colors.danger
+        )
+        else -> lightColorScheme(
+            primary = colors.accent,
+            onPrimary = Color.White,
+            primaryContainer = blendColors(colors.accent, Color.White, 0.8f),
+            onPrimaryContainer = Color.Black,
+            secondary = colors.accent,
+            onSecondary = Color.White,
+            background = Color(0xFFFCFDFD),
+            onBackground = Color(0xFF1A1C1E),
+            surface = Color(0xFFFDF8F8),
+            onSurface = Color(0xFF1A1C1E),
+            surfaceVariant = Color(0xFFE7E0EC),
+            onSurfaceVariant = Color(0xFF49454F),
+            outline = Color(0xFF79747E),
+            outlineVariant = Color(0xFFCAC4D0),
+            error = Color(0xFFBA1A1A)
+        )
+    }
 
     CompositionLocalProvider(LocalAuraColors provides colors) {
         MaterialTheme(colorScheme = scheme, typography = AuraTypography, content = content)
