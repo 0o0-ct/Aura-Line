@@ -403,10 +403,13 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val range = db.coerceIn(6f, 36f)
         saveSettings(_settings.value.copy(gainRangeDb = range))
         val current = _state.value
-        val globalGain = range.coerceIn(-range, range)
         val bands = current.bands.ifEmpty { generateEqualizerBands(current.numBands) }
-        val clamped = bands.map { it.copy(gainDb = globalGain) }
-        saveState(current.copy(gainRangeDb = range, bands = clamped))
+        val previousRange = current.gainRangeDb.coerceIn(6f, 36f)
+        val scale = range / previousRange
+        val scaled = bands.map { band ->
+            band.copy(gainDb = (band.gainDb * scale).coerceIn(-range, range))
+        }
+        saveState(current.copy(gainRangeDb = range, bands = scaled, presetName = "Personalizado"))
     }
 
     override fun applyFactoryPreset(name: String): Boolean {
