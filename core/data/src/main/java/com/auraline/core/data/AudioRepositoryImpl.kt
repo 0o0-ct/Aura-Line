@@ -189,6 +189,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putBoolean("state_auto_preamp", state.autoPreamp)
             .putInt("state_route", state.selectedRoute)
             .putString("state_preset", state.presetName)
+            .putFloat("state_band_global_gain", state.bandGlobalGainDb)
             .putFloat("state_sub", state.tone.subDb)
             .putFloat("state_bass", state.tone.bassDb)
             .putFloat("state_treble", state.tone.trebleDb)
@@ -269,6 +270,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             autoPreamp = p.getBoolean("state_auto_preamp", true),
             selectedRoute = p.getInt("state_route", 0),
             presetName = p.getString("state_preset", "Plano") ?: "Plano",
+            bandGlobalGainDb = p.getFloat("state_band_global_gain", 0f).coerceIn(0f, 36f),
             toneBoostMarginDb = toneBoostMarginFor(_settings.value.usageProfile),
             tone = ToneControls(
                 subDb = p.getFloat("state_sub", 0f),
@@ -404,12 +406,11 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         saveSettings(_settings.value.copy(gainRangeDb = range))
         val current = _state.value
         val bands = current.bands.ifEmpty { generateEqualizerBands(current.numBands) }
-        val previousRange = current.gainRangeDb.coerceIn(6f, 36f)
-        val scale = range / previousRange
-        val scaled = bands.map { band ->
-            band.copy(gainDb = (band.gainDb * scale).coerceIn(-range, range))
+        val delta = range - current.bandGlobalGainDb
+        val adjusted = bands.map { band ->
+            band.copy(gainDb = (band.gainDb + delta).coerceIn(-36f, 36f))
         }
-        saveState(current.copy(gainRangeDb = range, bands = scaled))
+        saveState(current.copy(gainRangeDb = range, bands = adjusted, bandGlobalGainDb = range))
     }
 
     override fun applyFactoryPreset(name: String): Boolean {
@@ -420,12 +421,11 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val gains = FloatArray(bands.size)
 
         val limit = current.gainRangeDb.coerceIn(6f, 36f)
-        val rangeScale = limit / 12f
         preset.gains.forEach { (frequency, gain) ->
             val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
-            // Las tablas parten de una referencia de ±12 dB; el selector amplía o reduce
-            // proporcionalmente cada punto sin perder la forma del preajuste.
-            val scaled = (gain * PRESET_GAIN_SCALE * rangeScale).coerceIn(-limit, limit)
+            // Conserva los dB nativos y suma la ganancia global elegida en Bandas.
+            val scaled = (gain * PRESET_GAIN_SCALE + current.bandGlobalGainDb)
+                .coerceIn(-limit, limit)
             gains[index] = (gains[index] + scaled).coerceIn(-limit, limit)
         }
 
@@ -461,7 +461,8 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val effectiveScale = (scale * profileScale * 2f).coerceAtLeast(2f)
 
         val primary = steps.first()
-        val alreadyApplied = gains[primary.first] >= primary.second * effectiveScale - 0.5f
+        val alreadyApplied = gains[primary.first] - current.bandGlobalGainDb >=
+            primary.second * effectiveScale - 0.5f
         val direction = if (alreadyApplied) -1f else 1f
 
         steps.forEach { (index, delta) ->
@@ -630,6 +631,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val root = JSONObject()
         root.put("numBands", state.numBands)
         root.put("preamp", state.preampDb.toDouble())
+        root.put("bandGlobalGain", state.bandGlobalGainDb.toDouble())
         root.put("motor", state.motorEnabled)
         root.put("effects", state.effectsEnabled)
         root.put("bass", state.tone.bassDb.toDouble())
@@ -678,6 +680,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         return EqualizerState(
             numBands = bandCount,
             preampDb = root.optDouble("preamp", 0.0).toFloat(),
+            bandGlobalGainDb = root.optDouble("bandGlobalGain", 0.0).toFloat().coerceIn(0f, 36f),
             bands = bands,
             motorEnabled = root.optBoolean("motor", false),
             effectsEnabled = root.optBoolean("effects", false),
