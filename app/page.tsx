@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { audioRepo } from "@/src/lib/audioRepository";
+import { audioRepo, DEFAULT_STATE, DEFAULT_SETTINGS } from "@/src/lib/audioRepository";
 import { auraEngine } from "@/src/lib/audioEngine";
 import { paletteFor } from "@/src/lib/constants";
 import { AudioRouteLabels, EngineStatus, EqualizerState, AppSettings } from "@/src/lib/types";
@@ -24,16 +24,22 @@ const tabs = [
 ];
 
 export default function HomePage() {
-  const [state, setState] = useState<EqualizerState>(audioRepo.getState());
-  const [settings, setSettings] = useState<AppSettings>(audioRepo.getSettings());
+  const [mounted, setMounted] = useState(false);
+  const [state, setState] = useState<EqualizerState>(DEFAULT_STATE);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [engine, setEngine] = useState<EngineStatus>(audioRepo.getEngineStatus());
   const [spectrum, setSpectrum] = useState<number[]>(new Array(25).fill(0));
   const [activeTab, setActiveTab] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    setMounted(true);
     audioRepo.loadFromStorage();
+    const loadedState = audioRepo.getState();
+    setState(loadedState);
+    setSettings(audioRepo.getSettings());
     auraEngine.initialize();
+    auraEngine.setState(loadedState);
 
     const unsubRepo = audioRepo.subscribe(() => {
       setState(audioRepo.getState());
@@ -55,8 +61,9 @@ export default function HomePage() {
     };
   }, []);
 
-  const activePalette = paletteFor(settings.theme.paletteKey);
-  const accent = state.motorEnabled ? activePalette.accent : "#8E9BAE";
+  const isMotorActive = mounted ? state.motorEnabled : false;
+  const activePalette = paletteFor(mounted ? settings.theme.paletteKey : DEFAULT_SETTINGS.theme.paletteKey);
+  const accent = isMotorActive ? activePalette.accent : "#8E9BAE";
 
   const handleToggleMotor = (enabled: boolean) => {
     audioRepo.toggleMotor(enabled);
@@ -78,7 +85,7 @@ export default function HomePage() {
           className="absolute -top-[10%] -right-[15%] w-[600px] h-[600px] rounded-full blur-[120px] transition-all duration-700"
           style={{
             backgroundColor: accent,
-            opacity: state.motorEnabled ? 0.12 : 0.03,
+            opacity: isMotorActive ? 0.12 : 0.03,
           }}
         />
         <div
@@ -102,8 +109,8 @@ export default function HomePage() {
             </h1>
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <StatusPill
-                text={state.motorEnabled ? "Motor activo" : "Motor apagado"}
-                color={state.motorEnabled ? "#34D399" : "#8E9BAE"}
+                text={isMotorActive ? "Motor activo" : "Motor apagado"}
+                color={isMotorActive ? "#34D399" : "#8E9BAE"}
               />
               <span className="text-[11px] text-[#8E9BAE] font-medium truncate">
                 {AudioRouteLabels[engine.route] || "Altavoz"}
@@ -116,7 +123,7 @@ export default function HomePage() {
 
           {/* Apple Neumorphic Tactile Power Switch */}
           <AuraSwitch
-            checked={state.motorEnabled}
+            checked={isMotorActive}
             onCheckedChange={handleToggleMotor}
             accentColor={activePalette.accent}
           />
@@ -125,7 +132,7 @@ export default function HomePage() {
         {/* Real-time Audition & Audio Test Bar */}
         <div className="mb-4">
           <AudioPlayerBar
-            motorEnabled={state.motorEnabled}
+            motorEnabled={isMotorActive}
             accentColor={activePalette.accent}
             onTurnOnMotor={() => handleToggleMotor(true)}
           />

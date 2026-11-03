@@ -31,6 +31,8 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -107,6 +109,23 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
     val perWindow = WindowSizes[windowSize]
     val pages = remember(bands, perWindow) { bands.chunked(perWindow) }
     val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
+
+    DisposableEffect(state.motorEnabled) {
+        if (state.motorEnabled) {
+            com.auraline.core.audio.AuraLineSpectrum.start()
+        } else {
+            com.auraline.core.audio.AuraLineSpectrum.stop()
+        }
+        onDispose {
+            com.auraline.core.audio.AuraLineSpectrum.stop()
+        }
+    }
+
+    LaunchedEffect(bands) {
+        if (bands.isNotEmpty()) {
+            com.auraline.core.audio.AuraLineSpectrum.setBandEdges(bands.map { it.frequencyHz }.toFloatArray())
+        }
+    }
 
     Column(
         modifier = Modifier
