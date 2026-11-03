@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.auraline.app.domain.AuraLineViewModel
+import com.auraline.core.ui.components.hapticFeedback
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqBand
 import com.auraline.core.domain.FactoryPresets
@@ -682,96 +683,122 @@ private fun LowSourcesCard(
     onFocus: (String) -> Unit
 ) {
     val colors = AuraTheme.colors
+    var expanded by remember { mutableStateOf(false) }
+    val haptic = hapticFeedback()
+
     AuraCard(modifier = Modifier.fillMaxWidth()) {
-        SectionTitle(text = "Fuentes graves", trailing = "${LowFrequencySources.size} instrumentos")
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    haptic()
+                    expanded = !expanded
+                },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                SectionTitle(text = "Fuentes graves", trailing = "${LowFrequencySources.size} instrumentos")
+            }
+            TextButton(
+                onClick = {
+                    haptic()
+                    expanded = !expanded
+                },
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                Text(
+                    text = if (expanded) "Ocultar" else "Ver 15 instrumentos",
+                    color = colors.accent,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Cada banda grave tiene un dueño. El botón + prepara esa fuente sobre tu " +
-                "curva actual, sin borrarla.",
+            text = "Cada banda grave tiene un dueño. Toca para ver y ajustar los 15 instrumentos en detalle.",
             color = colors.textSecondary,
             fontSize = 11.sp
         )
-        Spacer(modifier = Modifier.height(10.dp))
 
-        LowFrequencySources.forEach { source ->
-            val steps = focusFor(source.key)?.let { resolveFocus(bands, it) }.orEmpty()
-            val primaryStep = steps.firstOrNull()
-            val primaryIndex = primaryStep?.first
-            val role = LowFrequencyRoles.firstOrNull { it.owner.key == source.key }
-            val shared = role?.companions?.map { it.name }.orEmpty()
-            // El botón alterna: el foco escala según el rango de dB seleccionado (range / 12)
-            val rangeScale = range / 12f
-            val targetDelta = primaryStep?.let { it.second * rangeScale } ?: 0f
-            val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
-            val applied = primaryStep != null && kotlin.math.abs(gain) >= kotlin.math.abs(targetDelta) - 0.5f &&
-                (kotlin.math.sign(gain) == kotlin.math.sign(targetDelta) || targetDelta == 0f)
-
-            Row(
+        AnimatedVisibility(visible = expanded) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(top = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .background(categoryColor(source.category), RoundedCornerShape(50))
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = source.name,
-                        color = colors.textPrimary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = buildString {
-                            append("${source.fundamentalHz.first}–${source.fundamentalHz.last} Hz")
-                            if (shared.isNotEmpty()) append(" · con ${shared.joinToString(", ")}")
-                        },
-                        color = colors.textSecondary,
-                        fontSize = 10.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                if (primaryIndex != null) {
-                    Text(
-                        text = formatFrequency(bandCenterHz(bands, primaryIndex)),
-                        color = colors.accent,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${formatGain(gain)} dB",
-                        color = if (gain != 0f) colors.accent else colors.textSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                SelectableChip(
-                    text = if (applied) "−" else "+",
-                    selected = applied,
-                    onClick = { onFocus(source.key) }
-                )
-            }
-            // Control deslizante dedicado: mueve directamente la banda principal del
-            // instrumento para que su tonalidad se note de forma inmediata.
-            if (primaryIndex != null) {
-                val primaryBand = bands.getOrNull(primaryIndex)
-                if (primaryBand != null) {
-                    AuraSliderRow(
-                        label = "${source.shortName} · ${formatFrequency(bandCenterHz(bands, primaryIndex))} Hz",
-                        valueText = formatGain(primaryBand.gainDb),
-                        value = primaryBand.gainDb,
-                        valueRange = -range..range,
-                        onValueChange = { onBandGain(primaryBand.id, it) }
-                    )
+                LowFrequencySources.forEach { source ->
+                    val steps = focusFor(source.key)?.let { resolveFocus(bands, it) }.orEmpty()
+                    val primaryStep = steps.firstOrNull()
+                    val primaryIndex = primaryStep?.first
+                    val role = LowFrequencyRoles.firstOrNull { it.owner.key == source.key }
+                    val shared = role?.companions?.map { it.name }.orEmpty()
+                    val rangeScale = range / 12f
+                    val targetDelta = primaryStep?.let { it.second * rangeScale } ?: 0f
+                    val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
+                    val applied = primaryStep != null && kotlin.math.abs(gain) >= kotlin.math.abs(targetDelta) - 0.5f &&
+                        (kotlin.math.sign(gain) == kotlin.math.sign(targetDelta) || targetDelta == 0f)
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(colors.surface, RoundedCornerShape(14.dp))
+                            .border(1.dp, colors.outline.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(categoryColor(source.category), RoundedCornerShape(50))
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = source.name,
+                                    color = colors.textPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = buildString {
+                                        append("${source.fundamentalHz.first}–${source.fundamentalHz.last} Hz")
+                                        if (shared.isNotEmpty()) append(" · con ${shared.joinToString(", ")}")
+                                    },
+                                    color = colors.textSecondary,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            SelectableChip(
+                                text = if (applied) "−" else "+",
+                                selected = applied,
+                                onClick = { onFocus(source.key) }
+                            )
+                        }
+                        if (primaryIndex != null) {
+                            val primaryBand = bands.getOrNull(primaryIndex)
+                            if (primaryBand != null) {
+                                AuraSliderRow(
+                                    label = "${source.shortName} · ${formatFrequency(bandCenterHz(bands, primaryIndex))} Hz",
+                                    valueText = formatGain(primaryBand.gainDb),
+                                    value = primaryBand.gainDb,
+                                    valueRange = -range..range,
+                                    onValueChange = { onBandGain(primaryBand.id, it) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
