@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
@@ -83,7 +82,6 @@ private data class Destination(
 private val destinations = listOf(
     Destination("Ecualizador", Icons.Rounded.GraphicEq),
     Destination("Tono", Icons.Rounded.Tune),
-    Destination("Efectos", Icons.Rounded.AutoAwesome),
     Destination("Ajustes", Icons.Rounded.Settings)
 )
 
@@ -202,7 +200,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 when (tab) {
                                     0 -> EqualizerScreen(viewModel = viewModel)
                                     1 -> ToneScreen(viewModel = viewModel)
-                                    2 -> EffectsScreen(viewModel = viewModel)
                                     else -> SettingsScreen(
                                         viewModel = viewModel,
                                         onOpenDiagnostics = { showDiagnostics = true }
