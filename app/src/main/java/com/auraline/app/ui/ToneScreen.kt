@@ -1,5 +1,7 @@
 package com.auraline.app.ui
 
+import kotlin.math.pow
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -349,7 +351,7 @@ private fun ToneCurve(
                     val f0 = minF
                     moveTo(0f, yOf(responseAt(f0)))
                     for (i in 1..numPoints) {
-                        val f = minF * kotlin.math.pow(maxF / minF, i.toFloat() / numPoints)
+                        val f = minF * Math.pow((maxF / minF).toDouble(), (i.toFloat() / numPoints).toDouble()).toFloat()
                         lineTo(xOf(f), yOf(responseAt(f)))
                     }
                 }

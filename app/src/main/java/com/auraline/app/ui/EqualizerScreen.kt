@@ -592,6 +592,7 @@ private fun LowSourcesCard(
             // El botón alterna: el foco escala según el rango de dB seleccionado (range / 12)
             val rangeScale = range / 12f
             val targetDelta = primaryStep?.let { it.second * rangeScale } ?: 0f
+            val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
             val applied = primaryStep != null && kotlin.math.abs(gain) >= kotlin.math.abs(targetDelta) - 0.5f &&
                 (kotlin.math.sign(gain) == kotlin.math.sign(targetDelta) || targetDelta == 0f)
 
