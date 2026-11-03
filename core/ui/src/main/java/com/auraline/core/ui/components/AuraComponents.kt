@@ -412,7 +412,7 @@ fun BandFader(
     label: String = "",
     valueText: String = "",
     highlighted: Boolean = false,
-    faderWidth: Dp = 34.dp,
+    faderWidth: Dp = 46.dp,
     /** Nombre corto del instrumento o función que posee la banda. */
     subtitle: String = ""
 ) {
@@ -1133,7 +1133,8 @@ fun ResponseCurve(
                 }
 
                 val x = fraction * size.width
-                val y = centerY - (totalGainDb / gainRangeDb).coerceIn(-1.2f, 1.2f) * (size.height / 2.2f)
+                val normalizedGain = totalGainDb / (gainRangeDb + kotlin.math.abs(totalGainDb) * 0.35f)
+                val y = centerY - normalizedGain.coerceIn(-1f, 1f) * (size.height / 2.2f)
                 val pt = Offset(x, y)
                 points.add(pt)
 

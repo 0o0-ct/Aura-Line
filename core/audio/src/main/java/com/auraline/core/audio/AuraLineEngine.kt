@@ -41,8 +41,8 @@ object AuraLineEngine {
     /** Objetivo de nivel de salida: deja margen para que el códec no sature. */
     private const val TARGET_HEADROOM_DB = 3.0f
 
-    /** La protección no debe cancelar por completo los controles tonales del usuario. */
-    private const val MAX_AUTO_PREAMP_DB = 12f
+    /** Cubre el rango completo de las bandas sin dejar el limitador trabajando continuamente. */
+    private const val MAX_AUTO_PREAMP_DB = 36f
 
     /** Tope por banda del PreEq y por región del MBC (permite más de 24 dB sin clipping). */
     private const val MAX_BAND_GAIN_DB = 36f
@@ -98,6 +98,11 @@ object AuraLineEngine {
         desired = state
         if (!scheduled.compareAndSet(false, true)) return
         executor.execute {
+            try {
+                Thread.sleep(20)
+            } catch (interrupted: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
             val stateToApply = desired
             try {
                 if (stateToApply.motorEnabled) applyEngine(stateToApply) else releaseChain()
