@@ -10,14 +10,16 @@ import { AudioPlayerBar } from "@/src/components/AudioPlayerBar";
 import { EqualizerScreen } from "@/src/components/EqualizerScreen";
 import { ToneScreen } from "@/src/components/ToneScreen";
 import { EffectsScreen } from "@/src/components/EffectsScreen";
+import { DiagnosticScreen } from "@/src/components/DiagnosticScreen";
 import { SettingsScreen } from "@/src/components/SettingsScreen";
-import { Sliders, SlidersHorizontal, Sparkles, Settings } from "lucide-react";
+import { Sliders, SlidersHorizontal, Sparkles, Activity, Settings } from "lucide-react";
 import { cn } from "@/src/lib/utils";
 
 const tabs = [
   { label: "Ecualizador", icon: Sliders },
   { label: "Tono", icon: SlidersHorizontal },
   { label: "Efectos", icon: Sparkles },
+  { label: "Diagnóstico", icon: Activity },
   { label: "Ajustes", icon: Settings },
 ];
 
@@ -157,6 +159,15 @@ export default function HomePage() {
             />
           )}
           {activeTab === 3 && (
+            <DiagnosticScreen
+              repo={audioRepo}
+              state={state}
+              settings={settings}
+              engine={engine}
+              accentColor={activePalette.accent}
+            />
+          )}
+          {activeTab === 4 && (
             <SettingsScreen
               repo={audioRepo}
               state={state}

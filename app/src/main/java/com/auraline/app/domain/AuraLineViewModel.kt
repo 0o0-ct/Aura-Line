@@ -21,6 +21,15 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     val state: StateFlow<EqualizerState> = repository.stateFlow
     val settings: StateFlow<AppSettings> = repository.settingsFlow
     val engine: StateFlow<EngineStatus> = repository.engineStatus
+    val nativeTelemetry = com.auraline.app.audio.NativeEngineBridge.telemetry
+
+    init {
+        viewModelScope.launch {
+            state.collect { eqState ->
+                com.auraline.app.audio.NativeEngineBridge.syncState(eqState)
+            }
+        }
+    }
 
     private val _presets = MutableStateFlow(repository.listPresets())
     val presets: StateFlow<List<String>> = _presets.asStateFlow()
@@ -31,6 +40,12 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     private val _checking = MutableStateFlow(false)
     val checking: StateFlow<Boolean> = _checking.asStateFlow()
 
+    fun setGeneratorMode(mode: com.auraline.app.audio.GeneratorMode) =
+        com.auraline.app.audio.NativeEngineBridge.setGeneratorMode(mode)
+
+    fun setGeneratorLevel(level: Float) =
+        com.auraline.app.audio.NativeEngineBridge.setGeneratorLevel(level)
+
     fun toggleMotor(enabled: Boolean) = repository.toggleMotor(enabled)
     fun setEffectsEnabled(enabled: Boolean) = repository.setEffectsEnabled(enabled)
     fun setPreamp(db: Float) = repository.setPreamp(db)
@@ -39,7 +54,10 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setSubBass(db: Float) = repository.setSubBass(db)
     fun setSubCutoff(hz: Float) = repository.setSubCutoff(hz)
     fun setToneFrequencies(bassHz: Float, trebleHz: Float) = repository.setToneFrequencies(bassHz, trebleHz)
-    fun setBypass(enabled: Boolean) = repository.setBypass(enabled)
+    fun setBypass(enabled: Boolean) {
+        repository.setBypass(enabled)
+        com.auraline.app.audio.NativeEngineBridge.toggleBypass(enabled)
+    }
     fun setGainRange(db: Float) = repository.setGainRange(db)
     fun applyFactoryPreset(name: String) = repository.applyFactoryPreset(name)
     fun focusLowSource(key: String) = repository.focusLowSource(key)

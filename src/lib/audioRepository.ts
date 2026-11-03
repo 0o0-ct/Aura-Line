@@ -13,6 +13,7 @@ import {
   FactoryPresets,
   ReverbPresets,
   UsageProfiles,
+  bandCenterHz,
   focusFor,
   generateEqualizerBands,
   resolveFocus,
