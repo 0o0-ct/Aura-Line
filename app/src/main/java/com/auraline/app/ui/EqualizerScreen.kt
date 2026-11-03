@@ -697,8 +697,12 @@ private fun LowSourcesCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            SectionTitle(
-                text = "Fuentes graves",
+            Text(
+                text = "FUENTES GRAVES",
+                color = colors.textSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
                 modifier = Modifier.weight(1f)
             )
             TextButton(
