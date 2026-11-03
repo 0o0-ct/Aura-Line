@@ -409,7 +409,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val scaled = bands.map { band ->
             band.copy(gainDb = (band.gainDb * scale).coerceIn(-range, range))
         }
-        saveState(current.copy(gainRangeDb = range, bands = scaled, presetName = "Personalizado"))
+        saveState(current.copy(gainRangeDb = range, bands = scaled))
     }
 
     override fun applyFactoryPreset(name: String): Boolean {
@@ -420,10 +420,12 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val gains = FloatArray(bands.size)
 
         val limit = current.gainRangeDb.coerceIn(6f, 36f)
+        val rangeScale = limit / 12f
         preset.gains.forEach { (frequency, gain) ->
             val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
-            // Los valores de tabla son conservadores; se escalan para que el cambio se note.
-            val scaled = (gain * PRESET_GAIN_SCALE).coerceIn(-limit, limit)
+            // Las tablas parten de una referencia de ±12 dB; el selector amplía o reduce
+            // proporcionalmente cada punto sin perder la forma del preajuste.
+            val scaled = (gain * PRESET_GAIN_SCALE * rangeScale).coerceIn(-limit, limit)
             gains[index] = (gains[index] + scaled).coerceIn(-limit, limit)
         }
 
