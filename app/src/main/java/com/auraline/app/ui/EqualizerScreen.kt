@@ -694,11 +694,13 @@ private fun LowSourcesCard(
                     haptic()
                     expanded = !expanded
                 },
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                SectionTitle(text = "Fuentes graves", trailing = "${LowFrequencySources.size} instrumentos")
-            }
+            SectionTitle(
+                text = "Fuentes graves",
+                modifier = Modifier.weight(1f)
+            )
             TextButton(
                 onClick = {
                     haptic()
@@ -707,7 +709,7 @@ private fun LowSourcesCard(
                 contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 Text(
-                    text = if (expanded) "Ocultar" else "Ver 15 instrumentos",
+                    text = if (expanded) "Ocultar" else "Ver 15 instrumentos (${LowFrequencySources.size})",
                     color = colors.accent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
