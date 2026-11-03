@@ -249,7 +249,10 @@ class AuraAudioEngine {
     }
     if (this.midFilter) {
       const midFreq = Math.sqrt(state.tone.bassFrequencyHz * state.tone.trebleFrequencyHz);
+      const octaves = Math.max(1, Math.log2(state.tone.trebleFrequencyHz / Math.max(20, state.tone.bassFrequencyHz)));
+      const adaptiveQ = Math.max(0.4, Math.min(2.0, 1.4 / octaves));
       this.midFilter.frequency.setTargetAtTime(midFreq, ctx.currentTime, 0.02);
+      this.midFilter.Q.setTargetAtTime(adaptiveQ, ctx.currentTime, 0.02);
       this.midFilter.gain.setTargetAtTime(toneActive ? state.tone.midDb : 0, ctx.currentTime, 0.02);
     }
     if (this.trebleFilter) {

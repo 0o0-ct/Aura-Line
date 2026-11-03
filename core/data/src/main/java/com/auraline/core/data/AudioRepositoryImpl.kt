@@ -548,14 +548,16 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val clamped = current.bands.map {
             it.copy(gainDb = it.gainDb.coerceIn(-profile.gainRangeDb, profile.gainRangeDb))
         }
-        // El perfil fija el corte del sub-bajo y traslada los realces de Graves/Sub al
-        // margen de ese equipo (p. ej. en altavoz externo se puede pedir hasta ±24 dB).
         val oldBassMax = current.toneBoostMarginDb
         val bassScale = if (oldBassMax > 0f) profile.toneBoostMarginDb / oldBassMax else 1f
         val newTone = current.tone.copy(
             subCutoffHz = profile.subCutoffHz,
-            bassDb = (current.tone.bassDb * bassScale).coerceIn(-profile.toneBoostMarginDb, profile.toneBoostMarginDb),
-            subDb = (current.tone.subDb * bassScale).coerceIn(-profile.toneBoostMarginDb, profile.toneBoostMarginDb)
+            bassFrequencyHz = profile.bassFrequencyHz,
+            trebleFrequencyHz = profile.trebleFrequencyHz,
+            bassDb = profile.defaultBassDb.coerceIn(-profile.toneBoostMarginDb, profile.toneBoostMarginDb),
+            subDb = profile.defaultSubDb.coerceIn(-profile.toneBoostMarginDb, profile.toneBoostMarginDb),
+            midDb = profile.defaultMidDb,
+            trebleDb = profile.defaultTrebleDb
         )
         saveState(
             current.copy(

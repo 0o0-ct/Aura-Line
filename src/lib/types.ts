@@ -184,6 +184,9 @@ export interface UsageProfile {
   basePreset: string;
   toneBoostMarginDb: number;
   subCutoffHz: number;
+  bassFrequencyHz?: number;
+  trebleFrequencyHz?: number;
+  defaultTone?: Partial<ToneControls>;
   modules: ModuleState;
 }
 

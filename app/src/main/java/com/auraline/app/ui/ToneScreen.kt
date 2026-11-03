@@ -3,6 +3,7 @@ package com.auraline.app.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -53,8 +56,6 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
     val settings by viewModel.settings.collectAsState()
     val tone = state.tone
     val powered = state.motorEnabled
-    // El perfil de uso decide cuánto margen de realce tiene cada equipo: en altavoz externo
-    // se puede pedir hasta ±24 dB; en la barra 5.1, que ya procesa sola, ±12 dB.
     val boostMax = state.toneBoostMarginDb.coerceIn(12f, 24f)
     val activeProfile = UsageProfiles.firstOrNull { it.key == settings.usageProfile }
 
@@ -66,6 +67,37 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             .padding(top = 148.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
+        // Selector directo de perfil de uso en pantalla de Tono
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(
+                text = "Perfil de salida acústica",
+                trailing = activeProfile?.name ?: "Sin elegir"
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                UsageProfiles.forEach { profile ->
+                    SelectableChip(
+                        text = profile.name,
+                        selected = settings.usageProfile == profile.key,
+                        onClick = { viewModel.applyUsageProfile(profile.key) }
+                    )
+                }
+            }
+            activeProfile?.let { profile ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "${profile.description} · Corte ${profile.subCutoffHz.toInt()} Hz · Cruces ${profile.bassFrequencyHz.toInt()} Hz / ${kilo(profile.trebleFrequencyHz)}",
+                    color = colors.textSecondary,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
         AuraSurface(
             modifier = Modifier.fillMaxWidth(),
             depth = AuraDepth.Raised
@@ -79,6 +111,8 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 bassDb = tone.bassDb,
                 midDb = tone.midDb,
                 trebleDb = tone.trebleDb,
+                subDb = tone.subDb,
+                subCutoffHz = tone.subCutoffHz,
                 bassHz = tone.bassFrequencyHz,
                 trebleHz = tone.trebleFrequencyHz,
                 maxDb = boostMax
@@ -89,16 +123,14 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 valueText = db(tone.subDb),
                 value = tone.subDb,
                 valueRange = -boostMax..boostMax,
-                onValueChange = { viewModel.setSubBass(it) },
-                enabled = powered
+                onValueChange = { viewModel.setSubBass(it) }
             )
             AuraSliderRow(
                 label = "Corte del sub-bajo",
                 valueText = "${tone.subCutoffHz.toInt()} Hz",
                 value = tone.subCutoffHz,
                 valueRange = 20f..100f,
-                onValueChange = { viewModel.setSubCutoff(it) },
-                enabled = powered
+                onValueChange = { viewModel.setSubCutoff(it) }
             )
             Text(
                 text = if (activeProfile?.key == "mobile") {
@@ -119,24 +151,21 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 valueText = db(tone.bassDb),
                 value = tone.bassDb,
                 valueRange = -boostMax..boostMax,
-                onValueChange = { viewModel.setTone(it, tone.midDb, tone.trebleDb) },
-                enabled = powered
+                onValueChange = { viewModel.setTone(it, tone.midDb, tone.trebleDb) }
             )
             AuraSliderRow(
                 label = "Medios",
                 valueText = db(tone.midDb),
                 value = tone.midDb,
                 valueRange = -12f..12f,
-                onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) },
-                enabled = powered
+                onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) }
             )
             AuraSliderRow(
                 label = "Agudos",
                 valueText = db(tone.trebleDb),
                 value = tone.trebleDb,
                 valueRange = -12f..12f,
-                onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) },
-                enabled = powered
+                onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) }
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
@@ -147,24 +176,51 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(text = "Frecuencias de cruce")
+            SectionTitle(
+                text = "Frecuencias de cruce",
+                trailing = "${tone.bassFrequencyHz.toInt()} Hz | ${kilo(tone.trebleFrequencyHz)}"
+            )
             Spacer(modifier = Modifier.height(6.dp))
             AuraSliderRow(
                 label = "Graves / medios",
                 valueText = "${tone.bassFrequencyHz.toInt()} Hz",
                 value = tone.bassFrequencyHz,
                 valueRange = 40f..400f,
-                onValueChange = { viewModel.setToneFrequencies(it, tone.trebleFrequencyHz) },
-                enabled = powered
+                onValueChange = { viewModel.setToneFrequencies(it, tone.trebleFrequencyHz) }
             )
             AuraSliderRow(
                 label = "Medios / agudos",
                 valueText = kilo(tone.trebleFrequencyHz),
                 value = tone.trebleFrequencyHz,
                 valueRange = 2000f..16000f,
-                onValueChange = { viewModel.setToneFrequencies(tone.bassFrequencyHz, it) },
-                enabled = powered
+                onValueChange = { viewModel.setToneFrequencies(tone.bassFrequencyHz, it) }
             )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Presets rápidos de cruce
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SelectableChip(
+                    text = "Sub 80 / 4k",
+                    selected = tone.bassFrequencyHz == 80f && tone.trebleFrequencyHz == 4000f,
+                    onClick = { viewModel.setToneFrequencies(80f, 4000f) }
+                )
+                SelectableChip(
+                    text = "Estudio 120 / 6k",
+                    selected = tone.bassFrequencyHz == 120f && tone.trebleFrequencyHz == 6000f,
+                    onClick = { viewModel.setToneFrequencies(120f, 6000f) }
+                )
+                SelectableChip(
+                    text = "Voz 220 / 8k",
+                    selected = tone.bassFrequencyHz == 220f && tone.trebleFrequencyHz == 8000f,
+                    onClick = { viewModel.setToneFrequencies(220f, 8000f) }
+                )
+            }
+
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Cuerpo de voces y caja en 200–400 Hz · presencia en 2,5–5 kHz · aire por encima de 10 kHz",
@@ -191,8 +247,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                         state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
                         state.stereo.balance < -1f -> "I ${(-state.stereo.balance).toInt()}%"
                         else -> "Centro"
-                    },
-                    enabled = powered
+                    }
                 )
                 AuraKnob(
                     value = state.stereo.expansion,
@@ -200,8 +255,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                     valueRange = 1f..2f,
                     diameter = 92.dp,
                     label = "Anchura",
-                    valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
-                    enabled = powered
+                    valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%"
                 )
                 AuraKnob(
                     value = state.volume.percent,
@@ -216,8 +270,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
+            horizontalArrangement = Arrangement.End
         ) {
             SelectableChip(
                 text = "Restablecer controles",
@@ -230,12 +283,13 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
     }
 }
 
-/** Vista previa tipo osciloscopio de cristal de las tres regiones del control de tono. */
 @Composable
 private fun ToneCurve(
     bassDb: Float,
     midDb: Float,
     trebleDb: Float,
+    subDb: Float = 0f,
+    subCutoffHz: Float = 60f,
     bassHz: Float,
     trebleHz: Float,
     maxDb: Float = 12f
@@ -247,7 +301,7 @@ private fun ToneCurve(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(90.dp)
+            .height(105.dp)
             .clip(shape)
             .background(
                 Brush.verticalGradient(
@@ -275,25 +329,79 @@ private fun ToneCurve(
 
                 val xBass = xOf(bassHz)
                 val xTreble = xOf(trebleHz)
+                val xSub = xOf(subCutoffHz)
+
+                val midCenter = kotlin.math.sqrt(bassHz * trebleHz)
+                fun responseAt(f: Float): Float {
+                    val lfRatio = f / bassHz
+                    val bassResp = bassDb / (1f + lfRatio * lfRatio)
+                    val subRatio = f / subCutoffHz.coerceAtLeast(20f)
+                    val subResp = subDb / (1f + subRatio * subRatio)
+                    val hfRatio = trebleHz / f.coerceAtLeast(20f)
+                    val trebleResp = trebleDb / (1f + hfRatio * hfRatio)
+                    val logDist = kotlin.math.log10(f / midCenter)
+                    val midResp = midDb / (1f + logDist * logDist * 16f)
+                    return bassResp + subResp + midResp + trebleResp
+                }
+
+                val numPoints = 60
                 val path = Path().apply {
-                    moveTo(0f, yOf(bassDb))
-                    lineTo(xBass, yOf(bassDb))
-                    lineTo(xBass, yOf(midDb))
-                    lineTo(xTreble, yOf(midDb))
-                    lineTo(xTreble, yOf(trebleDb))
-                    lineTo(size.width, yOf(trebleDb))
+                    val f0 = minF
+                    moveTo(0f, yOf(responseAt(f0)))
+                    for (i in 1..numPoints) {
+                        val f = minF * kotlin.math.pow(maxF / minF, i.toFloat() / numPoints)
+                        lineTo(xOf(f), yOf(responseAt(f)))
+                    }
+                }
+
+                val fillPath = Path().apply {
+                    addPath(path)
+                    lineTo(size.width, centerY)
+                    lineTo(0f, centerY)
+                    close()
                 }
 
                 val dashEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
+                val subDashEffect = PathEffect.dashPathEffect(floatArrayOf(3f, 3f))
                 val glowStroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
                 val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
                 val gridStroke = 1.dp.toPx()
-                val nodeRadius = 2.dp.toPx()
-                val bassNode = Offset(xBass, yOf(bassDb))
-                val trebleNode = Offset(xTreble, yOf(trebleDb))
+                val dividerStroke = 1.5.dp.toPx()
+                val nodeRadius = 3.dp.toPx()
+                val bassNode = Offset(xBass, yOf(responseAt(bassHz)))
+                val trebleNode = Offset(xTreble, yOf(responseAt(trebleHz)))
 
                 onDrawBehind {
-                    // Línea central punteada de 0 dB
+                    // 1. Zonas espectrales sombreadas (Graves, Medios, Agudos)
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            listOf(Color(0x1A34D399), Color(0x0534D399)),
+                            startX = 0f,
+                            endX = xBass
+                        ),
+                        topLeft = Offset(0f, 0f),
+                        size = Size(xBass, size.height)
+                    )
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            listOf(Color(0x05FFFFFF), Color(0x0AFFFFFF), Color(0x05FFFFFF)),
+                            startX = xBass,
+                            endX = xTreble
+                        ),
+                        topLeft = Offset(xBass, 0f),
+                        size = Size(xTreble - xBass, size.height)
+                    )
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            listOf(Color(0x05A78BFA), Color(0x18A78BFA)),
+                            startX = xTreble,
+                            endX = size.width
+                        ),
+                        topLeft = Offset(xTreble, 0f),
+                        size = Size(size.width - xTreble, size.height)
+                    )
+
+                    // 2. Línea central punteada de 0 dB
                     drawLine(
                         color = colors.textSecondary.copy(alpha = 0.16f),
                         start = Offset(0f, centerY),
@@ -302,37 +410,61 @@ private fun ToneCurve(
                         pathEffect = dashEffect
                     )
 
-                    // Líneas divisorias de frecuencias de cruce
+                    // 3. Corte sub-bajo
+                    if (subCutoffHz > 20f) {
+                        drawLine(
+                            color = Color(0x80F59E0B),
+                            start = Offset(xSub, 0f),
+                            end = Offset(xSub, size.height),
+                            strokeWidth = gridStroke,
+                            pathEffect = subDashEffect
+                        )
+                    }
+
+                    // 4. Líneas divisorias de frecuencias de cruce resaltadas
                     drawLine(
-                        color = colors.textSecondary.copy(alpha = 0.10f),
+                        color = accent.copy(alpha = 0.85f),
                         start = Offset(xBass, 0f),
                         end = Offset(xBass, size.height),
-                        strokeWidth = gridStroke
+                        strokeWidth = dividerStroke
                     )
                     drawLine(
-                        color = colors.textSecondary.copy(alpha = 0.10f),
+                        color = Color(0xD0A78BFA),
                         start = Offset(xTreble, 0f),
                         end = Offset(xTreble, size.height),
-                        strokeWidth = gridStroke
+                        strokeWidth = dividerStroke
                     )
 
-                    // Resplandor neón exterior
+                    // 5. Relleno bajo la curva
+                    drawPath(
+                        path = fillPath,
+                        brush = Brush.verticalGradient(
+                            listOf(accent.copy(alpha = 0.20f), accent.copy(alpha = 0.02f)),
+                            startY = 0f,
+                            endY = size.height
+                        )
+                    )
+
+                    // 6. Resplandor neón exterior
                     drawPath(
                         path = path,
-                        color = accent.copy(alpha = 0.3f),
+                        color = accent.copy(alpha = 0.35f),
                         style = glowStroke
                     )
 
-                    // Trazo nítido de tono
+                    // 7. Trazo nítido de tono
                     drawPath(
                         path = path,
                         color = accent,
                         style = lineStroke
                     )
 
-                    // Puntos nodales
-                    drawCircle(color = accent, radius = nodeRadius, center = bassNode)
-                    drawCircle(color = accent, radius = nodeRadius, center = trebleNode)
+                    // 8. Puntos nodales en las frecuencias de cruce
+                    drawCircle(color = Color.White, radius = nodeRadius, center = bassNode)
+                    drawCircle(color = accent, radius = nodeRadius + 1.5f, center = bassNode, style = Stroke(1.5f))
+
+                    drawCircle(color = Color.White, radius = nodeRadius, center = trebleNode)
+                    drawCircle(color = Color(0xFFA78BFA), radius = nodeRadius + 1.5f, center = trebleNode, style = Stroke(1.5f))
                 }
             }
     )

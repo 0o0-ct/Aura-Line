@@ -405,14 +405,14 @@ object AuraLineEngine {
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            // El PreEq lleva la curva de bandas más el sub-bajo; Graves/Medios/Agudos viajan en
-            // el MBC con sus propios cruces configurables (ver compressorBand), sin duplicar filtros.
+            // El PreEq aplica directamente bandas, tono y sub-bajo. Esto garantiza que
+            // los cruces de frecuencia y los ajustes de tono sean audibles de inmediato.
+            val tone = toneOffset(state, centers[band])
+            val sub = subBoostAt(state, centers[band])
             val gain = if (eqActive) {
-                (bandGains[band] + subBoostAt(state, centers[band]))
-                    .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+                (bandGains[band] + tone + sub).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
             } else {
-                // Con el módulo EQ apagado, el control de tono sigue actuando como estanterías.
-                toneOffset(state, centers[band]) + subBoostAt(state, centers[band])
+                (tone + sub).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
             }
             dp.setPreEqBandAllChannelsTo(
                 band,

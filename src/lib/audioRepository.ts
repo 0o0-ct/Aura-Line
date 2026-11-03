@@ -474,8 +474,12 @@ export class AudioRepository {
     const newTone: ToneControls = {
       ...current.tone,
       subCutoffHz: profile.subCutoffHz,
-      bassDb: clampToneDb(current.tone.bassDb * bassScale, profile.toneBoostMarginDb),
-      subDb: clampToneDb(current.tone.subDb * bassScale, profile.toneBoostMarginDb),
+      bassFrequencyHz: profile.bassFrequencyHz ?? current.tone.bassFrequencyHz,
+      trebleFrequencyHz: profile.trebleFrequencyHz ?? current.tone.trebleFrequencyHz,
+      bassDb: profile.defaultTone?.bassDb ?? clampToneDb(current.tone.bassDb * bassScale, profile.toneBoostMarginDb),
+      subDb: profile.defaultTone?.subDb ?? clampToneDb(current.tone.subDb * bassScale, profile.toneBoostMarginDb),
+      midDb: profile.defaultTone?.midDb ?? current.tone.midDb,
+      trebleDb: profile.defaultTone?.trebleDb ?? current.tone.trebleDb,
     };
 
     this.state = {

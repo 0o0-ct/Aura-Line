@@ -9,7 +9,7 @@ import { ToneCurve } from "./ToneCurve";
 import { AudioRepository } from "@/src/lib/audioRepository";
 import { AppSettings, EqualizerState } from "@/src/lib/types";
 import { UsageProfiles, formatGain } from "@/src/lib/constants";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Volume2, Headphones, Radio, Speaker, Tv } from "lucide-react";
 
 interface ToneScreenProps {
   repo: AudioRepository;
@@ -27,7 +27,7 @@ export function ToneScreen({
   const tone = state.tone;
   const powered = state.motorEnabled;
   const boostMax = Math.min(24, Math.max(12, state.toneBoostMarginDb));
-  const activeProfile = UsageProfiles.find((p) => p.key === settings.usageProfile);
+  const activeProfile = UsageProfiles.find((p) => p.key === settings.usageProfile) || UsageProfiles[0];
 
   const formatKilo = (hz: number) => {
     return hz % 1000 === 0 ? `${hz / 1000} kHz` : `${(hz / 1000).toFixed(1)} kHz`;
@@ -39,13 +39,82 @@ export function ToneScreen({
     return "Centro";
   };
 
+  const profileIcon = (key: string) => {
+    switch (key) {
+      case "mobile":
+        return <Volume2 className="w-3.5 h-3.5" />;
+      case "wired":
+        return <Headphones className="w-3.5 h-3.5" />;
+      case "bluetooth":
+        return <Radio className="w-3.5 h-3.5" />;
+      case "external":
+        return <Speaker className="w-3.5 h-3.5" />;
+      case "surround":
+        return <Tv className="w-3.5 h-3.5" />;
+      default:
+        return <Volume2 className="w-3.5 h-3.5" />;
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 pb-28">
+      {/* Device Usage Profile Selector Card */}
+      <AuraCard>
+        <SectionTitle
+          text="Perfil de salida acústica"
+          trailing={activeProfile.name}
+          className="mb-1"
+        />
+        <p className="text-xs text-[#8E9BAE] mb-3">
+          Configura automáticamente los cruces de frecuencia, límites de sub-bajo y márgenes según tu dispositivo de audio.
+        </p>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+          {UsageProfiles.map((profile) => {
+            const isSelected = settings.usageProfile === profile.key;
+            return (
+              <button
+                key={profile.key}
+                type="button"
+                onClick={() => repo.applyUsageProfile(profile.key)}
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-tight transition-all duration-200 border shadow-sm select-none shrink-0 ${
+                  isSelected
+                    ? "border-white/30 text-[#07090E] shadow-md scale-[1.02]"
+                    : "bg-white/[0.04] text-[#8E9BAE] border-white/[0.08] hover:bg-white/[0.08] hover:text-white"
+                }`}
+                style={
+                  isSelected
+                    ? { backgroundColor: accentColor, color: "#07090E" }
+                    : undefined
+                }
+              >
+                {profileIcon(profile.key)}
+                <span>{profile.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeProfile.description && (
+          <div className="mt-2.5 p-2 rounded-xl bg-white/[0.03] border border-white/5 flex items-center justify-between text-xs">
+            <span className="text-[#A0AFC2] text-[11px] leading-relaxed">
+              {activeProfile.description}
+            </span>
+            <span
+              className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-white/5 border border-white/10 shrink-0 ml-2"
+              style={{ color: accentColor }}
+            >
+              Corte {activeProfile.subCutoffHz} Hz · Cruces {activeProfile.bassFrequencyHz ?? 100}/{activeProfile.trebleFrequencyHz ? formatKilo(activeProfile.trebleFrequencyHz) : "8k"}
+            </span>
+          </div>
+        )}
+      </AuraCard>
+
       {/* 4-Region Tone Shaping Card */}
       <AuraCard>
         <SectionTitle
-          text="Tono"
-          trailing={`graves ${Math.round(tone.bassFrequencyHz)} · agudos ${formatKilo(tone.trebleFrequencyHz)}`}
+          text="Curva espectral de tono"
+          trailing={`Graves <${Math.round(tone.bassFrequencyHz)} Hz · Agudos >${formatKilo(tone.trebleFrequencyHz)}`}
         />
 
         <div className="mt-2 mb-3">
@@ -53,11 +122,13 @@ export function ToneScreen({
             bassDb={tone.bassDb}
             midDb={tone.midDb}
             trebleDb={tone.trebleDb}
+            subDb={tone.subDb}
+            subCutoffHz={tone.subCutoffHz}
             bassHz={tone.bassFrequencyHz}
             trebleHz={tone.trebleFrequencyHz}
             maxDb={boostMax}
             accentColor={accentColor}
-            height={92}
+            height={115}
           />
         </div>
 
@@ -67,17 +138,15 @@ export function ToneScreen({
           value={tone.subDb}
           valueRange={[-boostMax, boostMax]}
           onValueChange={(val) => repo.setSubBass(val)}
-          enabled={powered}
           accentColor={accentColor}
         />
 
         <AuraSliderRow
-          label="Corte del sub-bajo"
+          label="Filtro de corte del sub-bajo"
           valueText={`${Math.round(tone.subCutoffHz)} Hz`}
           value={tone.subCutoffHz}
           valueRange={[20, 100]}
           onValueChange={(val) => repo.setSubCutoff(val)}
-          enabled={powered}
           accentColor={accentColor}
         />
 
@@ -93,7 +162,6 @@ export function ToneScreen({
           value={tone.bassDb}
           valueRange={[-boostMax, boostMax]}
           onValueChange={(val) => repo.setTone(val, tone.midDb, tone.trebleDb)}
-          enabled={powered}
           accentColor={accentColor}
         />
 
@@ -103,7 +171,6 @@ export function ToneScreen({
           value={tone.midDb}
           valueRange={[-12, 12]}
           onValueChange={(val) => repo.setTone(tone.bassDb, val, tone.trebleDb)}
-          enabled={powered}
           accentColor={accentColor}
         />
 
@@ -113,38 +180,75 @@ export function ToneScreen({
           value={tone.trebleDb}
           valueRange={[-12, 12]}
           onValueChange={(val) => repo.setTone(tone.bassDb, tone.midDb, val)}
-          enabled={powered}
           accentColor={accentColor}
         />
 
-        <p className="text-[11px] text-[#8E9BAE] mt-2">
-          Graves hasta {Math.round(tone.bassFrequencyHz)} Hz · medios hasta{" "}
-          {formatKilo(tone.trebleFrequencyHz)}
-        </p>
+        {!powered && (
+          <p className="text-[11px] text-amber-400/90 mt-1">
+            Motor inactivo: activa el motor en la barra superior para procesar la salida en vivo.
+          </p>
+        )}
       </AuraCard>
 
       {/* Crossover Frequencies Card */}
       <AuraCard>
-        <SectionTitle text="Frecuencias de cruce" />
+        <SectionTitle
+          text="Frecuencias de cruce (Crossovers)"
+          trailing={`${Math.round(tone.bassFrequencyHz)} Hz | ${formatKilo(tone.trebleFrequencyHz)}`}
+        />
+        <p className="text-xs text-[#8E9BAE] mb-3">
+          Define con precisión analógica los puntos de separación espectral entre Graves, Medios y Agudos. Al mover los deslizadores, la frontera se desplaza en tiempo real sobre la curva.
+        </p>
+
         <AuraSliderRow
-          label="Graves / medios"
+          label="Cruce Graves / Medios"
           valueText={`${Math.round(tone.bassFrequencyHz)} Hz`}
           value={tone.bassFrequencyHz}
           valueRange={[40, 400]}
+          step={5}
           onValueChange={(val) => repo.setToneFrequencies(val, tone.trebleFrequencyHz)}
-          enabled={powered}
           accentColor={accentColor}
         />
+
         <AuraSliderRow
-          label="Medios / agudos"
+          label="Cruce Medios / Agudos"
           valueText={formatKilo(tone.trebleFrequencyHz)}
           value={tone.trebleFrequencyHz}
           valueRange={[2000, 16000]}
+          step={100}
           onValueChange={(val) => repo.setToneFrequencies(tone.bassFrequencyHz, val)}
-          enabled={powered}
           accentColor={accentColor}
         />
-        <p className="text-[11px] text-[#8E9BAE] mt-1">
+
+        {/* Quick Crossover presets */}
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/5 overflow-x-auto pb-1 scrollbar-none">
+          <span className="text-[10px] text-[#8E9BAE] font-medium uppercase tracking-wider shrink-0 mr-1">
+            Cruces rápidos:
+          </span>
+          <button
+            type="button"
+            onClick={() => repo.setToneFrequencies(80, 4000)}
+            className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 whitespace-nowrap"
+          >
+            Sub 80 / 4k
+          </button>
+          <button
+            type="button"
+            onClick={() => repo.setToneFrequencies(120, 6000)}
+            className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 whitespace-nowrap"
+          >
+            Estudio 120 / 6k
+          </button>
+          <button
+            type="button"
+            onClick={() => repo.setToneFrequencies(220, 8000)}
+            className="px-2.5 py-1 rounded-md text-[11px] font-mono bg-white/5 hover:bg-white/10 text-white/80 border border-white/10 whitespace-nowrap"
+          >
+            Voz 220 / 8k
+          </button>
+        </div>
+
+        <p className="text-[11px] text-[#8E9BAE] mt-2">
           Cuerpo de voces y caja en 200–400 Hz · presencia en 2,5–5 kHz · aire por encima de 10 kHz
         </p>
       </AuraCard>
@@ -158,7 +262,6 @@ export function ToneScreen({
           value={state.stereo.balance}
           valueRange={[-100, 100]}
           onValueChange={(val) => repo.setBalance(val)}
-          enabled={powered}
           accentColor={accentColor}
         />
         <AuraSliderRow
@@ -168,7 +271,6 @@ export function ToneScreen({
           valueRange={[1.0, 2.0]}
           step={0.05}
           onValueChange={(val) => repo.setExpansion(val)}
-          enabled={powered}
           accentColor={accentColor}
         />
         <AuraSliderRow
