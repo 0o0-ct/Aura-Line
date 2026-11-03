@@ -168,7 +168,6 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle(
                     text = "Preajustes",
-                    trailing = "según tablas",
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(
