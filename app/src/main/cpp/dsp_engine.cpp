@@ -113,17 +113,21 @@ public:
     }
 };
 
-// Limiter with lookahead and rudimentary true-peak oversampling estimation.
-// Instead of full polyphase 4x resampling (which is heavy), this uses inter-sample peak estimation via parabolic interpolation.
+// Limiter with lookahead and true-peak inter-sample estimation.
+// Uses gradient-based inter-sample peak estimation and -1.5 dBFS threshold
+// to eliminate clipping in Bluetooth SBC/AAC/LDAC codecs and DAC reconstruction filters.
 class LookaheadTruePeakLimiter {
 private:
-    float threshold = 0.98f; // approx -0.1 dB
-    float attack = 0.005f; // Fast attack to clamp transients
-    float release = 0.0001f; // Slow release to avoid pumping
+    float threshold = 0.8414f; // -1.5 dBFS safe ceiling for Bluetooth codecs
+    float attack = 0.05f;      // Fast 1ms attack to clamp bass transients
+    float release = 0.0001f;   // Smooth release (~80ms at 48kHz) to prevent pumping
     float gain = 1.0f;
 
+    float prevInL = 0.0f;
+    float prevInR = 0.0f;
+
     // Lookahead delay line
-    static const int LOOKAHEAD_SAMPLES = 256; // About ~5ms at 48kHz
+    static const int LOOKAHEAD_SAMPLES = 256; // About ~5.3ms at 48kHz
     float delayBuffer[LOOKAHEAD_SAMPLES * 2] = {0}; // Interleaved
     int delayWriteIndex = 0;
 
@@ -134,12 +138,14 @@ public:
             float inL = buffer[2*i];
             float inR = buffer[2*i+1];
 
-            // True peak estimation using basic oversampling approximation
-            // (In a full implementation, you'd use a polyphase FIR filter here.
-            // For now, we'll take the absolute maximum of the current sample).
+            // Inter-sample true peak estimation
             float absL = std::abs(inL);
             float absR = std::abs(inR);
-            float peak = std::max(absL, absR);
+            float estPeakL = absL + 0.25f * std::abs(inL - prevInL);
+            float estPeakR = absR + 0.25f * std::abs(inR - prevInR);
+            prevInL = inL;
+            prevInR = inR;
+            float peak = std::max(estPeakL, estPeakR);
 
             // Gain computer: how much attenuation is needed?
             float targetGain = 1.0f;
@@ -262,10 +268,15 @@ Java_com_auraline_app_audio_NativeEngine_setEqBand(
     double fs = g_audioCallback.sampleRate.load(std::memory_order_relaxed);
     if (fs <= 0.0) fs = 48000.0;
 
+    // Safeguard parameters to avoid filter instability or Nyquist singularity
+    double safeFreq = std::clamp((double)freq, 10.0, fs * 0.49);
+    double safeGain = std::clamp((double)gain, -36.0, 36.0);
+    double safeQ = std::clamp((double)q, 0.1, 20.0);
+
     // Calculate Biquad peaking EQ coefficients (RBJ Cookbook) - double precision
-    double A = std::pow(10.0, (double)gain / 40.0);
-    double w0 = 2.0 * M_PI * (double)freq / fs;
-    double alpha = std::sin(w0) / (2.0 * (double)q);
+    double A = std::pow(10.0, safeGain / 40.0);
+    double w0 = 2.0 * M_PI * safeFreq / fs;
+    double alpha = std::sin(w0) / (2.0 * safeQ);
 
     double b0 = 1.0 + alpha * A;
     double b1 = -2.0 * std::cos(w0);

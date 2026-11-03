@@ -96,7 +96,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             centers.firstOrNull { center -> bandRoleFor(center)?.owner?.key == role.owner.key }
         }
     }
-    val range = state.gainRangeDb.coerceIn(6f, 24f)
+    val range = state.gainRangeDb.coerceIn(6f, 36f)
     val spectrum by com.auraline.core.audio.AuraLineSpectrum.levels.collectAsState()
     val scope = rememberCoroutineScope()
     val selectedFactory = FactoryPresets.firstOrNull { it.name == state.presetName }
@@ -225,7 +225,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     onClick = { windowSize = 2 }
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                listOf(6f, 12f, 24f).forEach { value ->
+                listOf(6f, 12f, 24f, 30f, 36f).forEach { value ->
                     SelectableChip(
                         text = "±${value.toInt()}",
                         selected = range.toInt() == value.toInt(),

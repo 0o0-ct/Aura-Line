@@ -1,0 +1,8 @@
+{
+  "name": "AuraLine",
+  "description": "Global audio equalizer and sound shaping studio with Apple Neumorphism & Glassmorphism design, 20–25 parametric bands, 4-region tone shaping, DSP effects chain (multiband compressor, reverb, noise gate, limiter, stereo expander), acoustic engine check, and 30 monochrome palettes.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
