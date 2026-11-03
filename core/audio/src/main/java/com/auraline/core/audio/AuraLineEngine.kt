@@ -98,12 +98,16 @@ object AuraLineEngine {
         desired = state
         if (!scheduled.compareAndSet(false, true)) return
         executor.execute {
-            scheduled.set(false)
+            val stateToApply = desired
             try {
-                if (state.motorEnabled) applyEngine(state) else releaseChain()
+                if (stateToApply.motorEnabled) applyEngine(stateToApply) else releaseChain()
             } catch (error: Throwable) {
                 lastError = error.message ?: error.javaClass.simpleName
                 Log.e(TAG, "No se pudo aplicar el estado: ${error.message}")
+            }
+            scheduled.set(false)
+            if (desired != stateToApply) {
+                setState(desired)
             }
             publish()
         }
@@ -323,15 +327,14 @@ object AuraLineEngine {
      * El MBC no debe comprimir ni expandir cuando los módulos están apagados: se configura en
      * ratio 1:1 con umbral/gate fuera de rango para que la banda quede pasante y el audio de
      * esa etapa sea idéntico a la entrada (bypass real). Con ratios bajos y umbrales altos el
-     * propio MBC actúa como ganancia fija por región — así Graves/Medios/Agudos se suman sin
-     * duplicar filtros y sin depender sólo de la rejilla del PreEq.
+     * propio MBC queda pasante cuando corresponde; Graves/Medios/Agudos se aplican directamente
+     * en el PreEq para que la respuesta sea consistente entre dispositivos.
      */
     private fun compressorBand(cutoffHz: Float, state: EqualizerState, bandIndex: Int): DynamicsProcessing.MbcBand {
         val compressor = state.compressor
         val gate = state.gate
         val compressing = state.effectsEnabled && state.modules.compressor && !state.bypass
         val gateActive = state.effectsEnabled && state.modules.gate && !state.bypass
-        val regionGain = if (state.bypass) 0f else toneRegionDb(state, bandIndex)
         return DynamicsProcessing.MbcBand(
             true,
             cutoffHz,
@@ -342,17 +345,10 @@ object AuraLineEngine {
             if (compressing) 6f else 0f,
             if (gateActive) gate.thresholdDb.coerceIn(-80f, -20f) else -80f,
             if (gateActive) gate.ratio.coerceIn(1f, 10f) else 1f,
-            (if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f) + regionGain,
+            if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f,
             0f
         )
     }
-
-    /** Ganancia de tono (Graves/Medios/Agudos) que corresponde a cada banda del MBC. */
-    private fun toneRegionDb(state: EqualizerState, bandIndex: Int): Float = when (bandIndex) {
-        0 -> state.tone.bassDb
-        1 -> state.tone.midDb
-        else -> state.tone.trebleDb
-    }.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
 
     private fun applyToDynamicsProcessing(dp: DynamicsProcessing, state: EqualizerState) {
         val bandCount = state.numBands.coerceIn(20, 25)
@@ -362,16 +358,14 @@ object AuraLineEngine {
         val centers = bandCenters(frequencies)
 
         // Headroom real: suma precisa de la ganancia máxima de la curva (bandas + sub-bajo),
-        // el realce por región del MBC, la compensación de volumen y la energía de la reverb.
+        // el realce del compresor y la energía de la reverb.
+        val effectsActive = state.effectsEnabled && !state.bypass
         val peakBand = (0 until bandCount).maxOfOrNull { band ->
             appliedBandGain(state, bandGains[band], centers[band]).coerceAtLeast(0f)
         } ?: 0f
-        val mbcPeak = if (state.bypass) 0f
-        else (0 until MBC_BANDS).maxOf { toneRegionDb(state, it).coerceAtLeast(0f) }
-        val effectsActive = state.effectsEnabled && !state.bypass
-        val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
+        val mbcPeak = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) / 2f else 0f
         val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
-        val totalBoost = peakBand + mbcPeak + makeup + reverbEnergy
+        val totalBoost = peakBand + mbcPeak + reverbEnergy
 
         val isBluetooth = _status.value.route == AudioRoute.BLUETOOTH
         // En Bluetooth A2DP/LE Audio, los códecs (SBC/AAC/LDAC) recortan estrictamente a 0 dBFS
@@ -405,10 +399,10 @@ object AuraLineEngine {
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            // El PreEq lleva la curva de bandas más el sub-bajo; Graves/Medios/Agudos viajan en
-            // el MBC con sus propios cruces configurables (ver compressorBand), sin duplicar filtros.
+            // El PreEq aplica directamente bandas, tono y sub-bajo. Esto evita depender del
+            // makeup gain del MBC para que Graves/Medios/Agudos sean audibles en cada dispositivo.
             val gain = if (eqActive) {
-                (bandGains[band] + subBoostAt(state, centers[band]))
+                (bandGains[band] + toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
                     .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
             } else {
                 // Con el módulo EQ apagado, el control de tono sigue actuando como estanterías.
