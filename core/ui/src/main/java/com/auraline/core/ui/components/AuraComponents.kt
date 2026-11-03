@@ -195,11 +195,11 @@ val LocalHapticsEnabled = androidx.compose.runtime.staticCompositionLocalOf { tr
 
 @Composable
 fun hapticFeedback(): () -> Unit {
-    val enabled = LocalHapticsEnabled.current
+    val enabledState = rememberUpdatedState(LocalHapticsEnabled.current)
     val context = LocalContext.current
     val feedback = LocalHapticFeedback.current
     return {
-        if (enabled) {
+        if (enabledState.value) {
             runCatching {
                 val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                     context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
