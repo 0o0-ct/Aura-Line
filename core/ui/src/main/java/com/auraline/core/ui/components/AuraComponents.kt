@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -195,9 +196,33 @@ val LocalHapticsEnabled = androidx.compose.runtime.staticCompositionLocalOf { tr
 @Composable
 fun hapticFeedback(): () -> Unit {
     val enabled = LocalHapticsEnabled.current
+    val context = LocalContext.current
     val feedback = LocalHapticFeedback.current
     return {
-        if (enabled) feedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (enabled) {
+            runCatching {
+                val vibrator = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    context.getSystemService(android.os.VibratorManager::class.java)?.defaultVibrator
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                }
+                if (vibrator != null && vibrator.hasVibrator()) {
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        vibrator.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK))
+                    } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        vibrator.vibrate(android.os.VibrationEffect.createOneShot(15, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        vibrator.vibrate(15)
+                    }
+                } else {
+                    feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            }.onFailure {
+                feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
+        }
     }
 }
 
