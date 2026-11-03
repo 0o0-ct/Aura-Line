@@ -110,6 +110,7 @@ fun AuraChip(
     modifier: Modifier = Modifier
 ) {
     val colors = AuraTheme.colors
+    val haptic = hapticFeedback()
     val selected = state == AuraChipState.Selected || state == AuraChipState.Preview
     val enabled = state != AuraChipState.Disabled
     val shape = RoundedCornerShape(999.dp)
@@ -129,7 +130,10 @@ fun AuraChip(
                 if (selected) colors.accent.copy(alpha = 0.75f) else colors.outline.copy(alpha = 0.45f),
                 shape
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, onClick = {
+                haptic()
+                onClick()
+            })
             .semantics {
                 role = Role.Button
                 stateDescription = when (state) {
