@@ -406,9 +406,14 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         saveSettings(_settings.value.copy(gainRangeDb = range))
         val current = _state.value
         val bands = current.bands.ifEmpty { generateEqualizerBands(current.numBands) }
-        val delta = range - current.bandGlobalGainDb
+        val previousRange = current.gainRangeDb.coerceIn(6f, 36f)
+        val legacyOffset = current.bandGlobalGainDb
+            .takeIf { it in 6f..36f && bands.count { kotlin.math.abs(it.gainDb) >= 0.05f } > bands.size * 0.8f }
+            ?: 0f
+        val scale = range / previousRange
         val adjusted = bands.map { band ->
-            band.copy(gainDb = (band.gainDb + delta).coerceIn(-36f, 36f))
+            val baseGain = (band.gainDb - legacyOffset).takeIf { kotlin.math.abs(it) >= 0.05f } ?: 0f
+            band.copy(gainDb = (baseGain * scale).coerceIn(-range, range))
         }
         saveState(current.copy(gainRangeDb = range, bands = adjusted, bandGlobalGainDb = range))
     }
@@ -421,16 +426,17 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val gains = FloatArray(bands.size)
 
         val limit = current.gainRangeDb.coerceIn(6f, 36f)
+        val scale = limit / 12f
         preset.gains.forEach { (frequency, gain) ->
             val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
-            // Conserva los dB nativos y suma la ganancia global elegida en Bandas.
-            val scaled = (gain * PRESET_GAIN_SCALE + current.bandGlobalGainDb)
+            // Solo las bandas de la tabla reciben el escalado; las demás permanecen planas.
+            val scaled = (gain * scale)
                 .coerceIn(-limit, limit)
             gains[index] = (gains[index] + scaled).coerceIn(-limit, limit)
         }
 
         val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
-        saveState(current.copy(bands = tuned, presetName = preset.name))
+        saveState(current.copy(bands = tuned, presetName = preset.name, bandGlobalGainDb = 0f))
         return true
     }
 
@@ -458,7 +464,8 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         // cualquier perfil de uso (incluido el modo 5.1 con rango ±6 dB) se duplica
         // como mínimo, y se amplifica según el rango disponible del perfil activo.
         val profileScale = (current.gainRangeDb / 6f).coerceAtLeast(1f)
-        val effectiveScale = (scale * profileScale * 2f).coerceAtLeast(2f)
+        val rangeScale = current.gainRangeDb.coerceIn(6f, 36f) / 12f
+        val effectiveScale = (scale * profileScale * rangeScale * 2f).coerceAtLeast(1f)
 
         val primary = steps.first()
         val alreadyApplied = gains[primary.first] - current.bandGlobalGainDb >=
@@ -826,8 +833,6 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     private companion object {
         const val PROBE_DURATION = 2.2
 
-        /** Los preajustes de las tablas son de mezcla; aquí se aplican más marcados. */
-        const val PRESET_GAIN_SCALE = 1.8f
     }
 
 
