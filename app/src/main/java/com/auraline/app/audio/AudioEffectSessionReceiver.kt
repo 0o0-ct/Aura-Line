@@ -8,8 +8,7 @@ import com.auraline.core.audio.AuraLineEngine
 
 /**
  * Los reproductores que lo soportan anuncian su sesión con estos broadcasts; el motor se
- * engancha a ella para procesar su salida. Es el camino oficial de Android para efectos
- * de terceros sobre audio ajeno.
+ * engancha a ella para procesar su salida y detectar el paquete activo (EXTRA_PACKAGE_NAME).
  */
 class AudioEffectSessionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {

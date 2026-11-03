@@ -152,7 +152,7 @@ class DspMathTest {
             gainAbove = 10.0f.pow(-dbRed / 20.0f)
         }
         val outDb = 20.0f * log10(inAboveThresh * gainAbove)
-        assertEquals("Con ratio 4:1 y 20 dB sobre umbral, la salida debe ser exactamente -5 dBFS (-20 + 20/4)", -5.0f, outDb, 0.05f)
+        assertEquals("Con ratio 4:1 y 20 dB sobre umbral, la reducción debe ser de 15 dB", -15.0f, outDb, 0.05f)
     }
 
     @Test

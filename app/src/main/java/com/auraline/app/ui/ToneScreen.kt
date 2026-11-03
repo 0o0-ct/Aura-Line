@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -34,7 +35,10 @@ import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraDepth
+import com.auraline.core.ui.components.AuraKnob
 import com.auraline.core.ui.components.AuraSliderRow
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.controlAccent
@@ -58,11 +62,14 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 148.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             SectionTitle(
                 text = "Tono",
                 trailing = "graves ${tone.bassFrequencyHz.toInt()} · agudos ${kilo(tone.trebleFrequencyHz)}"
@@ -169,33 +176,42 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Imagen estéreo y volumen")
             Spacer(modifier = Modifier.height(6.dp))
-            AuraSliderRow(
-                label = "Balance",
-                valueText = when {
-                    state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
-                    state.stereo.balance < -1f -> "I ${(-state.stereo.balance).toInt()}%"
-                    else -> "Centro"
-                },
-                value = state.stereo.balance,
-                valueRange = -100f..100f,
-                onValueChange = { viewModel.setBalance(it) },
-                enabled = powered
-            )
-            AuraSliderRow(
-                label = "Anchura estéreo",
-                valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
-                value = state.stereo.expansion,
-                valueRange = 1f..2f,
-                onValueChange = { viewModel.setExpansion(it) },
-                enabled = powered
-            )
-            AuraSliderRow(
-                label = "Volumen multimedia",
-                valueText = "${state.volume.percent.toInt()}%",
-                value = state.volume.percent,
-                valueRange = 0f..100f,
-                onValueChange = { viewModel.setVolume(it) }
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.Top
+            ) {
+                AuraKnob(
+                    value = state.stereo.balance,
+                    onValueChange = { viewModel.setBalance(it) },
+                    valueRange = -100f..100f,
+                    diameter = 92.dp,
+                    label = "Balance",
+                    valueText = when {
+                        state.stereo.balance > 1f -> "D ${state.stereo.balance.toInt()}%"
+                        state.stereo.balance < -1f -> "I ${(-state.stereo.balance).toInt()}%"
+                        else -> "Centro"
+                    },
+                    enabled = powered
+                )
+                AuraKnob(
+                    value = state.stereo.expansion,
+                    onValueChange = { viewModel.setExpansion(it) },
+                    valueRange = 1f..2f,
+                    diameter = 92.dp,
+                    label = "Anchura",
+                    valueText = "${((state.stereo.expansion - 1f) * 100f).toInt()}%",
+                    enabled = powered
+                )
+                AuraKnob(
+                    value = state.volume.percent,
+                    onValueChange = { viewModel.setVolume(it) },
+                    valueRange = 0f..100f,
+                    diameter = 92.dp,
+                    label = "Volumen",
+                    valueText = "${state.volume.percent.toInt()}%"
+                )
+            }
         }
 
         Row(
@@ -209,6 +225,8 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 onClick = { viewModel.resetControls() }
             )
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
@@ -222,6 +240,7 @@ private fun ToneCurve(
     trebleHz: Float,
     maxDb: Float = 12f
 ) {
+    val colors = AuraTheme.colors
     val accent = controlAccent()
     val shape = RoundedCornerShape(16.dp)
 
@@ -232,82 +251,91 @@ private fun ToneCurve(
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF090D14), Color(0xFF0F1420))
+                    listOf(colors.background, colors.neumorphicCavity)
                 )
             )
             .border(
                 1.dp,
                 Brush.verticalGradient(
-                    listOf(Color(0x33FFFFFF), Color(0x0AFFFFFF))
+                    listOf(colors.textSecondary.copy(alpha = 0.20f), colors.textSecondary.copy(alpha = 0.04f))
                 ),
                 shape
             )
             .padding(horizontal = 8.dp, vertical = 6.dp)
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val minF = 20f
-            val maxF = 20000f
-            val span = log10(maxF / minF)
-            fun xOf(frequency: Float): Float =
-                ((log10(frequency.coerceIn(minF, maxF) / minF)) / span) * size.width
+            .drawWithCache {
+                val minF = 20f
+                val maxF = 20000f
+                val span = log10(maxF / minF)
+                fun xOf(frequency: Float): Float =
+                    ((log10(frequency.coerceIn(minF, maxF) / minF)) / span) * size.width
 
-            val centerY = size.height / 2f
-            val scale = size.height / 2.3f
-            fun yOf(db: Float) = centerY - (db / maxDb).coerceIn(-1f, 1f) * scale
+                val centerY = size.height / 2f
+                val scale = size.height / 2.3f
+                fun yOf(db: Float) = centerY - (db / maxDb).coerceIn(-1f, 1f) * scale
 
-            // Línea central punteada de 0 dB
-            drawLine(
-                color = Color(0x28FFFFFF),
-                start = Offset(0f, centerY),
-                end = Offset(size.width, centerY),
-                strokeWidth = 1.dp.toPx(),
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
-            )
+                val xBass = xOf(bassHz)
+                val xTreble = xOf(trebleHz)
+                val path = Path().apply {
+                    moveTo(0f, yOf(bassDb))
+                    lineTo(xBass, yOf(bassDb))
+                    lineTo(xBass, yOf(midDb))
+                    lineTo(xTreble, yOf(midDb))
+                    lineTo(xTreble, yOf(trebleDb))
+                    lineTo(size.width, yOf(trebleDb))
+                }
 
-            // Líneas divisorias de frecuencias de cruce
-            val xBass = xOf(bassHz)
-            val xTreble = xOf(trebleHz)
-            drawLine(
-                color = Color(0x18FFFFFF),
-                start = Offset(xBass, 0f),
-                end = Offset(xBass, size.height),
-                strokeWidth = 1.dp.toPx()
-            )
-            drawLine(
-                color = Color(0x18FFFFFF),
-                start = Offset(xTreble, 0f),
-                end = Offset(xTreble, size.height),
-                strokeWidth = 1.dp.toPx()
-            )
+                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
+                val glowStroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+                val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                val gridStroke = 1.dp.toPx()
+                val nodeRadius = 2.dp.toPx()
+                val bassNode = Offset(xBass, yOf(bassDb))
+                val trebleNode = Offset(xTreble, yOf(trebleDb))
 
-            val path = Path().apply {
-                moveTo(0f, yOf(bassDb))
-                lineTo(xBass, yOf(bassDb))
-                lineTo(xBass, yOf(midDb))
-                lineTo(xTreble, yOf(midDb))
-                lineTo(xTreble, yOf(trebleDb))
-                lineTo(size.width, yOf(trebleDb))
+                onDrawBehind {
+                    // Línea central punteada de 0 dB
+                    drawLine(
+                        color = colors.textSecondary.copy(alpha = 0.16f),
+                        start = Offset(0f, centerY),
+                        end = Offset(size.width, centerY),
+                        strokeWidth = gridStroke,
+                        pathEffect = dashEffect
+                    )
+
+                    // Líneas divisorias de frecuencias de cruce
+                    drawLine(
+                        color = colors.textSecondary.copy(alpha = 0.10f),
+                        start = Offset(xBass, 0f),
+                        end = Offset(xBass, size.height),
+                        strokeWidth = gridStroke
+                    )
+                    drawLine(
+                        color = colors.textSecondary.copy(alpha = 0.10f),
+                        start = Offset(xTreble, 0f),
+                        end = Offset(xTreble, size.height),
+                        strokeWidth = gridStroke
+                    )
+
+                    // Resplandor neón exterior
+                    drawPath(
+                        path = path,
+                        color = accent.copy(alpha = 0.3f),
+                        style = glowStroke
+                    )
+
+                    // Trazo nítido de tono
+                    drawPath(
+                        path = path,
+                        color = accent,
+                        style = lineStroke
+                    )
+
+                    // Puntos nodales
+                    drawCircle(color = accent, radius = nodeRadius, center = bassNode)
+                    drawCircle(color = accent, radius = nodeRadius, center = trebleNode)
+                }
             }
-
-            // Resplandor neón exterior
-            drawPath(
-                path = path,
-                color = accent.copy(alpha = 0.3f),
-                style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
-            )
-
-            // Trazo nítido de tono
-            drawPath(
-                path = path,
-                color = accent,
-                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-            )
-
-            // Puntos nodales
-            drawCircle(color = accent, radius = 2.dp.toPx(), center = Offset(xBass, yOf(bassDb)))
-            drawCircle(color = accent, radius = 2.dp.toPx(), center = Offset(xTreble, yOf(trebleDb)))
-        }
-    }
+    )
 }
 
 private fun kilo(hz: Float): String =

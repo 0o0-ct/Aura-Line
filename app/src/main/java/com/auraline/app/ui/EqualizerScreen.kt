@@ -31,6 +31,8 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -60,6 +62,10 @@ import com.auraline.core.domain.generateEqualizerBands
 import com.auraline.core.domain.ownerShortNameFor
 import com.auraline.core.domain.resolveFocus
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraChip
+import com.auraline.core.ui.components.AuraChipState
+import com.auraline.core.ui.components.AuraDepth
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.BandFader
 import com.auraline.core.ui.components.ResponseCurve
@@ -104,17 +110,37 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
     val pages = remember(bands, perWindow) { bands.chunked(perWindow) }
     val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
 
+    DisposableEffect(state.motorEnabled) {
+        if (state.motorEnabled) {
+            com.auraline.core.audio.AuraLineSpectrum.start()
+        } else {
+            com.auraline.core.audio.AuraLineSpectrum.stop()
+        }
+        onDispose {
+            com.auraline.core.audio.AuraLineSpectrum.stop()
+        }
+    }
+
+    LaunchedEffect(bands) {
+        if (bands.isNotEmpty()) {
+            com.auraline.core.audio.AuraLineSpectrum.setBandEdges(bands.map { it.frequencyHz }.toFloatArray())
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 148.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         EngineStatusCard(engine = engine, motorEnabled = state.motorEnabled)
 
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle(
                     text = "Curva de respuesta",
@@ -140,18 +166,24 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 FactoryPresets.forEach { preset ->
-                    SelectableChip(
-                        text = preset.name,
-                        selected = state.presetName == preset.name,
+                    AuraChip(
+                        label = preset.name,
+                        state = if (state.presetName == preset.name) {
+                            AuraChipState.Selected
+                        } else {
+                            AuraChipState.Default
+                        },
                         onClick = {
                             if (preset.name == "Plano") viewModel.resetAll()
                             else viewModel.applyFactoryPreset(preset.name)
                             scope.launch { pagerState.animateScrollToPage(0) }
-                        }
+                        },
+                        modifier = Modifier.height(40.dp)
                     )
                 }
             }
@@ -186,11 +218,33 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     presets.forEach { name ->
+                        var showDeleteDialog by remember { mutableStateOf(false) }
                         SelectableChip(
                             text = name,
                             selected = state.presetName == name,
-                            onClick = { viewModel.applyPreset(name) }
+                            onClick = { viewModel.applyPreset(name) },
+                            onLongClick = { showDeleteDialog = true }
                         )
+
+                        if (showDeleteDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showDeleteDialog = false },
+                                containerColor = colors.surface,
+                                title = { Text("Eliminar preajuste", color = colors.textPrimary) },
+                                text = { Text("¿Deseas eliminar el preajuste de usuario '$name'?", color = colors.textSecondary) },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        viewModel.deletePreset(name)
+                                        showDeleteDialog = false
+                                    }) { Text("Eliminar", color = colors.danger) }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDeleteDialog = false }) {
+                                        Text("Cancelar", color = colors.textPrimary)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -302,6 +356,8 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
 
         LowSourcesCard(
             bands = bands,
+            range = range,
+            onBandGain = { bandId, gain -> viewModel.setBandGain(bandId, gain) },
             onFocus = { viewModel.focusLowSource(it) }
         )
 
@@ -318,15 +374,20 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     onClick = { viewModel.setBypass(!state.bypass) }
                 )
             }
-            Spacer(modifier = Modifier.height(4.dp))
-            AuraSliderRow(
-                label = "Nivel de preamplificación",
-                valueText = "${formatGain(state.preampDb)} dB",
-                value = state.preampDb,
-                valueRange = -15f..15f,
-                onValueChange = { viewModel.setPreamp(it) },
-                enabled = state.motorEnabled
-            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                com.auraline.core.ui.components.AuraKnob(
+                    value = state.preampDb,
+                    onValueChange = { viewModel.setPreamp(it) },
+                    valueRange = -15f..15f,
+                    label = "Preamplificación",
+                    valueText = "${formatGain(state.preampDb)} dB",
+                    diameter = 132.dp
+                )
+            }
             if (state.bypass) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -356,6 +417,8 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 }
             )
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 
     if (showSaveDialog) {
@@ -463,16 +526,17 @@ private fun BandPage(
     range: Float,
     onGainChange: (Int, Float) -> Unit
 ) {
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(215.dp)
-    ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val count = chunk.size.coerceAtLeast(1)
+        // Tablets: con más ancho los faders crecen (hasta 56 dp) y la carrera se alarga.
+        val wide = maxWidth >= 560.dp
+        val faderHeight = if (wide) 196.dp else 148.dp
         // El ancho se reparte entre las bandas visibles: con 12 no caben a 34 dp.
-        val faderWidth = ((maxWidth - 8.dp) / count).coerceIn(18.dp, 40.dp)
+        val faderWidth = ((maxWidth - 8.dp) / count).coerceIn(18.dp, if (wide) 56.dp else 40.dp)
         Row(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(faderHeight + 67.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -483,7 +547,7 @@ private fun BandPage(
                     value = band.gainDb,
                     onValueChange = { onGainChange(band.id, it) },
                     valueRange = -range..range,
-                    height = 148.dp,
+                    height = faderHeight,
                     label = formatFrequency(center),
                     valueText = formatGain(band.gainDb),
                     highlighted = band.gainDb != 0f,
@@ -503,6 +567,8 @@ private fun BandPage(
 @Composable
 private fun LowSourcesCard(
     bands: List<EqBand>,
+    range: Float,
+    onBandGain: (Int, Float) -> Unit,
     onFocus: (String) -> Unit
 ) {
     val colors = AuraTheme.colors
@@ -525,7 +591,9 @@ private fun LowSourcesCard(
             val shared = role?.companions?.map { it.name }.orEmpty()
             val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
             // El botón alterna: si la banda principal ya está subida, un toque retira el foco.
-            val applied = primaryStep != null && gain >= primaryStep.second - 0.5f
+            // El foco ahora aplica una receta reforzada (×2 como mínimo), así que el
+            // umbral de "ya aplicado" sigue esa misma escala para que el botón alterne bien.
+            val applied = primaryStep != null && gain >= primaryStep.second * 2f - 0.5f
 
             Row(
                 modifier = Modifier
@@ -580,6 +648,20 @@ private fun LowSourcesCard(
                     selected = applied,
                     onClick = { onFocus(source.key) }
                 )
+            }
+            // Control deslizante dedicado: mueve directamente la banda principal del
+            // instrumento para que su tonalidad se note de forma inmediata.
+            if (primaryIndex != null) {
+                val primaryBand = bands.getOrNull(primaryIndex)
+                if (primaryBand != null) {
+                    AuraSliderRow(
+                        label = "${source.shortName} · ${formatFrequency(bandCenterHz(bands, primaryIndex))} Hz",
+                        valueText = formatGain(primaryBand.gainDb),
+                        value = primaryBand.gainDb,
+                        valueRange = -range..range,
+                        onValueChange = { onBandGain(primaryBand.id, it) }
+                    )
+                }
             }
         }
     }

@@ -1,6 +1,8 @@
 package com.auraline.app.ui
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -16,11 +18,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -28,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -49,18 +55,41 @@ import androidx.core.content.ContextCompat
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.domain.UsageProfiles
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraDepth
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.StatusPill
+import com.auraline.core.ui.components.hapticFeedback
+import com.auraline.core.ui.components.neumorphicConvex
+import com.auraline.core.ui.components.neumorphicConcave
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.theme.AuraPalettes
 import com.auraline.core.ui.theme.AuraTheme
 
 @Composable
-fun SettingsScreen(viewModel: AuraLineViewModel) {
+fun SettingsScreen(
+    viewModel: AuraLineViewModel,
+    onOpenDiagnostics: () -> Unit = {}
+) {
     val colors = AuraTheme.colors
+    val haptic = hapticFeedback()
     val context = LocalContext.current
+    val activity = context as? Activity
+    val mediaProjectionManager =
+        context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
+    val captureLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val intent = Intent(context, com.auraline.app.audio.CaptureAudioService::class.java).apply {
+                putExtra(com.auraline.app.audio.CaptureAudioService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(com.auraline.app.audio.CaptureAudioService.EXTRA_DATA, result.data)
+            }
+            ContextCompat.startForegroundService(context, intent)
+        }
+    }
     val settings by viewModel.settings.collectAsState()
     val eqState by viewModel.state.collectAsState()
     val engine by viewModel.engine.collectAsState()
@@ -68,6 +97,8 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
     val checkResult by viewModel.checkResult.collectAsState()
 
     var permissionDenied by remember { mutableStateOf(false) }
+    var showAllPalettes by remember { mutableStateOf(false) }
+    var previewPalette by remember { mutableStateOf<com.auraline.core.ui.theme.AuraPalette?>(null) }
 
     val powerManager = context.getSystemService(PowerManager::class.java)
     val batteryExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
@@ -86,12 +117,15 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 148.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Perfil de uso: ajusta rango, protección, efectos y curva base de golpe
-        AuraCard(modifier = Modifier.fillMaxWidth()) {
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
             SectionTitle(
                 text = "Perfil de uso",
                 trailing = UsageProfiles.firstOrNull { it.key == settings.usageProfile }?.name ?: "sin elegir"
@@ -100,8 +134,9 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 UsageProfiles.forEach { profile ->
                     SelectableChip(
@@ -121,63 +156,58 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             }
         }
 
-        // Paleta de colores con discos táctiles Neumórficos
+        // Paleta curada con acceso opcional a las 30 variantes existentes.
         AuraCard(modifier = Modifier.fillMaxWidth()) {
+            val currentPalette = AuraPalettes.firstOrNull { it.key == settings.theme.paletteKey } ?: AuraPalettes.first()
+            val featuredKeys = listOf("p25", "p20", "p1", "p9", "p15", "p4")
+            val visiblePalettes = if (showAllPalettes) {
+                AuraPalettes
+            } else {
+                featuredKeys.mapNotNull { key -> AuraPalettes.firstOrNull { it.key == key } }
+            }
+
             SectionTitle(
-                text = "Paleta",
-                trailing = AuraPalettes.firstOrNull { it.key == settings.theme.paletteKey }?.label ?: settings.theme.paletteKey
+                text = "Identidad visual",
+                trailing = currentPalette.label
             )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                AuraPalettes.forEach { palette ->
-                    val selected = settings.theme.paletteKey == palette.key
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .shadow(
-                                elevation = if (selected) 8.dp else 2.dp,
-                                shape = CircleShape,
-                                ambientColor = if (selected) palette.accent.copy(alpha = 0.5f) else Color.Black
-                            )
-                            .background(
-                                Brush.radialGradient(
-                                    colors = listOf(
-                                        palette.accent,
-                                        palette.accent.copy(alpha = if (selected) 0.85f else 0.45f)
-                                    )
-                                ),
-                                CircleShape
-                            )
-                            .border(
-                                width = if (selected) 2.dp else 1.dp,
-                                brush = if (selected) {
-                                    Brush.verticalGradient(
-                                        listOf(Color.White, palette.accent)
-                                    )
-                                } else {
-                                    Brush.verticalGradient(
-                                        listOf(Color(0x33FFFFFF), Color(0x0AFFFFFF))
-                                    )
-                                },
-                                shape = CircleShape
-                            )
-                            .clickable { viewModel.setPalette(palette.key, palette.accent.value.toInt()) }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Elige una atmósfera para toda la experiencia. Puedes previsualizarla antes de aplicarla.",
+                color = colors.textSecondary,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                visiblePalettes.chunked(2).forEach { rowPalettes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        if (selected) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .background(Color.White, CircleShape)
+                        rowPalettes.forEach { palette ->
+                            PalettePreviewCard(
+                                palette = palette,
+                                selected = settings.theme.paletteKey == palette.key,
+                                onClick = {
+                                    haptic()
+                                    previewPalette = palette
+                                },
+                                modifier = Modifier.weight(1f)
                             )
                         }
+                        if (rowPalettes.size == 1) Spacer(modifier = Modifier.weight(1f))
                     }
                 }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(
+                onClick = { showAllPalettes = !showAllPalettes },
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Text(
+                    text = if (showAllPalettes) "Mostrar selección curada" else "Explorar las 30 paletas",
+                    color = colors.accent,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
         }
 
@@ -228,6 +258,21 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
                 checked = settings.autoStart,
                 onCheckedChange = { viewModel.setAutoStart(it) }
             )
+            SettingSwitch(
+                title = "Modo captura (experimental)",
+                subtitle = "Captura el audio de otras apps y lo procesa con el motor nativo. Requiere permiso de proyección de medios. El modo clásico sigue activo hasta que el motor de captura esté listo.",
+                checked = settings.captureMode,
+                onCheckedChange = { viewModel.setCaptureMode(it) }
+            )
+            if (settings.captureMode) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Modo captura experimental desactivado por seguridad: Android no permite silenciar la salida original, por lo que la captura duplica el audio. " +
+                        "El modo clásico (DynamicsProcessing) sigue siendo el motor activo. El código de captura queda disponible para futuras pruebas en dispositivos con root.",
+                    color = colors.warning,
+                    fontSize = 11.sp
+                )
+            }
         }
 
         // Protección de batería
@@ -370,11 +415,97 @@ fun SettingsScreen(viewModel: AuraLineViewModel) {
             }
         }
 
+        // Diagnóstico e Informe del Sistema
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Diagnóstico del Sistema")
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Verifica el estado del motor DSP, sesiones activas, generador de tonos sintéticos (60Hz, 1kHz, 8kHz, Ruido) e informe técnico.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Button(
+                onClick = onOpenDiagnostics,
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accent),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(42.dp)
+            ) {
+                Text(
+                    text = "Abrir Pantalla de Diagnóstico",
+                    color = Color.Black,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
         Text(
-            text = "AuraLine 2.0 · ${engine.sampleRateHz} Hz · ${if (engine.globalScope) "procesado global" else "sin cadena activa"}",
+            text = "AuraLine 4.1.0 · ${engine.sampleRateHz} Hz · ${if (engine.globalScope) "procesado global" else "sin cadena activa"}",
             color = colors.textSecondary.copy(alpha = 0.7f),
             fontSize = 11.sp,
             modifier = Modifier.padding(top = 4.dp)
+        )
+
+        Spacer(modifier = Modifier.height(96.dp))
+    }
+
+    previewPalette?.let { palette ->
+        AlertDialog(
+            onDismissRequest = { previewPalette = null },
+            containerColor = colors.surfaceElevated,
+            title = {
+                Text(
+                    text = palette.label,
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Así se verán el fondo, las tarjetas y los controles de AuraLine.",
+                        color = colors.textSecondary,
+                        fontSize = 13.sp
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    ) {
+                        palette.colors.forEach { color ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .background(color)
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.setPalette(palette.key, palette.accent.value.toInt())
+                        previewPalette = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = palette.accent,
+                        contentColor = Color.Black
+                    )
+                ) {
+                    Text("Aplicar", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { previewPalette = null }) {
+                    Text("Cancelar", color = colors.accent)
+                }
+            }
         )
     }
 }
@@ -401,5 +532,78 @@ private fun SettingSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange
         )
+    }
+
+}
+
+@Composable
+private fun PalettePreviewCard(
+    palette: com.auraline.core.ui.theme.AuraPalette,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colors = AuraTheme.colors
+    val shape = RoundedCornerShape(18.dp)
+
+    Column(
+        modifier = modifier
+            .height(94.dp)
+            .then(
+                if (selected) Modifier.neumorphicConcave(
+                    radius = 18.dp,
+                    shadowColor = colors.neumorphicCavity,
+                    highlightColor = colors.accent.copy(alpha = 0.45f),
+                    elevation = 3.dp
+                ) else Modifier.neumorphicConvex(
+                    radius = 18.dp,
+                    shadowColor = colors.neumorphicShadow,
+                    highlightColor = colors.neumorphicHighlight,
+                    elevation = 3.dp
+                )
+            )
+            .background(if (selected) colors.surfaceElevated else colors.surface, shape)
+            .border(
+                width = if (selected) 1.5.dp else 1.dp,
+                color = if (selected) colors.accent else colors.outline.copy(alpha = 0.25f),
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = palette.label.substringAfter(": ").ifBlank { palette.label },
+                color = if (selected) colors.accent else colors.textPrimary,
+                fontSize = 12.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                maxLines = 1,
+                modifier = Modifier.weight(1f)
+            )
+            if (selected) {
+                Box(modifier = Modifier.size(7.dp).background(colors.accent, CircleShape))
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(24.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(10.dp))
+        ) {
+            palette.colors.forEach { color ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(color)
+                )
+            }
+        }
     }
 }

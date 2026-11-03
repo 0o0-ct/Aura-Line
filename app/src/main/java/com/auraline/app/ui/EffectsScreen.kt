@@ -25,11 +25,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.domain.AuraLineViewModel
 import com.auraline.core.ui.components.AuraCard
+import com.auraline.core.ui.components.AuraDepth
 import com.auraline.core.ui.components.AuraSliderRow
 import com.auraline.core.ui.components.AuraSwitch
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.SelectableChip
 import com.auraline.core.ui.components.StatusPill
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.ui.theme.AuraTheme
 import java.util.Locale
@@ -50,10 +52,79 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 18.dp)
+            .padding(top = 148.dp, bottom = 120.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
+        // Indicador de compatibilidad: muestra si el dispositivo expone realmente
+        // el compresor multibanda y la reverb del sistema.
+        AuraSurface(
+            modifier = Modifier.fillMaxWidth(),
+            depth = AuraDepth.Raised
+        ) {
+            SectionTitle(text = "Compatibilidad del dispositivo")
+            Spacer(modifier = Modifier.height(6.dp))
+            if (!state.motorEnabled) {
+                Text(
+                    text = "Activa el motor de audio para comprobar la compatibilidad.",
+                    color = colors.textSecondary,
+                    fontSize = 12.sp
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Compresor multibanda", color = colors.textPrimary, fontSize = 13.sp)
+                    StatusPill(
+                        text = when {
+                            compressorStage?.detail == "requiere DynamicsProcessing" -> "No disponible"
+                            compressorStage?.active == true -> "Activo"
+                            else -> "Disponible"
+                        },
+                        color = when {
+                            compressorStage?.detail == "requiere DynamicsProcessing" -> colors.warning
+                            compressorStage?.active == true -> colors.positive
+                            else -> colors.accent
+                        }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Reverb (EnvironmentalReverb)", color = colors.textPrimary, fontSize = 13.sp)
+                    StatusPill(
+                        text = when {
+                            engine.lastError?.contains("Reverb", ignoreCase = true) == true -> "No disponible"
+                            reverbStage?.active == true -> "Activa"
+                            else -> "Disponible"
+                        },
+                        color = when {
+                            engine.lastError?.contains("Reverb", ignoreCase = true) == true -> colors.warning
+                            reverbStage?.active == true -> colors.positive
+                            else -> colors.accent
+                        }
+                    )
+                }
+                engine.lastError?.let { error ->
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = error,
+                        color = colors.warning,
+                        fontSize = 11.sp
+                    )
+                }
+                Text(
+                    text = "Si un efecto aparece como no disponible, el fabricante no expone ese módulo en este dispositivo.",
+                    color = colors.textSecondary,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Cadena de módulos", trailing = "orden real del motor")
             Spacer(modifier = Modifier.height(6.dp))
@@ -286,6 +357,8 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                 fontSize = 11.sp
             )
         }
+
+        Spacer(modifier = Modifier.height(96.dp))
     }
 }
 
