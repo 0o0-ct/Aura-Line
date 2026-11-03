@@ -58,14 +58,44 @@ export function ResponseCurve({
       ctx.stroke();
     });
 
+    // dB Reference grid lines & labels (+range, 0 dB, -range)
+    ctx.font = "9px monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+
+    // Top +range line
+    const yTop = centerY - scale;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, yTop);
+    ctx.lineTo(width, yTop);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fillText(`+${Math.round(gainRangeDb)} dB`, width - 6, yTop + 7);
+
     // 0 dB dashed reference line
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.18)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(0, centerY);
     ctx.lineTo(width, centerY);
     ctx.stroke();
+    ctx.fillText("0 dB", width - 6, centerY - 6);
+
+    // Bottom -range line
+    const yBottom = centerY + scale;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, yBottom);
+    ctx.lineTo(width, yBottom);
+    ctx.stroke();
+    ctx.fillText(`-${Math.round(gainRangeDb)} dB`, width - 6, yBottom - 7);
     ctx.setLineDash([]);
 
     if (bands.length === 0) return;

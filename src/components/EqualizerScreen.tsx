@@ -58,7 +58,7 @@ export function EqualizerScreen({
   const [expandedEngine, setExpandedEngine] = useState(false);
 
   const bands = state.bands.length ? state.bands : generateEqualizerBands(state.numBands);
-  const range = Math.max(6, Math.min(24, state.gainRangeDb));
+  const range = Math.max(6, Math.min(36, state.gainRangeDb));
   const perWindow = WindowSizes[windowSizeIndex];
 
   // Chunk bands for pagination
@@ -294,7 +294,7 @@ export function EqualizerScreen({
           </div>
 
           <div className="flex items-center gap-1.5">
-            {[6, 12, 24].map((v) => (
+            {[6, 12, 24, 30, 36].map((v) => (
               <SelectableChip
                 key={v}
                 text={`±${v}`}
@@ -381,8 +381,12 @@ export function EqualizerScreen({
             const role = LowFrequencyRoles.find((r) => r.owner.key === source.key);
             const shared = role ? role.companions.map((c) => c.name) : [];
             const gain = primaryIndex !== null ? bands[primaryIndex]?.gainDb || 0 : 0;
+            const rangeScale = range / 12.0;
+            const targetDelta = primaryStep ? primaryStep[1] * rangeScale : 0;
             const applied =
-              primaryStep !== undefined && gain >= primaryStep[1] - 0.5;
+              primaryStep !== undefined &&
+              Math.abs(gain) >= Math.abs(targetDelta) - 0.5 &&
+              (Math.sign(gain) === Math.sign(targetDelta) || targetDelta === 0);
 
             return (
               <div

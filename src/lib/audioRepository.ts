@@ -278,13 +278,24 @@ export class AudioRepository {
   }
 
   public setGainRange(db: number): void {
-    const range = Math.min(24, Math.max(6, db));
+    const range = Math.min(36, Math.max(6, db));
     this.settings = { ...this.settings, gainRangeDb: range };
-    const clampedBands = this.state.bands.map((b) => ({
-      ...b,
-      gainDb: clampBandGainDb(b.gainDb, range),
-    }));
-    this.state = { ...this.state, gainRangeDb: range, bands: clampedBands };
+    const previousRange = Math.min(36, Math.max(6, this.state.gainRangeDb || 12));
+    const scale = range / previousRange;
+
+    // Solo se escalan las bandas levantadas o recortadas; las bandas en 0 dB permanecen en 0 dB.
+    const adjustedBands = this.state.bands.map((b) => {
+      if (Math.abs(b.gainDb) < 0.05) {
+        return { ...b, gainDb: 0 };
+      }
+      const scaled = b.gainDb * scale;
+      return {
+        ...b,
+        gainDb: Math.round(clampBandGainDb(scaled, range) * 10) / 10,
+      };
+    });
+
+    this.state = { ...this.state, gainRangeDb: range, bands: adjustedBands };
     this.notify();
   }
 
@@ -296,10 +307,21 @@ export class AudioRepository {
       ? this.state.bands
       : generateEqualizerBands(this.state.numBands);
     const centers = bands.map((_, i) => bandCenterHz(bands, i));
-    const range = this.state.gainRangeDb;
+    const range = Math.min(36, Math.max(6, this.state.gainRangeDb || 12));
+
+    if (preset.name === "Plano" || Object.keys(preset.gains).length === 0) {
+      const flattened = bands.map((b) => ({ ...b, gainDb: 0 }));
+      this.state = { ...this.state, bands: flattened, presetName: preset.name };
+      this.notify();
+      return true;
+    }
 
     const newGains = new Float32Array(bands.length);
-    const PRESET_GAIN_SCALE = 1.8;
+    // Las tablas de preajustes están calibradas sobre una referencia base de 12 dB.
+    // Al escalar de forma proporcional al rango de dB seleccionado (range / 12),
+    // a 6 dB las bandas se elevan un poco (0.5x), a 12 dB suben más (1.0x), y a 24, 30 o 36 dB
+    // suben en la misma proporción sin topar el techo del fader ni saturar la UI.
+    const scaleFactor = range / 12.0;
 
     Object.entries(preset.gains).forEach(([freqStr, gainVal]) => {
       const freq = parseFloat(freqStr);
@@ -312,8 +334,9 @@ export class AudioRepository {
           bestIndex = i;
         }
       }
-      const scaled = Math.min(range, Math.max(-range, gainVal * PRESET_GAIN_SCALE));
-      newGains[bestIndex] = Math.min(range, Math.max(-range, newGains[bestIndex] + scaled));
+      // Solo las bandas de la receta reciben ganancia; las demás permanecen en 0
+      const scaled = Math.round(clampBandGainDb(gainVal * scaleFactor, range) * 10) / 10;
+      newGains[bestIndex] = clampBandGainDb(newGains[bestIndex] + scaled, range);
     });
 
     const tuned = bands.map((b, i) => ({ ...b, gainDb: newGains[i] }));
@@ -332,14 +355,21 @@ export class AudioRepository {
     const steps = resolveFocus(bands, focus);
     if (!steps.length) return false;
 
-    const range = this.state.gainRangeDb;
+    const range = Math.min(36, Math.max(6, this.state.gainRangeDb || 12));
+    const rangeScale = range / 12.0;
+    const effectiveScale = scale * rangeScale;
+
     const gains = bands.map((b) => b.gainDb);
     const primary = steps[0];
-    const alreadyApplied = gains[primary[0]] >= primary[1] * scale - 0.5;
+    const targetDelta = primary[1] * effectiveScale;
+    const alreadyApplied =
+      Math.abs(gains[primary[0]]) >= Math.abs(targetDelta) - 0.5 &&
+      (Math.sign(gains[primary[0]]) === Math.sign(targetDelta) || targetDelta === 0);
     const direction = alreadyApplied ? -1 : 1;
 
     steps.forEach(([index, delta]) => {
-      gains[index] = Math.min(range, Math.max(-range, gains[index] + delta * scale * direction));
+      const applyDelta = Math.round(delta * effectiveScale * direction * 10) / 10;
+      gains[index] = clampBandGainDb(gains[index] + applyDelta, range);
     });
 
     const tuned = bands.map((b, i) => ({ ...b, gainDb: gains[i] }));

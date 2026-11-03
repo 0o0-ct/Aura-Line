@@ -403,8 +403,17 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val range = db.coerceIn(6f, 36f)
         saveSettings(_settings.value.copy(gainRangeDb = range))
         val current = _state.value
-        val clamped = current.bands.map { it.copy(gainDb = it.gainDb.coerceIn(-range, range)) }
-        saveState(current.copy(gainRangeDb = range, bands = clamped))
+        val previousRange = current.gainRangeDb.coerceIn(6f, 36f)
+        val scale = range / previousRange
+        val adjusted = current.bands.map { band ->
+            if (kotlin.math.abs(band.gainDb) < 0.05f) {
+                band.copy(gainDb = 0f)
+            } else {
+                val scaled = (band.gainDb * scale).coerceIn(-range, range)
+                band.copy(gainDb = Math.round(scaled * 10f) / 10f)
+            }
+        }
+        saveState(current.copy(gainRangeDb = range, bands = adjusted))
     }
 
     override fun applyFactoryPreset(name: String): Boolean {
@@ -415,11 +424,19 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val gains = FloatArray(bands.size)
 
         val limit = current.gainRangeDb.coerceIn(6f, 36f)
+        if (preset.name == "Plano" || preset.gains.isEmpty()) {
+            val flattened = bands.map { it.copy(gainDb = 0f) }
+            saveState(current.copy(bands = flattened, presetName = preset.name))
+            return true
+        }
+
+        val scale = limit / 12f
         preset.gains.forEach { (frequency, gain) ->
             val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
-            // Los valores de tabla son conservadores; se escalan para que el cambio se note.
-            val scaled = (gain * PRESET_GAIN_SCALE).coerceIn(-limit, limit)
-            gains[index] = (gains[index] + scaled).coerceIn(-limit, limit)
+            // Escala según el rango de dB seleccionado por el usuario sin quedar topado
+            val scaled = (gain * scale).coerceIn(-limit, limit)
+            val rounded = Math.round(scaled * 10f) / 10f
+            gains[index] = (gains[index] + rounded).coerceIn(-limit, limit)
         }
 
         val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }
@@ -445,20 +462,19 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         if (steps.isEmpty()) return false
 
         val limit = current.gainRangeDb.coerceIn(6f, 36f)
+        val rangeScale = limit / 12f
+        val effectiveScale = scale * rangeScale
+
         val gains = bands.map { it.gainDb }.toMutableList()
-
-        // Escala adaptativa: las recetas base son sutiles; para que el foco se note en
-        // cualquier perfil de uso (incluido el modo 5.1 con rango ±6 dB) se duplica
-        // como mínimo, y se amplifica según el rango disponible del perfil activo.
-        val profileScale = (current.gainRangeDb / 6f).coerceAtLeast(1f)
-        val effectiveScale = (scale * profileScale * 2f).coerceAtLeast(2f)
-
         val primary = steps.first()
-        val alreadyApplied = gains[primary.first] >= primary.second * effectiveScale - 0.5f
+        val targetDelta = primary.second * effectiveScale
+        val alreadyApplied = kotlin.math.abs(gains[primary.first]) >= kotlin.math.abs(targetDelta) - 0.5f &&
+            (kotlin.math.sign(gains[primary.first]) == kotlin.math.sign(targetDelta) || targetDelta == 0f)
         val direction = if (alreadyApplied) -1f else 1f
 
         steps.forEach { (index, delta) ->
-            gains[index] = (gains[index] + delta * effectiveScale * direction).coerceIn(-limit, limit)
+            val applyDelta = Math.round(delta * effectiveScale * direction * 10f) / 10f
+            gains[index] = (gains[index] + applyDelta).coerceIn(-limit, limit)
         }
 
         val tuned = bands.mapIndexed { index, band -> band.copy(gainDb = gains[index]) }

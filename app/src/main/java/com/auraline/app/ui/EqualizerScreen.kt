@@ -589,11 +589,11 @@ private fun LowSourcesCard(
             val primaryIndex = primaryStep?.first
             val role = LowFrequencyRoles.firstOrNull { it.owner.key == source.key }
             val shared = role?.companions?.map { it.name }.orEmpty()
-            val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
-            // El botón alterna: si la banda principal ya está subida, un toque retira el foco.
-            // El foco ahora aplica una receta reforzada (×2 como mínimo), así que el
-            // umbral de "ya aplicado" sigue esa misma escala para que el botón alterne bien.
-            val applied = primaryStep != null && gain >= primaryStep.second * 2f - 0.5f
+            // El botón alterna: el foco escala según el rango de dB seleccionado (range / 12)
+            val rangeScale = range / 12f
+            val targetDelta = primaryStep?.let { it.second * rangeScale } ?: 0f
+            val applied = primaryStep != null && kotlin.math.abs(gain) >= kotlin.math.abs(targetDelta) - 0.5f &&
+                (kotlin.math.sign(gain) == kotlin.math.sign(targetDelta) || targetDelta == 0f)
 
             Row(
                 modifier = Modifier
