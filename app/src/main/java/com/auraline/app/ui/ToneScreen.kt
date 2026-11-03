@@ -52,9 +52,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
     val settings by viewModel.settings.collectAsState()
     val tone = state.tone
     val powered = state.motorEnabled
-    // El perfil de uso decide cuánto margen de realce tiene cada equipo: en altavoz externo
-    // se puede pedir hasta ±24 dB; en la barra 5.1, que ya procesa sola, ±12 dB.
-    val boostMax = state.toneBoostMarginDb.coerceIn(12f, 24f)
+    val boostMax = 36f
     val activeProfile = UsageProfiles.firstOrNull { it.key == settings.usageProfile }
 
     Column(
@@ -125,7 +123,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 label = "Medios",
                 valueText = db(tone.midDb),
                 value = tone.midDb,
-                valueRange = -12f..12f,
+                valueRange = -36f..36f,
                 onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) },
                 enabled = powered
             )
@@ -133,7 +131,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 label = "Agudos",
                 valueText = db(tone.trebleDb),
                 value = tone.trebleDb,
-                valueRange = -12f..12f,
+                valueRange = -36f..36f,
                 onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) },
                 enabled = powered
             )

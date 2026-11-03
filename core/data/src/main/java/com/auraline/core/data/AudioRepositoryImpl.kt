@@ -359,7 +359,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     override fun setSubBass(db: Float) {
         val tone = _state.value.tone
-        val margin = _state.value.toneBoostMarginDb.coerceIn(12f, 24f)
+        val margin = 36f
         saveState(_state.value.copy(tone = tone.copy(subDb = clampToneDb(db, margin))))
     }
 
@@ -372,13 +372,13 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     override fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) {
         val current = _state.value
         val tone = current.tone
-        val margin = current.toneBoostMarginDb.coerceIn(12f, 24f)
+        val margin = 36f
         saveState(
             current.copy(
                 tone = tone.copy(
                     bassDb = clampToneDb(bassDb, margin),
-                    midDb = clampToneDb(midDb, 12f),
-                    trebleDb = clampToneDb(trebleDb, 12f)
+                    midDb = clampToneDb(midDb, 36f),
+                    trebleDb = clampToneDb(trebleDb, 36f)
                 )
             )
         )
@@ -823,6 +823,6 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     private fun toneBoostMarginFor(profileKey: String): Float {
         val profile = com.auraline.core.domain.UsageProfiles.firstOrNull { it.key == profileKey }
-        return profile?.toneBoostMarginDb ?: 18f
+        return profile?.toneBoostMarginDb ?: 36f
     }
 }

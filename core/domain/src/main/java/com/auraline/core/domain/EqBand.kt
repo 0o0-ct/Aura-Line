@@ -97,7 +97,7 @@ data class EqualizerState(
     val selectedRoute: Int = 0, // 0=speaker, 1=headphones, 2=bluetooth, 3=usb
     val presetName: String = "Plano",
     /** Margen de realce de Graves y Sub-bajo según el perfil de uso activo. */
-    val toneBoostMarginDb: Float = 12f
+    val toneBoostMarginDb: Float = 36f
 )
 
 // ---------------------------------------------------------------------------
