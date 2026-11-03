@@ -18,54 +18,94 @@ val FactoryPresets: List<FactoryPreset> = listOf(
         gains = emptyMap()
     ),
     FactoryPreset(
+        name = "Cine / Películas",
+        hint = "Inmersión cinemática: sub-bajo profundo y diálogos frontales claros",
+        gains = mapOf(60f to 8f, 120f to 6f, 250f to 2f, 500f to 0f, 1000f to 2f, 3000f to 5f, 8000f to 4f)
+    ),
+    FactoryPreset(
+        name = "Podcast / Voz",
+        hint = "Claridad vocal óptima: realce en 2-4 kHz y corte de graves para nitidez",
+        gains = mapOf(60f to -4f, 120f to -3f, 250f to 1f, 500f to 2f, 1000f to 4f, 3000f to 6f, 6000f to 3f)
+    ),
+    FactoryPreset(
+        name = "Pop",
+        hint = "Sonido comercial: vocales brillantes, graves rítmicos y agudos chispeantes",
+        gains = mapOf(60f to 6f, 120f to 5f, 250f to 2f, 1000f to 1f, 3000f to 5f, 7000f to 6f, 12000f to 5f)
+    ),
+    FactoryPreset(
+        name = "Rock / Metal",
+        hint = "Energía cruda: cuerpo en baja media y agudos afilados para guitarras",
+        gains = mapOf(60f to 5f, 120f to 6f, 300f to 3f, 1000f to 4f, 3000f to 6f, 6000f to 5f, 10000f to 3f)
+    ),
+    FactoryPreset(
+        name = "Electrónica / EDM",
+        hint = "Sub-bajo retumbante y agudos cristalinos para sintetizadores",
+        gains = mapOf(60f to 9f, 120f to 7f, 250f to 2f, 1000f to 0f, 3000f to 4f, 6000f to 7f, 12000f to 6f)
+    ),
+    FactoryPreset(
+        name = "Hip-Hop / Rap",
+        hint = "Graves masivos y presencia vocal nítida",
+        gains = mapOf(60f to 9f, 120f to 7f, 250f to 4f, 1000f to 2f, 3000f to 4f, 6000f to 3f, 12000f to 2f)
+    ),
+    FactoryPreset(
+        name = "Clásica / Orquesta",
+        hint = "Rango dinámico amplio, aire superior y naturalidad acústica",
+        gains = mapOf(60f to 4f, 120f to 3f, 500f to 0f, 2000f to 3f, 5000f to 5f, 10000f to 6f)
+    ),
+    FactoryPreset(
+        name = "Jazz",
+        hint = "Contrabajo cálido, piano rico y agudos de platillos sedosos",
+        gains = mapOf(60f to 5f, 120f to 4f, 250f to 3f, 1000f to 2f, 3000f to 3f, 6000f to 4f, 12000f to 3f)
+    ),
+    FactoryPreset(
+        name = "Gaming",
+        hint = "Potencia en explosiones (sub-bajo) y localización de pasos (agudos)",
+        gains = mapOf(60f to 8f, 120f to 6f, 500f to 0f, 2000f to 3f, 5000f to 7f, 10000f to 6f)
+    ),
+    FactoryPreset(
         name = "Cálido y Profundo",
         hint = "Sub-bajo masivo, graves profundos, medios ricos y agudos suaves",
         gains = mapOf(60f to 7f, 120f to 6f, 250f to 4f, 500f to 3f, 1000f to 2f, 2500f to 2f, 6000f to 0f, 10000f to 0f)
     ),
     FactoryPreset(
-        name = "Voz",
-        hint = "Cuerpo cálido 200-400 · presencia natural sin estridencias",
-        gains = mapOf(60f to 2f, 120f to 2f, 250f to 4f, 500f to 3f, 1000f to 2f, 2500f to 3f, 5000f to 2f)
-    ),
-    FactoryPreset(
-        name = "Bombo",
-        hint = "Profundidad 60-80 · pegada cálida sin chillidos",
-        gains = mapOf(60f to 6f, 140f to 5f, 300f to 2f, 1000f to 1f, 3000f to 2f)
-    ),
-    FactoryPreset(
-        name = "Bajo eléctrico",
-        hint = "Cuerpo masivo 60-120 · gruñido rico en medios",
-        gains = mapOf(60f to 6f, 140f to 6f, 300f to 3f, 800f to 4f, 1500f to 2f)
-    ),
-    FactoryPreset(
-        name = "Guitarra eléctrica",
-        hint = "Cuerpo cálido y presencia balanceada",
-        gains = mapOf(100f to 3f, 250f to 4f, 800f to 2f, 2500f to 3f, 5000f to 1f)
-    ),
-    FactoryPreset(
-        name = "Guitarra acústica",
-        hint = "Graves redondos, madera y claridad natural",
-        gains = mapOf(100f to 4f, 250f to 3f, 1000f to 2f, 3000f to 3f, 6000f to 1f)
-    ),
-    FactoryPreset(
-        name = "Piano",
-        hint = "Graves envolventes y medios ricos en armónicos",
-        gains = mapOf(80f to 5f, 200f to 3f, 600f to 2f, 1500f to 2f, 4000f to 2f)
-    ),
-    FactoryPreset(
         name = "Graves +",
         hint = "Refuerzo total de sub-bajo y graves profundos con cuerpo denso",
-        gains = mapOf(60f to 9f, 120f to 7f, 250f to 5f, 500f to 3f, 1000f to 1f)
+        gains = mapOf(60f to 10f, 120f to 8f, 250f to 5f, 500f to 3f, 1000f to 1f)
     ),
     FactoryPreset(
         name = "Harman",
         hint = "Curva equilibrada: graves cálidos, medios presentes y agudos musicales",
-        gains = mapOf(60f to 5f, 120f to 4f, 250f to 3f, 500f to 2f, 1000f to 2f, 2500f to 2f, 6000f to 1f)
+        gains = mapOf(60f to 6f, 120f to 5f, 250f to 3f, 500f to 2f, 1000f to 2f, 2500f to 3f, 6000f to 2f)
     ),
     FactoryPreset(
         name = "JBL",
         hint = "Sonido envolvente: graves firmes y medios cálidos sin estridencias",
-        gains = mapOf(60f to 6f, 120f to 5f, 300f to 3f, 1000f to 2f, 3000f to 3f, 7000f to 1f)
+        gains = mapOf(60f to 7f, 120f to 6f, 300f to 3f, 1000f to 2f, 3000f to 4f, 7000f to 2f)
+    ),
+    FactoryPreset(
+        name = "Bombo",
+        hint = "Profundidad 60-80 · pegada cálida sin chillidos",
+        gains = mapOf(60f to 7f, 140f to 6f, 300f to 2f, 1000f to 1f, 3000f to 2f)
+    ),
+    FactoryPreset(
+        name = "Bajo eléctrico",
+        hint = "Cuerpo masivo 60-120 · gruñido rico en medios",
+        gains = mapOf(60f to 7f, 140f to 7f, 300f to 4f, 800f to 5f, 1500f to 3f)
+    ),
+    FactoryPreset(
+        name = "Guitarra eléctrica",
+        hint = "Cuerpo cálido y presencia balanceada",
+        gains = mapOf(100f to 4f, 250f to 5f, 800f to 3f, 2500f to 4f, 5000f to 2f)
+    ),
+    FactoryPreset(
+        name = "Guitarra acústica",
+        hint = "Graves redondos, madera y claridad natural",
+        gains = mapOf(100f to 5f, 250f to 4f, 1000f to 2f, 3000f to 4f, 6000f to 2f)
+    ),
+    FactoryPreset(
+        name = "Piano",
+        hint = "Graves envolventes y medios ricos en armónicos",
+        gains = mapOf(80f to 6f, 200f to 4f, 600f to 2f, 1500f to 3f, 4000f to 3f)
     )
 )
 

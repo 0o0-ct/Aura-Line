@@ -2,6 +2,7 @@ package com.auraline.app.ui
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,8 +40,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.border
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,6 +94,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
     var pendingPresetName by remember { mutableStateOf("") }
     var showSaveDialog by remember { mutableStateOf(false) }
     var showGuide by remember { mutableStateOf(false) }
+    var showAllPresetsDialog by remember { mutableStateOf(false) }
 
     val bands = remember(state.bands, state.numBands) {
         state.bands.ifEmpty { generateEqualizerBands(state.numBands) }
@@ -161,7 +165,19 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
         }
 
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(text = "Preajustes", trailing = "según tablas de ecualización")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(
+                    text = "Preajustes",
+                    trailing = "según tablas",
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = { showAllPresetsDialog = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text("Ver todos", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
             Spacer(modifier = Modifier.height(10.dp))
             Row(
                 modifier = Modifier
@@ -513,6 +529,101 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             confirmButton = {
                 TextButton(onClick = { showGuide = false }) {
                     Text("Cerrar", color = colors.accent)
+                }
+            }
+        )
+    }
+
+    if (showAllPresetsDialog) {
+        AlertDialog(
+            onDismissRequest = { showAllPresetsDialog = false },
+            containerColor = colors.surfaceElevated,
+            title = {
+                Text(
+                    text = "Todos los preajustes",
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(350.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Selecciona un preajuste para aplicarlo instantáneamente:",
+                        color = colors.textSecondary,
+                        fontSize = 12.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(text = "Fábrica", color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    FactoryPresets.forEach { preset ->
+                        val isSelected = state.presetName == preset.name
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isSelected) colors.accent.copy(alpha = 0.15f) else colors.surface)
+                                .border(1.dp, if (isSelected) colors.accent else colors.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                .clickable {
+                                    if (preset.name == "Plano") viewModel.resetAll()
+                                    else viewModel.applyFactoryPreset(preset.name)
+                                    scope.launch { pagerState.animateScrollToPage(0) }
+                                    showAllPresetsDialog = false
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = preset.name,
+                                color = if (isSelected) colors.accent else colors.textPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            if (preset.hint.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = preset.hint,
+                                    color = colors.textSecondary,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                    }
+                    if (presets.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(text = "Guardados por ti", color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        presets.forEach { name ->
+                            val isSelected = state.presetName == name
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isSelected) colors.accent.copy(alpha = 0.15f) else colors.surface)
+                                    .border(1.dp, if (isSelected) colors.accent else colors.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        viewModel.applyPreset(name)
+                                        scope.launch { pagerState.animateScrollToPage(0) }
+                                        showAllPresetsDialog = false
+                                    }
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = name,
+                                    color = if (isSelected) colors.accent else colors.textPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAllPresetsDialog = false }) {
+                    Text("Cerrar", color = colors.accent, fontWeight = FontWeight.Bold)
                 }
             }
         )
