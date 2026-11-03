@@ -46,7 +46,7 @@ export function clampSubCutoffHz(hz: number): number {
   return Math.min(100, Math.max(20, hz));
 }
 
-const DEFAULT_STATE: EqualizerState = {
+export const DEFAULT_STATE: EqualizerState = {
   numBands: 25,
   gainRangeDb: 12,
   preampDb: 0,
@@ -109,7 +109,7 @@ const DEFAULT_STATE: EqualizerState = {
   toneBoostMarginDb: 12,
 };
 
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   numBands: 25,
   gainRangeDb: 12,
   motorMode: "automatic",
@@ -140,7 +140,7 @@ export class AudioRepository {
   constructor() {
     this.state = DEFAULT_STATE;
     this.settings = DEFAULT_SETTINGS;
-    this.loadFromStorage();
+    // Note: loadFromStorage is explicitly called in client useEffect to avoid SSR hydration mismatch
   }
 
   public loadFromStorage(): void {
