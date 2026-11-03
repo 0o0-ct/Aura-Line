@@ -53,7 +53,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -142,27 +141,19 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
     ) {
         Box(modifier = Modifier.fillMaxSize().background(colors.background)) {
             // Fondo de lienzo ambiental (Apple ambient light blooms para iluminar el cristal translúcido)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .drawWithCache {
-                        val glowAlpha = if (state.motorEnabled) 0.14f else 0.04f
-                        val centerOffset = Offset(size.width * 0.85f, size.height * 0.12f)
-                        val glowRadius = size.width * 0.9f
-                        val radialBrush = Brush.radialGradient(
-                            colors = listOf(accent.copy(alpha = glowAlpha), Color.Transparent),
-                            center = centerOffset,
-                            radius = glowRadius
-                        )
-                        onDrawBehind {
-                            drawCircle(
-                                brush = radialBrush,
-                                radius = glowRadius,
-                                center = centerOffset
-                            )
-                        }
-                    }
-            )
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val glowAlpha = if (state.motorEnabled) 0.14f else 0.04f
+                // Resplandor superior derecho con el acento activo
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(accent.copy(alpha = glowAlpha), Color.Transparent),
+                        center = Offset(size.width * 0.85f, size.height * 0.12f),
+                        radius = size.width * 0.9f
+                    ),
+                    radius = size.width * 0.9f,
+                    center = Offset(size.width * 0.85f, size.height * 0.12f)
+                )
+            }
 
             Scaffold(
                 containerColor = Color.Transparent,

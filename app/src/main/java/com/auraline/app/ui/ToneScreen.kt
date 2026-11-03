@@ -22,7 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -53,9 +52,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
     val settings by viewModel.settings.collectAsState()
     val tone = state.tone
     val powered = state.motorEnabled
-    // El perfil de uso decide cuánto margen de realce tiene cada equipo: en altavoz externo
-    // se puede pedir hasta ±24 dB; en la barra 5.1, que ya procesa sola, ±12 dB.
-    val boostMax = state.toneBoostMarginDb.coerceIn(12f, 24f)
+    val boostMax = 36f
     val activeProfile = UsageProfiles.firstOrNull { it.key == settings.usageProfile }
 
     Column(
@@ -126,7 +123,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 label = "Medios",
                 valueText = db(tone.midDb),
                 value = tone.midDb,
-                valueRange = -12f..12f,
+                valueRange = -36f..36f,
                 onValueChange = { viewModel.setTone(tone.bassDb, it, tone.trebleDb) },
                 enabled = powered
             )
@@ -134,7 +131,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 label = "Agudos",
                 valueText = db(tone.trebleDb),
                 value = tone.trebleDb,
-                valueRange = -12f..12f,
+                valueRange = -36f..36f,
                 onValueChange = { viewModel.setTone(tone.bassDb, tone.midDb, it) },
                 enabled = powered
             )
@@ -262,80 +259,71 @@ private fun ToneCurve(
                 shape
             )
             .padding(horizontal = 8.dp, vertical = 6.dp)
-            .drawWithCache {
-                val minF = 20f
-                val maxF = 20000f
-                val span = log10(maxF / minF)
-                fun xOf(frequency: Float): Float =
-                    ((log10(frequency.coerceIn(minF, maxF) / minF)) / span) * size.width
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val minF = 20f
+            val maxF = 20000f
+            val span = log10(maxF / minF)
+            fun xOf(frequency: Float): Float =
+                ((log10(frequency.coerceIn(minF, maxF) / minF)) / span) * size.width
 
-                val centerY = size.height / 2f
-                val scale = size.height / 2.3f
-                fun yOf(db: Float) = centerY - (db / maxDb).coerceIn(-1f, 1f) * scale
+            val centerY = size.height / 2f
+            val scale = size.height / 2.3f
+            fun yOf(db: Float) = centerY - (db / maxDb).coerceIn(-1f, 1f) * scale
 
-                val xBass = xOf(bassHz)
-                val xTreble = xOf(trebleHz)
-                val path = Path().apply {
-                    moveTo(0f, yOf(bassDb))
-                    lineTo(xBass, yOf(bassDb))
-                    lineTo(xBass, yOf(midDb))
-                    lineTo(xTreble, yOf(midDb))
-                    lineTo(xTreble, yOf(trebleDb))
-                    lineTo(size.width, yOf(trebleDb))
-                }
+            // Línea central punteada de 0 dB
+            drawLine(
+                color = colors.textSecondary.copy(alpha = 0.16f),
+                start = Offset(0f, centerY),
+                end = Offset(size.width, centerY),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
+            )
 
-                val dashEffect = PathEffect.dashPathEffect(floatArrayOf(5f, 5f))
-                val glowStroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
-                val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                val gridStroke = 1.dp.toPx()
-                val nodeRadius = 2.dp.toPx()
-                val bassNode = Offset(xBass, yOf(bassDb))
-                val trebleNode = Offset(xTreble, yOf(trebleDb))
+            // Líneas divisorias de frecuencias de cruce
+            val xBass = xOf(bassHz)
+            val xTreble = xOf(trebleHz)
+            drawLine(
+                color = colors.textSecondary.copy(alpha = 0.10f),
+                start = Offset(xBass, 0f),
+                end = Offset(xBass, size.height),
+                strokeWidth = 1.dp.toPx()
+            )
+            drawLine(
+                color = colors.textSecondary.copy(alpha = 0.10f),
+                start = Offset(xTreble, 0f),
+                end = Offset(xTreble, size.height),
+                strokeWidth = 1.dp.toPx()
+            )
 
-                onDrawBehind {
-                    // Línea central punteada de 0 dB
-                    drawLine(
-                        color = colors.textSecondary.copy(alpha = 0.16f),
-                        start = Offset(0f, centerY),
-                        end = Offset(size.width, centerY),
-                        strokeWidth = gridStroke,
-                        pathEffect = dashEffect
-                    )
-
-                    // Líneas divisorias de frecuencias de cruce
-                    drawLine(
-                        color = colors.textSecondary.copy(alpha = 0.10f),
-                        start = Offset(xBass, 0f),
-                        end = Offset(xBass, size.height),
-                        strokeWidth = gridStroke
-                    )
-                    drawLine(
-                        color = colors.textSecondary.copy(alpha = 0.10f),
-                        start = Offset(xTreble, 0f),
-                        end = Offset(xTreble, size.height),
-                        strokeWidth = gridStroke
-                    )
-
-                    // Resplandor neón exterior
-                    drawPath(
-                        path = path,
-                        color = accent.copy(alpha = 0.3f),
-                        style = glowStroke
-                    )
-
-                    // Trazo nítido de tono
-                    drawPath(
-                        path = path,
-                        color = accent,
-                        style = lineStroke
-                    )
-
-                    // Puntos nodales
-                    drawCircle(color = accent, radius = nodeRadius, center = bassNode)
-                    drawCircle(color = accent, radius = nodeRadius, center = trebleNode)
-                }
+            val path = Path().apply {
+                moveTo(0f, yOf(bassDb))
+                lineTo(xBass, yOf(bassDb))
+                lineTo(xBass, yOf(midDb))
+                lineTo(xTreble, yOf(midDb))
+                lineTo(xTreble, yOf(trebleDb))
+                lineTo(size.width, yOf(trebleDb))
             }
-    )
+
+            // Resplandor neón exterior
+            drawPath(
+                path = path,
+                color = accent.copy(alpha = 0.3f),
+                style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // Trazo nítido de tono
+            drawPath(
+                path = path,
+                color = accent,
+                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // Puntos nodales
+            drawCircle(color = accent, radius = 2.dp.toPx(), center = Offset(xBass, yOf(bassDb)))
+            drawCircle(color = accent, radius = 2.dp.toPx(), center = Offset(xTreble, yOf(trebleDb)))
+        }
+    }
 }
 
 private fun kilo(hz: Float): String =

@@ -119,7 +119,7 @@ data class UsageProfile(
     val effectsEnabled: Boolean,
     val basePreset: String,
     /** Margen extra de realce aplicado a Graves y Sub-bajo en la pantalla Tono. */
-    val toneBoostMarginDb: Float = 12f,
+    val toneBoostMarginDb: Float = 36f,
     /** Corte inicial del paso bajo del sub-bajo al elegir este perfil (Hz). */
     val subCutoffHz: Float = 60f,
     val modules: ModuleState = ModuleState()
@@ -136,7 +136,7 @@ val UsageProfiles: List<UsageProfile> = listOf(
         basePreset = "Cálido y Profundo",
         // El altavoz interno corta por debajo de ~150-200 Hz: se realza la banda que sí
         // reproduce (graves altos) y el sub se centra en 70-100 Hz para que algo se note.
-        toneBoostMarginDb = 18f,
+        toneBoostMarginDb = 36f,
         subCutoffHz = 90f
     ),
     UsageProfile(
@@ -147,7 +147,7 @@ val UsageProfiles: List<UsageProfile> = listOf(
         levelProtection = false,
         effectsEnabled = false,
         basePreset = "Harman",
-        toneBoostMarginDb = 18f,
+        toneBoostMarginDb = 36f,
         subCutoffHz = 45f
     ),
     UsageProfile(
@@ -158,7 +158,7 @@ val UsageProfiles: List<UsageProfile> = listOf(
         levelProtection = true,
         effectsEnabled = false,
         basePreset = "JBL",
-        toneBoostMarginDb = 15f,
+        toneBoostMarginDb = 36f,
         subCutoffHz = 50f
     ),
     UsageProfile(
@@ -169,7 +169,7 @@ val UsageProfiles: List<UsageProfile> = listOf(
         levelProtection = true,
         effectsEnabled = false,
         basePreset = "Cálido y Profundo",
-        toneBoostMarginDb = 24f,
+        toneBoostMarginDb = 36f,
         subCutoffHz = 50f
     ),
     UsageProfile(
@@ -180,7 +180,7 @@ val UsageProfiles: List<UsageProfile> = listOf(
         levelProtection = false,
         effectsEnabled = false,
         basePreset = "JBL",
-        toneBoostMarginDb = 12f,
+        toneBoostMarginDb = 36f,
         // Con .1 el subwoofer hace todo el trabajo por debajo de 80 Hz (corte estándar LFE).
         subCutoffHz = 80f
     )

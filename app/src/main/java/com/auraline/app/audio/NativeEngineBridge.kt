@@ -115,9 +115,24 @@ object NativeEngineBridge {
                 val band = bands.getOrNull(i)
                 if (band != null) {
                     val center = bandCenterHz(bands, i)
-                    NativeEngine.setEqBand(i, center, if (state.bypass) 0f else band.gainDb, band.q)
+                    val toneGain = if (state.bypass) {
+                        0f
+                    } else {
+                        toneOffset(state, center) + subBoostAt(state, center)
+                    }
+                    NativeEngine.setEqBand(
+                        i,
+                        center,
+                        (if (state.bypass) 0f else band.gainDb + toneGain)
+                            .coerceIn(-36f, 36f),
+                        band.q
+                    )
                 }
             }
+            NativeEngine.setSubsonic(
+                enabled = !state.bypass,
+                cutoffHz = state.tone.subCutoffHz.coerceIn(20f, 100f)
+            )
 
             // Dynamics
             val comp = state.compressor
@@ -197,5 +212,25 @@ object NativeEngineBridge {
     fun setBluetoothRoute(isBluetooth: Boolean) {
         if (!NativeEngine.isAvailable()) return
         NativeEngine.setBluetoothRoute(isBluetooth)
+    }
+
+    private fun toneOffset(state: EqualizerState, centerHz: Float): Float {
+        return when {
+            centerHz <= state.tone.bassFrequencyHz -> state.tone.bassDb
+            centerHz >= state.tone.trebleFrequencyHz -> state.tone.trebleDb
+            else -> state.tone.midDb
+        }.coerceIn(-36f, 36f)
+    }
+
+    private fun subBoostAt(state: EqualizerState, centerHz: Float): Float {
+        val sub = state.tone.subDb
+        if (sub == 0f || centerHz > 100f) return 0f
+        val cutoff = state.tone.subCutoffHz.coerceIn(20f, 100f)
+        val shaped = if (centerHz <= cutoff) {
+            sub
+        } else {
+            sub * (1f - (centerHz - cutoff) / (100f - cutoff))
+        }
+        return shaped.coerceIn(-36f, 36f)
     }
 }

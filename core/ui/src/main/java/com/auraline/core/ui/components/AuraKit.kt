@@ -201,9 +201,6 @@ fun AuraBandFader(
     label: String = "Fader"
 ) {
     val colors = AuraTheme.colors
-    val activeTrackBrush = remember(colors.accent) {
-        Brush.verticalGradient(listOf(colors.accent, colors.accent.copy(alpha = 0.45f)))
-    }
     val range = (valueRange.endInclusive - valueRange.start).coerceAtLeast(0.001f)
     var trackHeight by remember { mutableFloatStateOf(1f) }
     val normalized = ((value - valueRange.start) / range).coerceIn(0f, 1f)
@@ -246,7 +243,7 @@ fun AuraBandFader(
                     strokeWidth = size.width
                 )
                 drawLine(
-                    brush = activeTrackBrush,
+                    brush = Brush.verticalGradient(listOf(colors.accent, colors.accent.copy(alpha = 0.45f))),
                     start = Offset(size.width / 2f, centerY),
                     end = Offset(size.width / 2f, size.height),
                     strokeWidth = size.width

@@ -51,7 +51,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -87,11 +86,11 @@ fun Modifier.neumorphicConvex(
     highlightColor: Color,
     shadowColor: Color,
     elevation: Dp = 8.dp
-) = this.drawWithCache {
+) = this.drawBehind {
     val cornerRadius = radius.toPx()
-    val blurRadius = (elevation.toPx() * 1.5f).coerceAtLeast(1f) // Blur más difuso como en el diseño de referencia
-    val dx = elevation.toPx()
-    val dy = elevation.toPx()
+    val blurRadius = elevation.toPx() * 1.5f // Blur más difuso como en el diseño de referencia
+    val dx = (elevation).toPx()
+    val dy = (elevation).toPx()
 
     val paintHighlight = Paint().apply {
         color = highlightColor
@@ -107,29 +106,27 @@ fun Modifier.neumorphicConvex(
         }
     }
 
-    onDrawBehind {
-        drawIntoCanvas { canvas ->
-            // Sombra inferior derecha (Oscura)
-            canvas.drawRoundRect(
-                left = dx,
-                top = dy,
-                right = size.width + dx,
-                bottom = size.height + dy,
-                radiusX = cornerRadius,
-                radiusY = cornerRadius,
-                paint = paintShadow
-            )
-            // Brillo superior izquierdo (Claro)
-            canvas.drawRoundRect(
-                left = -dx,
-                top = -dy,
-                right = size.width - dx,
-                bottom = size.height - dy,
-                radiusX = cornerRadius,
-                radiusY = cornerRadius,
-                paint = paintHighlight
-            )
-        }
+    drawIntoCanvas { canvas ->
+        // Sombra inferior derecha (Oscura)
+        canvas.drawRoundRect(
+            left = dx,
+            top = dy,
+            right = size.width + dx,
+            bottom = size.height + dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintShadow
+        )
+        // Brillo superior izquierdo (Claro)
+        canvas.drawRoundRect(
+            left = -dx,
+            top = -dy,
+            right = size.width - dx,
+            bottom = size.height - dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintHighlight
+        )
     }
 }
 
@@ -138,17 +135,16 @@ fun Modifier.neumorphicConcave(
     shadowColor: Color,
     highlightColor: Color,
     elevation: Dp = 4.dp
-) = this.drawWithCache {
+) = this.drawBehind {
     val cornerRadius = radius.toPx()
-    val blurRadius = elevation.toPx().coerceAtLeast(1f)
+    val blurRadius = elevation.toPx()
     val dx = (elevation / 1.5f).toPx()
     val dy = (elevation / 1.5f).toPx()
-    val strokeW = elevation.toPx() * 2
 
     val paintShadow = Paint().apply {
         color = shadowColor
         style = androidx.compose.ui.graphics.PaintingStyle.Stroke
-        strokeWidth = strokeW // Stroke más grueso para que se vea más natural al difuminar
+        strokeWidth = elevation.toPx() * 2 // Stroke más grueso para que se vea más natural al difuminar
         asFrameworkPaint().apply {
             maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
@@ -157,35 +153,37 @@ fun Modifier.neumorphicConcave(
     val paintHighlight = Paint().apply {
         color = highlightColor
         style = androidx.compose.ui.graphics.PaintingStyle.Stroke
-        strokeWidth = strokeW
+        strokeWidth = elevation.toPx() * 2
         asFrameworkPaint().apply {
             maskFilter = android.graphics.BlurMaskFilter(blurRadius, android.graphics.BlurMaskFilter.Blur.NORMAL)
         }
     }
 
-    onDrawBehind {
-        drawIntoCanvas { canvas ->
-            // Sombra interior superior izquierda (simulando que la luz viene de arriba a la izquierda y pega dentro)
-            canvas.drawRoundRect(
-                left = -dx,
-                top = -dy,
-                right = size.width + dx,
-                bottom = size.height + dy,
-                radiusX = cornerRadius,
-                radiusY = cornerRadius,
-                paint = paintShadow
-            )
-            // Brillo interior inferior derecho
-            canvas.drawRoundRect(
-                left = -dx,
-                top = -dy,
-                right = size.width + dx,
-                bottom = size.height + dy,
-                radiusX = cornerRadius,
-                radiusY = cornerRadius,
-                paint = paintHighlight
-            )
-        }
+    drawIntoCanvas { canvas ->
+        // Sombra interior superior izquierda (simulando que la luz viene de arriba a la izquierda y pega dentro)
+        canvas.drawRoundRect(
+            left = -dx,
+            top = -dy,
+            right = size.width + dx,
+            bottom = size.height + dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintShadow
+        )
+        // Brillo interior inferior derecho
+        canvas.drawRoundRect(
+            left = -dx,
+            top = -dy,
+            right = size.width + dx,
+            bottom = size.height + dy,
+            radiusX = cornerRadius,
+            radiusY = cornerRadius,
+            paint = paintHighlight
+        )
+
+        // Se requiere un clip o un clear en el borde interior si no estuviese recortado,
+        // pero Compose aplica modifier background/clip despues de drawBehind
+        // (por lo tanto drawBehind afecta al fondo)
     }
 }
 
@@ -856,12 +854,6 @@ fun SpectrumBars(
             val barWidth = ((size.width - totalGaps) / count).coerceAtLeast(1.5f)
             val radius = CornerRadius(barWidth / 2f, barWidth / 2f)
             val minBarHeight = (barWidth * 0.85f).coerceAtMost(size.height * 0.2f)
-            val slotColor = colors.outline.copy(alpha = 0.16f)
-            val barBrush = Brush.verticalGradient(
-                colors = listOf(colors.textPrimary, accent),
-                startY = 0f,
-                endY = size.height
-            )
 
             for (index in 0 until count) {
                 val left = index * (barWidth + gap)
@@ -869,7 +861,7 @@ fun SpectrumBars(
 
                 // 1. Ranura física empotrada de fondo (canal inactivo visible)
                 drawRoundRect(
-                    color = slotColor,
+                    color = colors.outline.copy(alpha = 0.16f),
                     topLeft = Offset(left, 0f),
                     size = Size(barWidth, size.height),
                     cornerRadius = radius
@@ -880,7 +872,14 @@ fun SpectrumBars(
                 val top = size.height - barHeight
 
                 drawRoundRect(
-                    brush = barBrush,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            colors.textPrimary, // Tono luminoso de la paleta
+                            accent              // Acento de la paleta
+                        ),
+                        startY = top,
+                        endY = size.height
+                    ),
                     topLeft = Offset(left, top),
                     size = Size(barWidth, barHeight),
                     cornerRadius = radius,
@@ -1091,101 +1090,102 @@ fun ResponseCurve(
                 shape
             )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 10.dp, vertical = 10.dp)
-                .drawWithCache {
-                    if (bands.isEmpty()) {
-                        onDrawBehind {}
-                    } else {
-                        val minF = bands.minOf { it.frequencyHz }.coerceAtLeast(20f)
-                        val maxF = bands.maxOf { it.frequencyHz }.coerceAtLeast(minF * 1.01f)
-                        val spanLog = log10(maxF / minF)
-                        val centerY = size.height / 2f
-                        val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+        Canvas(modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 10.dp)) {
+            if (bands.isEmpty()) return@Canvas
+            val minF = bands.minOf { it.frequencyHz }.coerceAtLeast(20f)
+            val maxF = bands.maxOf { it.frequencyHz }.coerceAtLeast(minF * 1.01f)
+            val spanLog = log10(maxF / minF)
+            val centerY = size.height / 2f
 
-                        val steps = 90
-                        val path = Path()
-                        val points = ArrayList<Offset>(steps + 1)
+            // Retícula proporcional al rango real de las bandas configuradas.
+            listOf(0.25f, 0.5f, 0.75f).forEach { fraction ->
+                val x = fraction * size.width
+                drawLine(
+                    color = colors.textSecondary.copy(alpha = 0.08f),
+                    start = Offset(x, 0f),
+                    end = Offset(x, size.height),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
 
-                        for (i in 0..steps) {
-                            val fraction = i.toFloat() / steps
-                            val freq = minF * Math.pow((maxF / minF).toDouble(), fraction.toDouble()).toFloat()
-                            var totalGainDb = 0f
+            // Línea de referencia 0 dB
+            drawLine(
+                color = colors.textSecondary.copy(alpha = 0.20f),
+                start = Offset(0f, centerY),
+                end = Offset(size.width, centerY),
+                strokeWidth = 1.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f))
+            )
 
-                            for (band in bands) {
-                                if (kotlin.math.abs(band.gainDb) >= 0.05f) {
-                                    totalGainDb += calculateBiquadMagnitudeDb(freq, band.frequencyHz, band.gainDb, band.q)
-                                }
-                            }
+            val steps = 90
+            val path = Path()
+            val points = ArrayList<Offset>(steps)
 
-                            val x = fraction * size.width
-                            val y = centerY - (totalGainDb / gainRangeDb).coerceIn(-1.2f, 1.2f) * (size.height / 2.2f)
-                            val pt = Offset(x, y)
-                            points.add(pt)
+            for (i in 0..steps) {
+                val fraction = i.toFloat() / steps
+                val freq = minF * Math.pow((maxF / minF).toDouble(), fraction.toDouble()).toFloat()
+                var totalGainDb = 0f
 
-                            if (i == 0) {
-                                path.moveTo(x, y)
-                            } else {
-                                val prev = points[i - 1]
-                                val cx = (prev.x + x) / 2f
-                                path.cubicTo(cx, prev.y, cx, y, x, y)
-                            }
-                        }
-
-                        val fill = Path().apply {
-                            addPath(path)
-                            lineTo(size.width, size.height)
-                            lineTo(0f, size.height)
-                            close()
-                        }
-
-                        val fillBrush = Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.28f), Color.Transparent)
-                        )
-                        val glowStroke = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
-                        val lineStroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-                        val gridStroke = 1.dp.toPx()
-                        val nodeRadius = 2.dp.toPx()
-
-                        val nodes = bands.map { band ->
-                            val cutoff = band.frequencyHz.coerceIn(minF, maxF)
-                            val x = ((log10(cutoff / minF)) / spanLog) * size.width
-                            val y = centerY - (band.gainDb / gainRangeDb).coerceIn(-1f, 1f) * (size.height / 2.2f)
-                            Offset(x, y)
-                        }
-
-                        onDrawBehind {
-                            listOf(0.25f, 0.5f, 0.75f).forEach { fraction ->
-                                val x = fraction * size.width
-                                drawLine(
-                                    color = colors.textSecondary.copy(alpha = 0.08f),
-                                    start = Offset(x, 0f),
-                                    end = Offset(x, size.height),
-                                    strokeWidth = gridStroke
-                                )
-                            }
-
-                            drawLine(
-                                color = colors.textSecondary.copy(alpha = 0.20f),
-                                start = Offset(0f, centerY),
-                                end = Offset(size.width, centerY),
-                                strokeWidth = gridStroke,
-                                pathEffect = dashEffect
-                            )
-
-                            drawPath(path = fill, brush = fillBrush)
-                            drawPath(path = path, color = accent.copy(alpha = 0.35f), style = glowStroke)
-                            drawPath(path = path, color = accent, style = lineStroke)
-
-                            nodes.forEach { node ->
-                                drawCircle(color = accent, radius = nodeRadius, center = node)
-                            }
-                        }
+                for (band in bands) {
+                    if (kotlin.math.abs(band.gainDb) >= 0.05f) {
+                        totalGainDb += calculateBiquadMagnitudeDb(freq, band.frequencyHz, band.gainDb, band.q)
                     }
                 }
-        )
+
+                val x = fraction * size.width
+                val y = centerY - (totalGainDb / gainRangeDb).coerceIn(-1.2f, 1.2f) * (size.height / 2.2f)
+                val pt = Offset(x, y)
+                points.add(pt)
+
+                if (i == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    val prev = points[i - 1]
+                    val cx = (prev.x + x) / 2f
+                    path.cubicTo(cx, prev.y, cx, y, x, y)
+                }
+            }
+
+            // Relleno de área degradada bajo la curva
+            val fill = Path().apply {
+                addPath(path)
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            drawPath(
+                path = fill,
+                brush = Brush.verticalGradient(
+                    listOf(accent.copy(alpha = 0.28f), Color.Transparent)
+                )
+            )
+
+            // Resplandor de la curva (bloom pass)
+            drawPath(
+                path = path,
+                color = accent.copy(alpha = 0.35f),
+                style = Stroke(width = 6.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // Línea nítida de la curva
+            drawPath(
+                path = path,
+                color = accent,
+                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // Nodos en cada banda
+            bands.forEach { band ->
+                val cutoff = band.frequencyHz.coerceIn(minF, maxF)
+                val x = ((log10(cutoff / minF)) / spanLog) * size.width
+                val y = centerY - (band.gainDb / gainRangeDb).coerceIn(-1f, 1f) * (size.height / 2.2f)
+                drawCircle(
+                    color = accent,
+                    radius = 2.dp.toPx(),
+                    center = Offset(x, y)
+                )
+            }
+        }
     }
 }
 
