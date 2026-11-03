@@ -403,7 +403,9 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val range = db.coerceIn(6f, 36f)
         saveSettings(_settings.value.copy(gainRangeDb = range))
         val current = _state.value
-        val clamped = current.bands.map { it.copy(gainDb = it.gainDb.coerceIn(-range, range)) }
+        val globalGain = range.coerceIn(-range, range)
+        val bands = current.bands.ifEmpty { generateEqualizerBands(current.numBands) }
+        val clamped = bands.map { it.copy(gainDb = globalGain) }
         saveState(current.copy(gainRangeDb = range, bands = clamped))
     }
 
