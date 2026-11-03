@@ -7,7 +7,6 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -38,11 +37,6 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <service
-            android:name=".audio.CaptureAudioService"
-            android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
-
         <!-- Se habilita desde Ajustes sólo si el usuario activa el inicio automático -->
         <receiver
             android:name=".audio.BootReceiver"
@@ -67,15 +61,6 @@
         <receiver
             android:name=".audio.MotorToggleReceiver"
             android:exported="false" />
-
-        <service
-            android:name=".audio.AuraLineTileService"
-            android:exported="true"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
 
         <!-- Panel de efectos: cualquier reproductor compatible puede abrir AuraLine como su
              ecualizador (ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL). -->
@@ -102,4 +87,5 @@
             <action android:name="android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
     </queries>
+
 </manifest>

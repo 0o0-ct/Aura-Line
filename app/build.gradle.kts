@@ -91,4 +91,7 @@ dependencies {
 
     // Add Oboe via Prefab
     implementation("com.google.oboe:oboe:1.8.1")
+
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20231013")
 }

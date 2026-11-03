@@ -39,16 +39,13 @@ object AuraLineEngine {
     private const val MBC_BANDS = 3
 
     /** Objetivo de nivel de salida: deja margen para que el códec no sature. */
-    private const val TARGET_HEADROOM_DB = 4f
+    private const val TARGET_HEADROOM_DB = 3.0f
 
-    private const val MAX_HEADROOM_DB = 6f
+    /** Rango máximo de atenuación de headroom para proteger salidas digitales (Bluetooth A2DP/LE). */
+    private const val MAX_HEADROOM_DB = 36f
 
-    /** Tope por banda del PreEq y por región del MBC (Android no permite más; ver límite real). */
-    /** Techo del limitador de DynamicsProcessing, en dBFS. Único sitio donde se define. */
-    private const val LIMITER_THRESHOLD_DB = -2f
-
-    /** Tope por banda del PreEq y por región del MBC (Android no permite más; ver límite real). */
-    private const val MAX_BAND_GAIN_DB = 24f
+    /** Tope por banda del PreEq y por región del MBC (permite más de 24 dB sin clipping). */
+    private const val MAX_BAND_GAIN_DB = 36f
 
     /** Separación mínima entre los cruces Graves/Medios y Medios/Agudos (Hz). */
     private const val CROSS_MIN_GAP_HZ = 800f
@@ -102,11 +99,8 @@ object AuraLineEngine {
         if (!scheduled.compareAndSet(false, true)) return
         executor.execute {
             scheduled.set(false)
-            // Se lee `desired` en el momento de ejecución para no aplicar un estado
-            // obsoleto si llegaron cambios mientras la tarea estaba encolada.
-            val current = desired
             try {
-                if (current.motorEnabled) applyEngine(current) else releaseChain()
+                if (state.motorEnabled) applyEngine(state) else releaseChain()
             } catch (error: Throwable) {
                 lastError = error.message ?: error.javaClass.simpleName
                 Log.e(TAG, "No se pudo aplicar el estado: ${error.message}")
@@ -122,11 +116,8 @@ object AuraLineEngine {
         runCatching { latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
     }
 
-    fun onSessionOpened(sessionId: Int, packageName: String? = null) {
+    fun onSessionOpened(sessionId: Int) {
         if (sessionId == GLOBAL_SESSION) return
-        if (!packageName.isNullOrBlank()) {
-            Log.i(TAG, "Sesión $sessionId asociada a la aplicación: $packageName")
-        }
         executor.execute {
             if (!desired.motorEnabled) return@execute
             if (sessionChain.containsKey(sessionId)) return@execute
@@ -278,7 +269,7 @@ object AuraLineEngine {
 
         val limiter = DynamicsProcessing.Limiter(
             state.modules.limiter,
-            true, 0, 5f, 60f, 10f, LIMITER_THRESHOLD_DB, 0f
+            true, 0, 5f, 60f, 10f, -2f, 0f
         )
 
         val config = DynamicsProcessing.Config.Builder(
@@ -340,7 +331,7 @@ object AuraLineEngine {
         val gate = state.gate
         val compressing = state.effectsEnabled && state.modules.compressor && !state.bypass
         val gateActive = state.effectsEnabled && state.modules.gate && !state.bypass
-        val regionGain = 0f
+        val regionGain = if (state.bypass) 0f else toneRegionDb(state, bandIndex)
         return DynamicsProcessing.MbcBand(
             true,
             cutoffHz,
@@ -351,7 +342,7 @@ object AuraLineEngine {
             if (compressing) 6f else 0f,
             if (gateActive) gate.thresholdDb.coerceIn(-80f, -20f) else -80f,
             if (gateActive) gate.ratio.coerceIn(1f, 10f) else 1f,
-            (if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f),
+            (if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f) + regionGain,
             0f
         )
     }
@@ -370,9 +361,8 @@ object AuraLineEngine {
         AuraLineSpectrum.setBandEdges(frequencies)
         val centers = bandCenters(frequencies)
 
-        // Preamp y Headroom:
-        // En lugar de recortar todo el volumen, permitimos que el limitador haga su trabajo.
-        // Sólo reducimos la ganancia si hay un refuerzo masivo de más de 12dB.
+        // Headroom real: suma precisa de la ganancia máxima de la curva (bandas + sub-bajo),
+        // el realce por región del MBC, la compensación de volumen y la energía de la reverb.
         val peakBand = (0 until bandCount).maxOfOrNull { band ->
             appliedBandGain(state, bandGains[band], centers[band]).coerceAtLeast(0f)
         } ?: 0f
@@ -382,47 +372,53 @@ object AuraLineEngine {
         val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
         val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
         val totalBoost = peakBand + mbcPeak + makeup + reverbEnergy
-        val headroom = if (state.autoPreamp) {
-            ((totalBoost - 12f) * 0.2f).coerceIn(0f, 6f)
-        } else {
-            0f
-        }
 
-        val balance = if (state.bypass) 0f else state.stereo.balance / 100f
-        val preamp = if (state.bypass) 0f else state.preampDb - headroom
+        val isBluetooth = _status.value.route == AudioRoute.BLUETOOTH
+        // En Bluetooth A2DP/LE Audio, los códecs (SBC/AAC/LDAC) recortan estrictamente a 0 dBFS
+        // y los filtros de reconstrucción generan sobreimpulsos inter-sample (True Peak).
+        // Se reserva un margen de seguridad de 2.0 dB para evitar distorsión áspera y chillona.
+        val codecMargin = if (isBluetooth) 2.0f else 0.5f
+
+        val headroom = if (state.autoPreamp) {
+            if (totalBoost > TARGET_HEADROOM_DB) {
+                // Compensación exacta y suave: evita clipping sin destruir el carácter tonal
+                (totalBoost - TARGET_HEADROOM_DB + codecMargin).coerceIn(0f, MAX_HEADROOM_DB)
+            } else {
+                0f
+            }
+        } else {
+            // Protección mínima de seguridad en Bluetooth cuando el usuario apaga autoPreamp
+            if (isBluetooth && totalBoost > 14f) {
+                ((totalBoost - 14f) * 0.75f).coerceIn(0f, 18f)
+            } else {
+                0f
+            }
+        }
+        val maxBoost = headroom
+
+        val balance = state.stereo.balance / 100f
+        val preamp = state.preampDb - maxBoost
         val leftGain = preamp + if (balance > 0f) -balance * 12f else 0f
         val rightGain = preamp + if (balance < 0f) balance * 12f else 0f
-        
-        // Aplicamos la ganancia global de forma segura
-        runCatching {
-            dp.setInputGainAllChannelsTo(preamp)
-            dp.setInputGainbyChannel(0, leftGain)
-            dp.setInputGainbyChannel(1, rightGain)
-        }
+        dp.setInputGainbyChannel(0, leftGain)
+        dp.setInputGainbyChannel(1, rightGain)
 
         val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
+            // El PreEq lleva la curva de bandas más el sub-bajo; Graves/Medios/Agudos viajan en
+            // el MBC con sus propios cruces configurables (ver compressorBand), sin duplicar filtros.
             val gain = if (eqActive) {
-                // Modulo EQ activo y no hay bypass: aplicar curva completa
-                (bandGains[band] + toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
-                    .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
-            } else if (!state.bypass && !state.modules.equalizer) {
-                // Módulo EQ apagado manualmente, pero SIN bypass general:
-                // Solo se aplican los controles de Tono (se comportan como estanterías) y el sub-bajo.
-                (toneOffset(state, centers[band]) + subBoostAt(state, centers[band]))
+                (bandGains[band] + subBoostAt(state, centers[band]))
                     .coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
             } else {
-                // Bypass activo (A/B) o curva completamente apagada:
-                // El filtro devuelve 0 absoluto. Todo el procesamiento de frecuencias queda nulo.
-                0f
+                // Con el módulo EQ apagado, el control de tono sigue actuando como estanterías.
+                toneOffset(state, centers[band]) + subBoostAt(state, centers[band])
             }
             dp.setPreEqBandAllChannelsTo(
                 band,
-                DynamicsProcessing.EqBand(true, frequencies[band], gain)
+                DynamicsProcessing.EqBand(true, frequencies[band], gain.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB))
             )
         }
-
-
 
         if (DEBUG_LOG_BANDS) {
             val active = (0 until bandCount).filter { kotlin.math.abs(bandGains[it]) > 0.5f || state.bypass }
@@ -437,15 +433,25 @@ object AuraLineEngine {
         for (band in 0 until MBC_BANDS) {
             dp.setMbcBandAllChannelsTo(band, compressorBand(mbcCutoffs(state)[band], state, band))
         }
+
+        // Limitador de seguridad Brickwall con ataque ultrarrápido (1ms) y ratio alto (50:1)
+        // para impedir que transitorios de graves saturen el codificador Bluetooth
+        val limiterCeiling = if (isBluetooth) {
+            // Techo de seguridad a -1.5 dBFS en Bluetooth para evitar clipping en códecs SBC/AAC
+            minOf(-1.5f, state.compressor.limiterCeiling.coerceIn(-12f, 0f))
+        } else {
+            state.compressor.limiterCeiling.coerceIn(-12f, -0.2f)
+        }
+
         dp.setLimiterAllChannelsTo(
             DynamicsProcessing.Limiter(
                 state.modules.limiter && !state.bypass,
                 true,
                 0,
-                5f,
-                60f,
-                10f,
-                state.compressor.limiterCeiling.coerceIn(-12f, 0f),
+                1.0f, // 1 ms ataque rápido para capturar picos de graves
+                80.0f, // 80 ms liberación transparente sin bombeo
+                50.0f, // Ratio 50:1 (Brickwall limiter efectivo)
+                limiterCeiling,
                 0f
             )
         )
@@ -473,24 +479,24 @@ object AuraLineEngine {
         if (deviceBands <= 0) return
         val frequencies = bandFrequencies(state, state.numBands.coerceIn(20, 25))
         val gains = bandGains(state, state.numBands.coerceIn(20, 25))
-        val min = try { eq.bandLevelRange[0] } catch (_: Throwable) { -1500.toShort() }
-        val max = try { eq.bandLevelRange[1] } catch (_: Throwable) { 1500.toShort() }
+        val min = try { eq.bandLevelRange[0].toFloat() } catch (_: Throwable) { -1500f }
+        val max = try { eq.bandLevelRange[1].toFloat() } catch (_: Throwable) { 1500f }
         // ¿La orden supera lo que este Equalizer puede dar? Se registra el recorte real.
         var clippedAt = 0f
         for (band in 0 until deviceBands) {
-            val centerHz = try { eq.getCenterFreq(band.toShort()).toFloat() / 1000.0f } catch (_: Throwable) { continue }
+            val centerHz = try { eq.getCenterFreq(band.toShort()) / 1000f } catch (_: Throwable) { continue }
             val nearest = frequencies.indices.minByOrNull { abs(frequencies[it] - centerHz) }
             val base = nearest?.let { gains[it] } ?: 0f
             val ordered = regionGainForLegacyEq(state, base, centerHz) + state.preampDb
-            if (ordered > max.toFloat() / 100f || ordered < min.toFloat() / 100f) clippedAt = maxOf(clippedAt, abs(ordered))
+            if (ordered > max / 100f || ordered < min / 100f) clippedAt = maxOf(clippedAt, abs(ordered))
         }
         if (clippedAt > 0f) {
-            lastError = "EQ del sistema recorta a ±${max.toFloat() / 100f} dB (se pidieron %.1f dB)".format(clippedAt)
+            lastError = "EQ del sistema recorta a ±${max / 100f} dB (se pidieron %.1f dB)".format(clippedAt)
             Log.w(TAG, lastError!!)
         }
 
         for (band in 0 until deviceBands) {
-            val centerHz = try { eq.getCenterFreq(band.toShort()).toFloat() / 1000f } catch (_: Throwable) { 1000f }
+            val centerHz = try { eq.getCenterFreq(band.toShort()) / 1000f } catch (_: Throwable) { 1000f }
             val nearest = frequencies.indices.minByOrNull { kotlin.math.abs(frequencies[it] - centerHz) }
             val base = if (nearest != null) gains[nearest] else 0f
             // Tono + sub-bajo repartidos igual que en la cadena DynamicsProcessing.
@@ -650,6 +656,47 @@ object AuraLineEngine {
         return enabled && controlled
     }
 
+    private fun publish() {
+        val app = appContext
+        val manager = app?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val device = manager?.let { pickOutput(it) }
+        val route = manager?.let { currentRoute(it) } ?: AudioRoute.UNKNOWN
+        val sampleRate = manager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48000
+
+        val stages = mutableListOf<EffectStage>()
+        if (processing != null && effectAlive(processing)) {
+            stages.add(EffectStage("DynamicsProcessing", true, "Motor principal activo"))
+            stages.add(EffectStage("PreEQ", desired.modules.equalizer && !desired.bypass, "${builtBandCount} bandas"))
+            stages.add(EffectStage("MBC", desired.modules.compressor && !desired.bypass, "3 bandas"))
+            stages.add(EffectStage("Limitador", desired.modules.limiter && !desired.bypass, "True-Peak Limiter"))
+        } else if (fallbackEq != null && effectAlive(fallbackEq)) {
+            stages.add(EffectStage("Equalizer", true, "Modo compatibilidad"))
+        }
+
+        if (reverb != null && effectAlive(reverb)) {
+            stages.add(EffectStage("Reverb", true, "Reverberación activa"))
+        }
+        if (virtualizer != null && effectAlive(virtualizer)) {
+            stages.add(EffectStage("Virtualizer", true, "Expansión estéreo"))
+        }
+
+        val sessions = sessionChain.keys.map { id ->
+            AudioSession(id = id, owner = "Sesión $id", global = id == GLOBAL_SESSION)
+        }
+
+        _status.value = EngineStatus(
+            running = (processing != null && effectAlive(processing)) || (fallbackEq != null && effectAlive(fallbackEq)),
+            globalScope = true,
+            route = route,
+            sampleRateHz = sampleRate,
+            outputName = device?.productName?.toString() ?: device?.address?.toString(),
+            channels = 2,
+            stages = stages,
+            sessions = sessions,
+            lastError = lastError
+        )
+    }
+
     private fun registerDeviceCallback(context: Context) {
         if (deviceCallback != null) return
         val callback = object : AudioDeviceCallback() {
@@ -674,96 +721,44 @@ object AuraLineEngine {
     private fun reapplySoon() {
         executor.execute {
             if (desired.motorEnabled) {
+                // Durante la conexión/desconexión Bluetooth o cambio de códec A2DP (SBC/AAC/LDAC),
+                // la frecuencia de muestreo de la salida puede cambiar (p.ej. de 48kHz a 44.1kHz o 96kHz).
+                // Si la frecuencia cambió o el efecto perdió control, reconstruimos la cadena limpia.
+                val manager = appContext?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                val newRate = manager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 0
+                if (newRate > 0 && _status.value.sampleRateHz > 0 && newRate != _status.value.sampleRateHz) {
+                    Log.i(TAG, "Cambio de frecuencia de salida detectado (${_status.value.sampleRateHz} -> $newRate Hz). Reconstruyendo DSP.")
+                    runCatching { processing?.release() }
+                    processing = null
+                    builtBandCount = 0
+                }
                 runCatching { applyEngine(desired) }
+                publish()
             }
         }
     }
 
-    private fun publish() {
-        val context = appContext ?: return
-        val manager = runCatching {
-            context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        }.getOrNull()
-
-        val output = manager?.let { pickOutput(it) }
-        val route = output?.let { routeOf(it) } ?: AudioRoute.UNKNOWN
-        val sampleRate = manager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
-            ?.toIntOrNull() ?: 0
-
-        // Estado real leído del propio efecto: que exista el objeto no significa que el sistema
-        // lo tenga activo ni que conserve el control.
-        val dpLive = effectAlive(processing)
-        val eqLive = effectAlive(fallbackEq)
-        val revLive = effectAlive(reverb)
-        val virLive = effectAlive(virtualizer)
-        val mbcActive = dpLive && desired.effectsEnabled && desired.modules.compressor && !desired.bypass
-        val limiterActive = dpLive && desired.modules.limiter && !desired.bypass
-        val toneActive = dpLive || eqLive
-        val cutoffs = runCatching { mbcCutoffs(desired) }.getOrDefault(floatArrayOf(100f, 2000f, 9000f))
-
-        val stages = listOf(
-            EffectStage(
-                "Ecualizador paramétrico",
-                dpLive || eqLive,
-                if (dpLive) "${desired.numBands.coerceIn(20, 25)} bandas · DP" else "EQ del dispositivo · ${if (fallbackEq != null) "sin control" else "no creado"}"
-            ),
-
-            EffectStage(
-                "Compresor multibanda",
-                mbcActive,
-                if (mbcActive) "3 bandas · cruces ${cutoffs[0].toInt()}/${cutoffs[1].toInt()}/${cutoffs[2].toInt()} Hz"
-                else if (dpLive && !desired.effectsEnabled) "inactivo: activa Efectos"
-                else "requiere DynamicsProcessing"
-            ),
-            EffectStage("Limitador", limiterActive, "techo ${desired.compressor.limiterCeiling} dBFS"),
-            EffectStage(
-                "Tono (sub · graves · medios · agudos)",
-                toneActive,
-                "sub ${desired.tone.subDb}dB ≤${desired.tone.subCutoffHz.toInt()}Hz · shelves ${desired.tone.bassFrequencyHz.toInt()} / ${desired.tone.trebleFrequencyHz.toInt()} Hz"
-            ),
-            EffectStage("Anchura estéreo", virLive, "Virtualizer"),
-            EffectStage("Reverb", revLive, "EnvironmentalReverb")
-        )
-
-        val sessions = buildList {
-            if (dpLive || eqLive) {
-                add(AudioSession(GLOBAL_SESSION, "Mezcla del sistema · efectos vivos", true))
-            } else if (processing != null || fallbackEq != null) {
-                add(AudioSession(GLOBAL_SESSION, "Mezcla del sistema · efecto sin control", true))
-            }
-            sessionChain.forEach { (id, effect) ->
-                val ok = effectAlive(effect)
-                add(
-                    AudioSession(
-                        id,
-                        "Reproductor · ${effect.javaClass.simpleName}${if (ok) "" else " · sin control"}",
-                        false
-                    )
-                )
-            }
-        }
-
-        _status.value = EngineStatus(
-            running = desired.motorEnabled && (dpLive || eqLive || sessionChain.values.any { effectAlive(it) }),
-            globalScope = dpLive || eqLive,
-            route = route,
-            sampleRateHz = sampleRate,
-            outputName = output?.productName?.toString()?.trim()?.takeIf { it.isNotEmpty() },
-            channels = output?.channelCounts?.maxOrNull() ?: 2,
-            stages = stages,
-            sessions = sessions,
-            lastError = lastError
-        )
+    private fun isBluetoothType(type: Int): Boolean {
+        return type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+               type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+               type == 26 || // AudioDeviceInfo.TYPE_BLE_HEADSET (API 31+)
+               type == 27 || // AudioDeviceInfo.TYPE_BLE_SPEAKER (API 31+)
+               type == 30 || // AudioDeviceInfo.TYPE_BLE_BROADCAST (API 33+)
+               type == 23    // AudioDeviceInfo.TYPE_HEARING_AID (API 28+)
     }
 
-    /** Dispositivo que está sonando ahora mismo, con lo que el sistema permite ver. */
+    /** Dispositivo que está sonando ahora mismo, con soporte completo para A2DP y LE Audio. */
     private fun pickOutput(manager: AudioManager): AudioDeviceInfo? {
         val devices = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         val priority = listOf(
             AudioDeviceInfo.TYPE_USB_HEADSET,
             AudioDeviceInfo.TYPE_USB_DEVICE,
+            26, // TYPE_BLE_HEADSET
+            27, // TYPE_BLE_SPEAKER
             AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
             AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+            23, // TYPE_HEARING_AID
+            30, // TYPE_BLE_BROADCAST
             AudioDeviceInfo.TYPE_WIRED_HEADSET,
             AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
             AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
@@ -771,10 +766,10 @@ object AuraLineEngine {
         return priority.firstNotNullOfOrNull { type -> devices.firstOrNull { it.type == type } }
     }
 
-    private fun routeOf(device: AudioDeviceInfo): AudioRoute = when (device.type) {
-        AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE -> AudioRoute.USB
-        AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> AudioRoute.BLUETOOTH
-        AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET -> AudioRoute.WIRED_HEADSET
+    private fun routeOf(device: AudioDeviceInfo): AudioRoute = when {
+        device.type == AudioDeviceInfo.TYPE_USB_HEADSET || device.type == AudioDeviceInfo.TYPE_USB_DEVICE -> AudioRoute.USB
+        isBluetoothType(device.type) -> AudioRoute.BLUETOOTH
+        device.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || device.type == AudioDeviceInfo.TYPE_WIRED_HEADSET -> AudioRoute.WIRED_HEADSET
         else -> AudioRoute.SPEAKER
     }
 
@@ -782,10 +777,7 @@ object AuraLineEngine {
         val devices = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         return when {
             devices.any { it.type == AudioDeviceInfo.TYPE_USB_HEADSET || it.type == AudioDeviceInfo.TYPE_USB_DEVICE } -> AudioRoute.USB
-            devices.any {
-                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-                    it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-            } -> AudioRoute.BLUETOOTH
+            devices.any { isBluetoothType(it.type) } -> AudioRoute.BLUETOOTH
             devices.any {
                 it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
                     it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET

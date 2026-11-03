@@ -1,19 +1,20 @@
-*.iml
-.gradle
-/local.properties
-/.idea/
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
-app/build/
-core/audio/build/
-core/data/build/
-core/domain/build/
-core/ui/build/
+# Build
+build/
+.gradle/
 .kotlin/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Toolchain bundled in the repo (see jdk/README)
 jdk/
 gradle/dist/
+
+# OS
+.DS_Store
+
+# Parches locales
 *.patch

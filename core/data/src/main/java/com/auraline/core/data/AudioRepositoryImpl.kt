@@ -44,6 +44,7 @@ import com.auraline.core.domain.clampThresholdDb
 import com.auraline.core.domain.clampToneDb
 import com.auraline.core.domain.clampTrebleCrossHz
 import com.auraline.core.domain.clampBassCrossHz
+import com.auraline.core.domain.toneBoostMarginFor
 import com.auraline.core.domain.focusFor
 import com.auraline.core.domain.generateEqualizerBands
 import com.auraline.core.domain.resolveFocus
@@ -399,7 +400,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     override fun setBypass(enabled: Boolean) = saveState(_state.value.copy(bypass = enabled))
 
     override fun setGainRange(db: Float) {
-        val range = db.coerceIn(6f, 24f)
+        val range = db.coerceIn(6f, 36f)
         saveSettings(_settings.value.copy(gainRangeDb = range))
         val current = _state.value
         val clamped = current.bands.map { it.copy(gainDb = it.gainDb.coerceIn(-range, range)) }
@@ -413,7 +414,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val centers = bands.indices.map { bandCenterHz(bands, it) }
         val gains = FloatArray(bands.size)
 
-        val limit = current.gainRangeDb.coerceIn(6f, 24f)
+        val limit = current.gainRangeDb.coerceIn(6f, 36f)
         preset.gains.forEach { (frequency, gain) ->
             val index = centers.indices.minByOrNull { abs(centers[it] - frequency) } ?: return@forEach
             // Los valores de tabla son conservadores; se escalan para que el cambio se note.
@@ -443,7 +444,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val steps = resolveFocus(bands, focus)
         if (steps.isEmpty()) return false
 
-        val limit = current.gainRangeDb.coerceIn(6f, 24f)
+        val limit = current.gainRangeDb.coerceIn(6f, 36f)
         val gains = bands.map { it.gainDb }.toMutableList()
 
         // Escala adaptativa: las recetas base son sutiles; para que el foco se note en

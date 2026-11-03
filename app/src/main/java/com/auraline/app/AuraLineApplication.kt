@@ -9,5 +9,6 @@ class AuraLineApplication : Application() {
         super.onCreate()
         // Construye el repositorio (y con él el motor) antes de que la UI lo necesite.
         AuraLineModule.repository(this)
+        com.auraline.app.audio.NativeEngineBridge.initialize(this)
     }
 }

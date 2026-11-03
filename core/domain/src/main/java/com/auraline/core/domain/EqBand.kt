@@ -106,7 +106,7 @@ data class EqualizerState(
 // válidos por construcción (dB reales, Hz reales, nunca valores normalizados).
 // ---------------------------------------------------------------------------
 
-fun clampPreampDb(db: Float): Float = db.coerceIn(-15f, 15f)
+fun clampPreampDb(db: Float): Float = db.coerceIn(-36f, 36f)
 fun clampBandGainDb(db: Float, rangeDb: Float): Float = db.coerceIn(-rangeDb, rangeDb)
 fun clampToneDb(db: Float, marginDb: Float): Float = db.coerceIn(-marginDb, marginDb)
 fun clampBassCrossHz(hz: Float): Float = hz.coerceIn(40f, 400f)

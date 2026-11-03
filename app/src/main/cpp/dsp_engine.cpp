@@ -1,665 +1,1048 @@
-// AuraLine — motor DSP nativo (esqueleto seguro).
-//
-// Estado actual, para no engañar a nadie que lea este archivo:
-//   * El motor NO está enganchado a la salida del sistema. Sin root, Android no permite
-//     insertar un procesador propio en la mezcla global; para eso sigue usándose
-//     android.media.audiofx.DynamicsProcessing desde Kotlin (core/audio/AuraLineEngine.kt).
-//   * Este código procesa buffers que se le entreguen explícitamente (processBlock) y sirve
-//     como base verificable para el modo "captura + salida propia" o para un módulo de efecto
-//     con root. Por diseño NO abre ningún stream de Oboe: un stream Exclusive de salida que
-//     emite silencio puede robar la ruta de audio y dejar el teléfono mudo.
-//   * Todo lo que toca el camino de audio está libre de asignaciones, locks y logging.
-//
-// Cadena: EQ (biquads en cascada, coeficientes double con rampa) → Tono (shelves) → Compresor
-// → Puerta → Anchura Estéreo (Mid/Side) → Limitador → Reverb → soft-clip de seguridad.
-
 #include <jni.h>
+#include <string>
 #include <cmath>
+#include <vector>
 #include <atomic>
 #include <algorithm>
 #include <cstring>
-#include <cstdint>
-#include <array>
 #include <android/log.h>
+#include <oboe/Oboe.h>
 
-#define LOG_TAG "AuraLineDSP"
+#define LOG_TAG "AuraLineDSP_Native"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
+#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-namespace {
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
-constexpr int kMaxBands = 31;
-constexpr int kChannels = 2;
-// Lookahead: 240 muestras ≈ 5 ms a 48 kHz. Potencia de dos no es necesaria, se usa módulo.
-constexpr int kLookahead = 240;
-// Rampa de parámetros ≈ 15 ms a 48 kHz (1 - exp(-1/(0.015*48000)) ≈ 0.00139).
-constexpr double kSmoothing = 0.0014;
-
-inline float sanitize(float v) {
-    // NaN/Inf → 0; denormales → 0 (evita el coste de FP denormal en ARM sin FTZ).
-    if (!std::isfinite(v)) return 0.0f;
-    if (std::fabs(v) < 1.0e-20f) return 0.0f;
-    return v;
+// Denormal number prevention
+inline float sanitizeDenormal(float val) {
+    return (std::abs(val) < 1e-15f) ? 0.0f : val;
 }
 
-inline float dbToLinear(float db) { return std::pow(10.0f, db / 20.0f); }
+// Biquad filter parameters using double precision to prevent numeric instability
+struct BiquadParams {
+    double b0 = 1.0, b1 = 0.0, b2 = 0.0;
+    double a1 = 0.0, a2 = 0.0;
+};
 
-/** Biquad estéreo (Direct Form II transpuesta) con rampa lineal de coeficientes. */
+// Real-Time Safe Smoothed Biquad Filter (Direct Form II Transposed)
 class SmoothedBiquad {
+private:
+    double b0 = 1.0, b1 = 0.0, b2 = 0.0;
+    double a1 = 0.0, a2 = 0.0;
+
+    std::atomic<double> target_b0{1.0};
+    std::atomic<double> target_b1{0.0};
+    std::atomic<double> target_b2{0.0};
+    std::atomic<double> target_a1{0.0};
+    std::atomic<double> target_a2{0.0};
+
+    double z1_l = 0.0, z2_l = 0.0;
+    double z1_r = 0.0, z2_r = 0.0;
+
+    const double smoothingFactor = 0.01; // ~10ms exponential smoothing
+
 public:
-    void setTarget(double b0, double b1, double b2, double a1, double a2) {
-        t_[0].store(b0, std::memory_order_relaxed);
-        t_[1].store(b1, std::memory_order_relaxed);
-        t_[2].store(b2, std::memory_order_relaxed);
-        t_[3].store(a1, std::memory_order_relaxed);
-        t_[4].store(a2, std::memory_order_relaxed);
-    }
+    SmoothedBiquad() = default;
 
     void reset() {
-        for (auto& z : zl_) z = 0.0;
-        for (auto& z : zr_) z = 0.0;
+        z1_l = z2_l = z1_r = z2_r = 0.0;
     }
 
-    void process(float* interleaved, int frames) {
-        for (int i = 0; i < frames; ++i) {
-            // Rampa una vez por frame: suficiente para matar el "zipper noise".
-            c_[0] += (t_[0].load(std::memory_order_relaxed) - c_[0]) * kSmoothing;
-            c_[1] += (t_[1].load(std::memory_order_relaxed) - c_[1]) * kSmoothing;
-            c_[2] += (t_[2].load(std::memory_order_relaxed) - c_[2]) * kSmoothing;
-            c_[3] += (t_[3].load(std::memory_order_relaxed) - c_[3]) * kSmoothing;
-            c_[4] += (t_[4].load(std::memory_order_relaxed) - c_[4]) * kSmoothing;
-
-            interleaved[2 * i]     = tick(interleaved[2 * i], zl_);
-            interleaved[2 * i + 1] = tick(interleaved[2 * i + 1], zr_);
-        }
+    void setTarget(const BiquadParams& params) {
+        target_b0.store(params.b0, std::memory_order_relaxed);
+        target_b1.store(params.b1, std::memory_order_relaxed);
+        target_b2.store(params.b2, std::memory_order_relaxed);
+        target_a1.store(params.a1, std::memory_order_relaxed);
+        target_a2.store(params.a2, std::memory_order_relaxed);
     }
 
-private:
-    inline float tick(float in, double* z) const {
-        const double x = in;
-        const double y = x * c_[0] + z[0];
-        z[0] = x * c_[1] - y * c_[3] + z[1];
-        z[1] = x * c_[2] - y * c_[4];
-        return static_cast<float>(y);
+    void setImmediate(const BiquadParams& params) {
+        b0 = params.b0; b1 = params.b1; b2 = params.b2;
+        a1 = params.a1; a2 = params.a2;
+        setTarget(params);
     }
 
-    // c_ = {b0, b1, b2, a1, a2} actuales; t_ = objetivos escritos por la UI.
-    double c_[5] = {1.0, 0.0, 0.0, 0.0, 0.0};
-    std::atomic<double> t_[5] = {{1.0}, {0.0}, {0.0}, {0.0}, {0.0}};
-    double zl_[2] = {0.0, 0.0};
-    double zr_[2] = {0.0, 0.0};
+    inline void updateCoefficients() {
+        b0 += (target_b0.load(std::memory_order_relaxed) - b0) * smoothingFactor;
+        b1 += (target_b1.load(std::memory_order_relaxed) - b1) * smoothingFactor;
+        b2 += (target_b2.load(std::memory_order_relaxed) - b2) * smoothingFactor;
+        a1 += (target_a1.load(std::memory_order_relaxed) - a1) * smoothingFactor;
+        a2 += (target_a2.load(std::memory_order_relaxed) - a2) * smoothingFactor;
+    }
+
+    inline float processL(float in) {
+        double ind = (double)in;
+        double out = ind * b0 + z1_l;
+        z1_l = sanitizeDenormal((float)(ind * b1 - out * a1 + z2_l));
+        z2_l = sanitizeDenormal((float)(ind * b2 - out * a2));
+        return (float)out;
+    }
+
+    inline float processR(float in) {
+        double ind = (double)in;
+        double out = ind * b0 + z1_r;
+        z1_r = sanitizeDenormal((float)(ind * b1 - out * a1 + z2_r));
+        z2_r = sanitizeDenormal((float)(ind * b2 - out * a2));
+        return (float)out;
+    }
+
+    inline void processStereoSample(float& l, float& r) {
+        updateCoefficients();
+        l = processL(l);
+        r = processR(r);
+    }
 };
 
-/**
- * Limitador con lookahead real: la señal se retrasa kLookahead muestras y la ganancia se
- * calcula sobre el pico MÁXIMO de la ventana que está por salir.
- */
-class LookaheadLimiter {
-public:
-    void setCeilingDb(float db) { ceiling_.store(dbToLinear(db), std::memory_order_relaxed); }
-    void setSampleRate(float fs) {
-        attackCoef_  = 1.0f - std::exp(-1.0f / (0.0005f * fs)); // 0.5 ms
-        releaseCoef_ = 1.0f - std::exp(-1.0f / (0.080f  * fs)); // 80 ms
-    }
-    float gainReductionDb() const {
-        const float g = gain_.load(std::memory_order_relaxed);
-        return 20.0f * std::log10(std::max(g, 1.0e-6f));
-    }
-
-    void reset() {
-        delay_.fill(0.0f);
-        peaks_.fill(0.0f);
-        write_ = 0;
-        env_ = 1.0;
-        prevL_ = prevR_ = 0.0f;
-        dqHead_ = dqTail_ = 0;
-        sampleIndex_ = 0;
-    }
-
-    void process(float* interleaved, int frames) {
-        const float ceiling = ceiling_.load(std::memory_order_relaxed);
-        for (int i = 0; i < frames; ++i) {
-            const float inL = interleaved[2 * i];
-            const float inR = interleaved[2 * i + 1];
-
-            const float outL = delay_[write_ * 2];
-            const float outR = delay_[write_ * 2 + 1];
-            delay_[write_ * 2]     = inL;
-            delay_[write_ * 2 + 1] = inR;
-            write_ = (write_ + 1 == kLookahead) ? 0 : write_ + 1;
-
-            const float pk = std::max(interPeak(prevL_, inL), interPeak(prevR_, inR));
-            prevL_ = inL; prevR_ = inR;
-            pushPeak(pk);
-            const float windowPeak = frontPeak();
-
-            const double target = windowPeak > ceiling ? static_cast<double>(ceiling / windowPeak) : 1.0;
-            if (target < env_) env_ += (target - env_) * attackCoef_;
-            else               env_ += (target - env_) * releaseCoef_;
-            if (env_ > target) env_ = target;
-
-            const float g = static_cast<float>(env_);
-            interleaved[2 * i]     = outL * g;
-            interleaved[2 * i + 1] = outR * g;
-        }
-        gain_.store(static_cast<float>(env_), std::memory_order_relaxed);
-    }
-
+// 4th-Order Linkwitz-Riley Crossover (LR4, 24 dB/oct) using two cascaded 2nd-order Butterworth filters
+class LinkwitzRiley4Crossover {
 private:
-    static inline float interPeak(float a, float b) {
-        const float fa = std::fabs(a), fb = std::fabs(b);
-        const float m = std::max(fa, fb);
-        if ((a > 0.0f) == (b > 0.0f)) return m + 0.25f * std::fabs(fb - fa);
-        return m;
+    SmoothedBiquad lp1, lp2;
+    SmoothedBiquad hp1, hp2;
+    double sampleRate = 48000.0;
+    double cutoffFreq = 1000.0;
+
+public:
+    void init(double fs, double cutoff) {
+        sampleRate = fs;
+        cutoffFreq = cutoff;
+        updateFilters();
     }
 
-    static constexpr int kDq = kLookahead + 1;
-    inline void pushPeak(float pk) {
-        while (dqHead_ != dqTail_) {
-            const int last = (dqTail_ == 0 ? kDq : dqTail_) - 1;
-            if (peaks_[last] > pk) break;
-            dqTail_ = last;
-        }
-        peaks_[dqTail_] = pk;
-        peakIdx_[dqTail_] = sampleIndex_;
-        dqTail_ = (dqTail_ + 1 == kDq) ? 0 : dqTail_ + 1;
-        while (dqHead_ != dqTail_ &&
-               sampleIndex_ - peakIdx_[dqHead_] >= static_cast<uint32_t>(kLookahead)) {
-            dqHead_ = (dqHead_ + 1 == kDq) ? 0 : dqHead_ + 1;
-        }
-        ++sampleIndex_;
+    void setCutoff(double cutoff) {
+        cutoffFreq = cutoff;
+        updateFilters();
     }
-    inline float frontPeak() const { return dqHead_ != dqTail_ ? peaks_[dqHead_] : 0.0f; }
 
-    std::atomic<float> ceiling_{dbToLinear(-1.0f)};
-    std::atomic<float> gain_{1.0f};
-    float attackCoef_ = 0.04f, releaseCoef_ = 0.00026f;
-    std::array<float, kLookahead * kChannels> delay_{};
-    std::array<float, kDq> peaks_{};
-    std::array<uint32_t, kDq> peakIdx_{};
-    int dqHead_ = 0, dqTail_ = 0;
-    uint32_t sampleIndex_ = 0;
-    int write_ = 0;
-    double env_ = 1.0;
-    float prevL_ = 0.0f, prevR_ = 0.0f;
+    void updateFilters() {
+        double safeCutoff = std::clamp(cutoffFreq, 20.0, sampleRate * 0.49);
+        double w0 = 2.0 * M_PI * safeCutoff / sampleRate;
+        double cosw = std::cos(w0);
+        double sinw = std::sin(w0);
+        // Q = 1 / sqrt(2) for Butterworth 2nd-order stage
+        double alpha = sinw / (2.0 * 0.7071067811865475);
+
+        // Lowpass 2nd-order Butterworth
+        double b0_lp = (1.0 - cosw) / 2.0;
+        double b1_lp = 1.0 - cosw;
+        double b2_lp = (1.0 - cosw) / 2.0;
+        double a0_lp = 1.0 + alpha;
+        double a1_lp = -2.0 * cosw;
+        double a2_lp = 1.0 - alpha;
+
+        BiquadParams lpParams{
+            b0_lp / a0_lp, b1_lp / a0_lp, b2_lp / a0_lp,
+            a1_lp / a0_lp, a2_lp / a0_lp
+        };
+
+        // Highpass 2nd-order Butterworth
+        double b0_hp = (1.0 + cosw) / 2.0;
+        double b1_hp = -(1.0 + cosw);
+        double b2_hp = (1.0 + cosw) / 2.0;
+        double a0_hp = 1.0 + alpha;
+        double a1_hp = -2.0 * cosw;
+        double a2_hp = 1.0 - alpha;
+
+        BiquadParams hpParams{
+            b0_hp / a0_hp, b1_hp / a0_hp, b2_hp / a0_hp,
+            a1_hp / a0_hp, a2_hp / a0_hp
+        };
+
+        lp1.setTarget(lpParams);
+        lp2.setTarget(lpParams);
+        hp1.setTarget(hpParams);
+        hp2.setTarget(hpParams);
+    }
+
+    inline void process(float inL, float inR, float& lowL, float& lowR, float& highL, float& highR) {
+        float l_lp = lp2.processL(lp1.processL(inL));
+        float r_lp = lp2.processR(lp1.processR(inR));
+        float l_hp = hp2.processL(hp1.processL(inL));
+        float r_hp = hp2.processR(hp1.processR(inR));
+
+        lowL = l_lp;  lowR = r_lp;
+        highL = l_hp; highR = r_hp;
+    }
 };
 
-/** Red de seguridad: tanh suave sólo por encima del techo; en régimen normal es identidad. */
-inline float softClip(float x) {
-    constexpr float kKnee = 0.95f;
-    const float ax = std::fabs(x);
-    if (ax <= kKnee) return x;
-    const float over = ax - kKnee;
-    const float y = kKnee + (1.0f - kKnee) * std::tanh(over / (1.0f - kKnee));
-    return x < 0.0f ? -y : y;
-}
-
-/** Estantería vía peaking EQ de Q alta en el crossover (aproximación shelf por paso). */
-static void setPeakingTarget(SmoothedBiquad& b, float fs, float freq, float gainDb, float q) {
-    const double A = std::pow(10.0, gainDb / 40.0);
-    const double w0 = 2.0 * M_PI * freq / fs;
-    const double alpha = std::sin(w0) / (2.0 * q);
-    const double cosw = std::cos(w0);
-    const double a0 = 1.0 + alpha / A;
-    b.setTarget((1.0 + alpha * A) / a0, (-2.0 * cosw) / a0, (1.0 - alpha * A) / a0, (-2.0 * cosw) / a0, (1.0 - alpha / A) / a0);
-}
-
-/** Compresor dinámico con lookahead. */
-class Compressor {
+// Internal Audio Signal Generator for instant audible A/B testing
+class SignalGenerator {
 public:
-    void setSampleRate(float fs) {
-        attackCoef_ = 1.0f - std::exp(-1.0f / (0.001f * attackMs_ * fs));
-        releaseCoef_ = 1.0f - std::exp(-1.0f / (0.001f * releaseMs_ * fs));
+    enum Mode {
+        OFF = 0,
+        PINK_NOISE = 1,
+        WHITE_NOISE = 2,
+        SINE_SWEEP = 3
+    };
+
+private:
+    std::atomic<int> mode{OFF};
+    std::atomic<float> level{0.35f}; // -9 dBFS default safe test level
+    double sampleRate = 48000.0;
+
+    // Pink noise filter state (Paul Kellet's algorithm)
+    float b0 = 0.0f, b1 = 0.0f, b2 = 0.0f, b3 = 0.0f, b4 = 0.0f, b5 = 0.0f, b6 = 0.0f;
+    uint32_t seed = 22222;
+
+    // Sine sweep parameters
+    double sweepPhase = 0.0;
+    double sweepTime = 0.0;
+    const double sweepDuration = 6.0; // 6-second cyclic sweep from 20 Hz to 20,000 Hz
+
+    inline float randUniform() {
+        seed = seed * 1664525u + 1013904223u;
+        return ((float)(seed >> 9) / 8388608.0f) - 1.0f;
     }
-    void setParams(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
-        thresholdDb_ = thresholdDb;
-        ratio_ = std::max(1.0f, ratio);
-        attackMs_ = attackMs;
-        releaseMs_ = releaseMs;
-        makeupLin_ = dbToLinear(makeupDb);
-        setSampleRate(48000.0f);
+
+public:
+    void init(double fs) {
+        sampleRate = fs;
+        reset();
     }
-    float gainReductionDb() const {
-        const float g = gain_.load(std::memory_order_relaxed);
-        return 20.0f * std::log10(std::max(g, 1.0e-6f));
-    }
+
     void reset() {
-        delay_.fill(0.0f);
-        peaks_.fill(0.0f);
-        write_ = 0;
-        env_ = 1.0;
-        prevL_ = prevR_ = 0.0f;
-        dqHead_ = dqTail_ = 0;
-        sampleIndex_ = 0;
+        b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0.0f;
+        sweepPhase = 0.0;
+        sweepTime = 0.0;
     }
-    void process(float* interleaved, int frames) {
-        const float threshold = dbToLinear(thresholdDb_);
-        for (int i = 0; i < frames; ++i) {
-            const float inL = interleaved[2 * i];
-            const float inR = interleaved[2 * i + 1];
-            const float outL = delay_[write_ * 2];
-            const float outR = delay_[write_ * 2 + 1];
-            delay_[write_ * 2] = inL;
-            delay_[write_ * 2 + 1] = inR;
-            write_ = (write_ + 1 == kLookahead) ? 0 : write_ + 1;
-            const float pk = std::max(interPeak(prevL_, inL), interPeak(prevR_, inR));
-            prevL_ = inL; prevR_ = inR;
-            pushPeak(pk);
-            const float windowPeak = frontPeak();
-            float g = 1.0f;
-            if (windowPeak > threshold) {
-                g = (threshold + (windowPeak - threshold) / ratio_) / windowPeak;
+
+    void setMode(int m) {
+        mode.store(m, std::memory_order_relaxed);
+    }
+
+    void setLevel(float l) {
+        level.store(std::clamp(l, 0.0f, 1.0f), std::memory_order_relaxed);
+    }
+
+    int getMode() const {
+        return mode.load(std::memory_order_relaxed);
+    }
+
+    inline void generateSample(float& outL, float& outR) {
+        int m = mode.load(std::memory_order_relaxed);
+        if (m == OFF) {
+            outL = 0.0f;
+            outR = 0.0f;
+            return;
+        }
+
+        float amp = level.load(std::memory_order_relaxed);
+
+        if (m == WHITE_NOISE) {
+            float white = randUniform() * amp;
+            outL = white;
+            outR = white;
+        } else if (m == PINK_NOISE) {
+            float white = randUniform();
+            b0 = 0.99886f * b0 + white * 0.0555179f;
+            b1 = 0.99332f * b1 + white * 0.0750759f;
+            b2 = 0.96900f * b2 + white * 0.1538520f;
+            b3 = 0.86650f * b3 + white * 0.3104856f;
+            b4 = 0.55000f * b4 + white * 0.5329522f;
+            b5 = -0.7616f * b5 - white * 0.0168980f;
+            float pink = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362f) * 0.11f;
+            b6 = white * 0.115926f;
+            outL = pink * amp;
+            outR = pink * amp;
+        } else if (m == SINE_SWEEP) {
+            // Logarithmic frequency sweep from 20 Hz to 20,000 Hz
+            double t = sweepTime / sweepDuration;
+            double f = 20.0 * std::pow(1000.0, t);
+            sweepPhase += 2.0 * M_PI * f / sampleRate;
+            if (sweepPhase >= 2.0 * M_PI) sweepPhase -= 2.0 * M_PI;
+
+            float val = (float)std::sin(sweepPhase) * amp;
+            outL = val;
+            outR = val;
+
+            sweepTime += 1.0 / sampleRate;
+            if (sweepTime >= sweepDuration) {
+                sweepTime = 0.0;
             }
-            if (g < env_) env_ += (g - env_) * releaseCoef_;
-            else       env_ += (g - env_) * attackCoef_;
-            if (env_ > g) env_ = g;
-            const float gain = env_ * makeupLin_;
-            interleaved[2 * i] = outL * gain;
-            interleaved[2 * i + 1] = outR * gain;
         }
-        gain_.store(env_, std::memory_order_relaxed);
     }
-private:
-    static inline float interPeak(float a, float b) {
-        const float fa = std::fabs(a), fb = std::fabs(b);
-        const float m = std::max(fa, fb);
-        if ((a > 0.0f) == (b > 0.0f)) return m + 0.25f * std::fabs(fb - fa);
-        return m;
-    }
-    static constexpr int kDq = kLookahead + 1;
-    inline void pushPeak(float pk) {
-        while (dqHead_ != dqTail_) {
-            const int last = (dqTail_ == 0 ? kDq : dqTail_) - 1;
-            if (peaks_[last] > pk) break;
-            dqTail_ = last;
-        }
-        peaks_[dqTail_] = pk;
-        peakIdx_[dqTail_] = sampleIndex_;
-        dqTail_ = (dqTail_ + 1 == kDq) ? 0 : dqTail_ + 1;
-        while (dqHead_ != dqTail_ &&
-               sampleIndex_ - peakIdx_[dqHead_] >= static_cast<uint32_t>(kLookahead)) {
-            dqHead_ = (dqHead_ + 1 == kDq) ? 0 : dqHead_ + 1;
-        }
-        ++sampleIndex_;
-    }
-    inline float frontPeak() const { return dqHead_ != dqTail_ ? peaks_[dqHead_] : 0.0f; }
-
-    std::atomic<float> thresholdDb_{-6.0f};
-    std::atomic<float> gain_{1.0f};
-    float ratio_ = 20.0f;
-    float attackMs_ = 10.0f;
-    float releaseMs_ = 200.0f;
-    float makeupLin_ = 1.0f;
-    float attackCoef_ = 0.04f, releaseCoef_ = 0.00026f;
-    std::array<float, kLookahead * kChannels> delay_{};
-    std::array<float, kDq> peaks_{};
-    std::array<uint32_t, kDq> peakIdx_{};
-    int dqHead_ = 0, dqTail_ = 0;
-    uint32_t sampleIndex_ = 0;
-    int write_ = 0;
-    double env_ = 1.0;
-    float prevL_ = 0.0f, prevR_ = 0.0f;
 };
 
-/** Puerta de ruido. */
-class Gate {
+// Lookahead True-Peak Limiter with Inter-Sample Estimation
+class LookaheadTruePeakLimiter {
+private:
+    std::atomic<bool> enabled{true};
+    std::atomic<float> thresholdDb{-1.5f}; // Default -1.5 dBFS safe ceiling for Bluetooth
+    float thresholdLin = 0.8414f;
+    float attack = 0.05f;      // ~1ms fast attack
+    float release = 0.0001f;   // ~80ms smooth release
+    float currentGain = 1.0f;
+
+    float prevInL = 0.0f;
+    float prevInR = 0.0f;
+
+    static const int LOOKAHEAD_SAMPLES = 256;
+    float delayBuffer[LOOKAHEAD_SAMPLES * 2] = {0.0f};
+    int delayWriteIndex = 0;
+
 public:
-    void setSampleRate(float fs) {
-        attackCoef_ = 1.0f - std::exp(-1.0f / (0.001f * attackMs_ * fs));
-        releaseCoef_ = 1.0f - std::exp(-1.0f / (0.001f * releaseMs_ * fs));
-    }
-    void setParams(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
-        thresholdDb_ = thresholdDb;
-        ratio_ = std::max(1.0f, ratio);
-        attackMs_ = attackMs;
-        releaseMs_ = releaseMs;
-        makeupLin_ = dbToLinear(makeupDb);
-        setSampleRate(48000.0f);
-    }
-    void reset() {
-        delay_.fill(0.0f);
-        peaks_.fill(0.0f);
-        write_ = 0;
-        env_ = 1.0;
-        prevL_ = prevR_ = 0.0f;
-        dqHead_ = dqTail_ = 0;
-        sampleIndex_ = 0;
-    }
-    void process(float* interleaved, int frames) {
-        const float threshold = dbToLinear(thresholdDb_);
-        for (int i = 0; i < frames; ++i) {
-            const float inL = interleaved[2 * i];
-            const float inR = interleaved[2 * i + 1];
-            const float outL = delay_[write_ * 2];
-            const float outR = delay_[write_ * 2 + 1];
-            delay_[write_ * 2] = inL;
-            delay_[write_ * 2 + 1] = inR;
-            write_ = (write_ + 1 == kLookahead) ? 0 : write_ + 1;
-            const float pk = std::max(interPeak(prevL_, inL), interPeak(prevR_, inR));
-            prevL_ = inL; prevR_ = inR;
-            pushPeak(pk);
-            const float windowPeak = frontPeak();
-            float g = (windowPeak > threshold) ? 1.0f : makeupLin_;
-            if (g < env_) env_ += (g - env_) * releaseCoef_;
-            else       env_ += (g - env_) * attackCoef_;
-            if (env_ > g) env_ = g;
-            interleaved[2 * i] = outL * env_;
-            interleaved[2 * i + 1] = outR * env_;
-        }
-    }
-private:
-    static inline float interPeak(float a, float b) {
-        const float fa = std::fabs(a), fb = std::fabs(b);
-        const float m = std::max(fa, fb);
-        if ((a > 0.0f) == (b > 0.0f)) return m + 0.25f * std::fabs(fb - fa);
-        return m;
-    }
-    static constexpr int kDq = kLookahead + 1;
-    inline void pushPeak(float pk) {
-        while (dqHead_ != dqTail_) {
-            const int last = (dqTail_ == 0 ? kDq : dqTail_) - 1;
-            if (peaks_[last] > pk) break;
-            dqTail_ = last;
-        }
-        peaks_[dqTail_] = pk;
-        peakIdx_[dqTail_] = sampleIndex_;
-        dqTail_ = (dqTail_ + 1 == kDq) ? 0 : dqTail_ + 1;
-        while (dqHead_ != dqTail_ &&
-               sampleIndex_ - peakIdx_[dqHead_] >= static_cast<uint32_t>(kLookahead)) {
-            dqHead_ = (dqHead_ + 1 == kDq) ? 0 : dqHead_ + 1;
-        }
-        ++sampleIndex_;
-    }
-    inline float frontPeak() const { return dqHead_ != dqTail_ ? peaks_[dqHead_] : 0.0f; }
-    std::atomic<float> thresholdDb_{-6.0f};
-    std::atomic<float> gain_{1.0f};
-    float ratio_ = 20.0f;
-    float attackMs_ = 10.0f;
-    float releaseMs_ = 200.0f;
-    float makeupLin_ = 1.0f;
-    float attackCoef_ = 0.04f, releaseCoef_ = 0.00026f;
-    std::array<float, kLookahead * kChannels> delay_{};
-    std::array<float, kDq> peaks_{};
-    std::array<uint32_t, kDq> peakIdx_{};
-    int dqHead_ = 0, dqTail_ = 0;
-    uint32_t sampleIndex_ = 0;
-    int write_ = 0;
-    double env_ = 1.0;
-    float prevL_ = 0.0f, prevR_ = 0.0f;
-};
-
-/**
- * Anchura estéreo (Mid/Side processing):
- * M = (L+R)/2, S = (L-R)/2
- * L' = M + width * S
- * R' = M - width * S
- * width = 1.0 -> sin cambios (100%)
- * width = 0.0 -> mono (0%)
- * width > 1.0 -> expansión estéreo (hasta 200%)
- */
-class StereoWidth {
-public:
-    void setWidth(float factor) {
-        width_.store(std::clamp(factor, 0.0f, 2.0f), std::memory_order_relaxed);
-    }
-    void process(float* interleaved, int frames) {
-        const float w = width_.load(std::memory_order_relaxed);
-        if (std::fabs(w - 1.0f) < 0.001f) return; // 100% sin cambios
-        for (int i = 0; i < frames; ++i) {
-            const float L = interleaved[2 * i];
-            const float R = interleaved[2 * i + 1];
-            const float M = (L + R) * 0.5f;
-            const float S = (L - R) * 0.5f;
-            interleaved[2 * i]     = M + S * w;
-            interleaved[2 * i + 1] = M - S * w;
-        }
-    }
-private:
-    std::atomic<float> width_{1.0f};
-};
-
-/** Reverb simplificada. */
-class Reverb {
-public:
-    void setParams(float mix, float decaySeconds) {
-        mix_ = std::min(1.0f, std::max(0.0f, mix));
-        decay_ = std::max(0.01f, decaySeconds);
-        fb_ = std::exp(-1.0 / (decay_ * 48000.0f));
-    }
-    void reset() {
-        ylHist_ = 0.0f;
-        yrHist_ = 0.0f;
-    }
-    void process(float* interleaved, int frames) {
-        if (mix_ <= 0.001f) return; // 0% mezclado = idéntico al original
-        const float dry = 1.0f - mix_;
-        for (int i = 0; i < frames; ++i) {
-            const float inL = interleaved[2 * i];
-            const float inR = interleaved[2 * i + 1];
-            const float yl = inL + fb_ * ylHist_;
-            const float yr = inR + fb_ * yrHist_;
-            ylHist_ = yl;
-            yrHist_ = yr;
-            interleaved[2 * i] = inL * dry + yl * mix_;
-            interleaved[2 * i + 1] = inR * dry + yr * mix_;
-        }
-    }
-private:
-    float mix_ = 0.25f;
-    float decay_ = 0.3f;
-    float fb_ = 0.0f;
-    float ylHist_ = 0.0f, yrHist_ = 0.0f;
-};
-
-struct Engine {
-    std::atomic<float> sampleRate{48000.0f};
-    std::atomic<float> preampLin{1.0f};
-    std::atomic<int>   activeBands{0};
-    std::atomic<bool>  enabled{false};
-    std::atomic<float> peakOut{0.0f};
-    SmoothedBiquad bands[kMaxBands];
-    LookaheadLimiter limiter;
-    SmoothedBiquad toneBassShelf;
-    SmoothedBiquad toneTrebleShelf;
-    SmoothedBiquad toneSubShelf;
-    Compressor compressor;
-    bool compressorActive_ = false;
-    Gate gate;
-    bool gateActive_ = false;
-    StereoWidth stereoWidth;
-    Reverb reverb;
-    float toneBassDb = 0.0f, toneBassHz = 100.0f;
-    float toneTrebleDb = 0.0f, toneTrebleHz = 8000.0f;
-    float toneSubDb = 0.0f, toneSubHz = 60.0f;
-
-    void reset() {
-        for (auto& b : bands) b.reset();
-        toneBassShelf.reset();
-        toneTrebleShelf.reset();
-        toneSubShelf.reset();
-        compressor.reset();
-        gate.reset();
-        reverb.reset();
-        limiter.reset();
+    void init(float sampleRate) {
+        attack = 1.0f - std::exp(-1.0f / (0.001f * sampleRate));
+        release = 1.0f - std::exp(-1.0f / (0.080f * sampleRate));
+        updateThreshold();
     }
 
-    void setTone(float bassDb, float bassHz, float trebleDb, float trebleHz, float subDb, float subHz) {
-        bassDb = std::min(30.0f, std::max(-30.0f, bassDb));
-        trebleDb = std::min(30.0f, std::max(-30.0f, trebleDb));
-        subDb = std::min(30.0f, std::max(-30.0f, subDb));
-        bassHz = std::min(400.0f, std::max(20.0f, bassHz));
-        trebleHz = std::min(16000.0f, std::max(2000.0f, trebleHz));
-        subHz = std::min(100.0f, std::max(20.0f, subHz));
-        toneBassDb = bassDb; toneBassHz = bassHz;
-        toneTrebleDb = trebleDb; toneTrebleHz = trebleHz;
-        toneSubDb = subDb; toneSubHz = subHz;
-        const float fs = sampleRate.load(std::memory_order_relaxed);
-        setPeakingTarget(toneBassShelf, fs, toneBassHz, toneBassDb, 8.0f);
-        setPeakingTarget(toneTrebleShelf, fs, toneTrebleHz, toneTrebleDb, 8.0f);
-        setPeakingTarget(toneSubShelf, fs, toneSubHz, toneSubDb, 8.0f);
+    void setEnabled(bool e) {
+        enabled.store(e, std::memory_order_relaxed);
     }
 
-    void setCompressor(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
-        compressor.setSampleRate(sampleRate.load(std::memory_order_relaxed));
-        compressor.setParams(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
-        compressorActive_ = (ratio > 1.0f) || (makeupDb > 0.0f);
+    void setCeilingDb(float db) {
+        thresholdDb.store(std::clamp(db, -20.0f, 0.0f), std::memory_order_relaxed);
+        updateThreshold();
     }
 
-    void setGate(float thresholdDb, float ratio, float attackMs, float releaseMs, float makeupDb) {
-        gate.setSampleRate(sampleRate.load(std::memory_order_relaxed));
-        gate.setParams(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
-        gateActive_ = (makeupDb > 0.0f) || (ratio > 1.0f);
+    void updateThreshold() {
+        float db = thresholdDb.load(std::memory_order_relaxed);
+        thresholdLin = std::pow(10.0f, db / 20.0f);
     }
 
-    void setStereoWidth(float widthFactor) {
-        stereoWidth.setWidth(widthFactor);
-    }
-
-    void setReverb(float mix, float decaySeconds) {
-        reverb.setParams(mix, decaySeconds);
-    }
-
-    /** Procesa in situ un bloque estéreo intercalado. Sin asignaciones, sin locks. */
-    void processBlock(float* buf, int frames) {
+    inline void process(float& inL, float& inR, bool& clipped) {
         if (!enabled.load(std::memory_order_relaxed)) return;
-        const float pre = preampLin.load(std::memory_order_relaxed);
-        const int n = frames * kChannels;
-        for (int i = 0; i < n; ++i) buf[i] = sanitize(buf[i]) * pre;
 
-        const int count = std::min(activeBands.load(std::memory_order_relaxed), kMaxBands);
-        for (int b = 0; b < count; ++b) bands[b].process(buf, frames);
+        // Gradient-based true peak estimation
+        float absL = std::abs(inL);
+        float absR = std::abs(inR);
+        float estPeakL = absL + 0.25f * std::abs(inL - prevInL);
+        float estPeakR = absR + 0.25f * std::abs(inR - prevInR);
+        prevInL = inL;
+        prevInR = inR;
 
-        // Tono: estanterías + sub-bajo (Fase 4).
-        toneBassShelf.process(buf, frames);
-        toneTrebleShelf.process(buf, frames);
-        toneSubShelf.process(buf, frames);
-
-        // Compresor y Gate
-        if (compressorActive_) compressor.process(buf, frames);
-        if (gateActive_) gate.process(buf, frames);
-
-        // Anchura Estéreo (Mid/Side)
-        stereoWidth.process(buf, frames);
-
-        // Limitador
-        limiter.process(buf, frames);
-
-        // Reverb
-        reverb.process(buf, frames);
-
-        float pk = 0.0f;
-        for (int i = 0; i < n; ++i) {
-            const float v = softClip(sanitize(buf[i]));
-            buf[i] = v;
-            pk = std::max(pk, std::fabs(v));
+        float peak = std::max(estPeakL, estPeakR);
+        if (peak > 1.0f) {
+            clipped = true;
         }
-        peakOut.store(pk, std::memory_order_relaxed);
+
+        float targetGain = 1.0f;
+        if (peak > thresholdLin) {
+            targetGain = thresholdLin / peak;
+        }
+
+        if (targetGain < currentGain) {
+            currentGain += (targetGain - currentGain) * attack;
+        } else {
+            currentGain += (targetGain - currentGain) * release;
+        }
+
+        // Delay buffer
+        delayBuffer[delayWriteIndex * 2] = inL;
+        delayBuffer[delayWriteIndex * 2 + 1] = inR;
+
+        int readIndex = (delayWriteIndex + 1) % LOOKAHEAD_SAMPLES;
+        inL = delayBuffer[readIndex * 2] * currentGain;
+        inR = delayBuffer[readIndex * 2 + 1] * currentGain;
+
+        delayWriteIndex = readIndex;
     }
 };
 
-Engine g_engine;
+// Feedback Delay Network (FDN) Stereo Reverb
+class StereoFDNReverb {
+private:
+    std::atomic<bool> enabled{false};
+    std::atomic<float> roomSize{0.5f};
+    std::atomic<float> damping{0.5f};
+    std::atomic<float> mix{0.25f};
 
-} // namespace
+    static const int MAX_DELAY = 4800; // ~100ms at 48kHz
+    float delayBuffers[4][MAX_DELAY] = {{0.0f}};
+    int writeIndices[4] = {0};
+    int delayLengths[4] = {1777, 1997, 2179, 2383}; // Mutually prime lengths
+    float lastFilterOutputs[4] = {0.0f};
 
-// ---------------------------------------------------------------------------------------
-// JNI — com.auraline.app.audio.NativeEngine
-// ---------------------------------------------------------------------------------------
+public:
+    void init(float sampleRate) {
+        float scale = sampleRate / 48000.0f;
+        delayLengths[0] = std::clamp((int)(1777 * scale), 100, MAX_DELAY - 1);
+        delayLengths[1] = std::clamp((int)(1997 * scale), 100, MAX_DELAY - 1);
+        delayLengths[2] = std::clamp((int)(2179 * scale), 100, MAX_DELAY - 1);
+        delayLengths[3] = std::clamp((int)(2383 * scale), 100, MAX_DELAY - 1);
+        std::memset(delayBuffers, 0, sizeof(delayBuffers));
+        std::memset(lastFilterOutputs, 0, sizeof(lastFilterOutputs));
+    }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeInit(JNIEnv*, jobject, jint sampleRate) {
-    const float fs = sampleRate > 0 ? static_cast<float>(sampleRate) : 48000.0f;
-    g_engine.sampleRate.store(fs, std::memory_order_relaxed);
-    g_engine.limiter.setSampleRate(fs);
-    g_engine.reset();
-    LOGI("Motor nativo listo a %.0f Hz (sin stream de salida: modo offline/verificación)", fs);
+    void setParams(bool e, float size, float damp, float m) {
+        enabled.store(e, std::memory_order_relaxed);
+        roomSize.store(std::clamp(size, 0.0f, 0.95f), std::memory_order_relaxed);
+        damping.store(std::clamp(damp, 0.0f, 0.9f), std::memory_order_relaxed);
+        mix.store(std::clamp(m, 0.0f, 1.0f), std::memory_order_relaxed);
+    }
+
+    inline void process(float& l, float& r) {
+        if (!enabled.load(std::memory_order_relaxed)) return;
+
+        float m = mix.load(std::memory_order_relaxed);
+        if (m <= 0.001f) return;
+
+        float size = roomSize.load(std::memory_order_relaxed);
+        float damp = damping.load(std::memory_order_relaxed);
+        float monoIn = (l + r) * 0.5f;
+
+        // Read delays
+        float d[4];
+        for (int i = 0; i < 4; ++i) {
+            int readIdx = writeIndices[i] - delayLengths[i];
+            if (readIdx < 0) readIdx += MAX_DELAY;
+            d[i] = delayBuffers[i][readIdx];
+
+            // One-pole lowpass damping
+            d[i] = lastFilterOutputs[i] + (d[i] - lastFilterOutputs[i]) * (1.0f - damp);
+            lastFilterOutputs[i] = sanitizeDenormal(d[i]);
+        }
+
+        // Hadamard 4x4 unitary feedback matrix
+        const float g = 0.5f;
+        float f0 = ( d[0] + d[1] + d[2] + d[3]) * g;
+        float f1 = ( d[0] - d[1] + d[2] - d[3]) * g;
+        float f2 = ( d[0] + d[1] - d[2] - d[3]) * g;
+        float f3 = ( d[0] - d[1] - d[2] + d[3]) * g;
+
+        delayBuffers[0][writeIndices[0]] = sanitizeDenormal(monoIn + f0 * size);
+        delayBuffers[1][writeIndices[1]] = sanitizeDenormal(monoIn + f1 * size);
+        delayBuffers[2][writeIndices[2]] = sanitizeDenormal(monoIn + f2 * size);
+        delayBuffers[3][writeIndices[3]] = sanitizeDenormal(monoIn + f3 * size);
+
+        for (int i = 0; i < 4; ++i) {
+            writeIndices[i] = (writeIndices[i] + 1) % MAX_DELAY;
+        }
+
+        float wetL = (d[0] + d[2]) * 0.7f;
+        float wetR = (d[1] + d[3]) * 0.7f;
+
+        l = l * (1.0f - m) + wetL * m;
+        r = r * (1.0f - m) + wetR * m;
+    }
+};
+
+// Mid/Side Stereo Widener with Bass Mono Protection (< 120 Hz)
+class StereoWidener {
+private:
+    std::atomic<bool> enabled{true};
+    std::atomic<float> width{1.0f}; // 1.0 = normal, 0.0 = mono, 2.0 = extra wide
+    SmoothedBiquad bassMonoHpL;
+    SmoothedBiquad bassMonoHpR;
+
+public:
+    void init(double sampleRate) {
+        // Highpass at 120 Hz to keep bass strictly mono (centered)
+        double w0 = 2.0 * M_PI * 120.0 / sampleRate;
+        double cosw = std::cos(w0);
+        double alpha = std::sin(w0) / (2.0 * 0.7071);
+        double b0 = (1.0 + cosw) / 2.0;
+        double b1 = -(1.0 + cosw);
+        double b2 = (1.0 + cosw) / 2.0;
+        double a0 = 1.0 + alpha;
+        double a1 = -2.0 * cosw;
+        double a2 = 1.0 - alpha;
+
+        BiquadParams params{b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+        bassMonoHpL.setImmediate(params);
+        bassMonoHpR.setImmediate(params);
+    }
+
+    void setParams(bool e, float w) {
+        enabled.store(e, std::memory_order_relaxed);
+        width.store(std::clamp(w, 0.0f, 2.0f), std::memory_order_relaxed);
+    }
+
+    inline void process(float& l, float& r) {
+        if (!enabled.load(std::memory_order_relaxed)) return;
+        float w = width.load(std::memory_order_relaxed);
+        if (std::abs(w - 1.0f) < 0.01f) return;
+
+        float mid = (l + r) * 0.5f;
+        float side = (l - r) * 0.5f;
+
+        // Bass mono: only widen side frequencies above 120 Hz
+        float sideHigh = bassMonoHpL.processL(side);
+        float sideLow = side - sideHigh;
+
+        // Apply width to mids/highs, keep lows intact (width = 1.0)
+        float widenedSide = sideLow + sideHigh * w;
+
+        l = mid + widenedSide;
+        r = mid - widenedSide;
+    }
+};
+
+// Acoustic Model for 15 Low Frequency Instruments
+class LowInstrumentEnhancer {
+private:
+    std::atomic<bool> enabled{false};
+    SmoothedBiquad fundamentalBoost;
+    SmoothedBiquad attackBoost;
+    SmoothedBiquad mudCut;
+    std::atomic<float> harmonicsAmount{0.0f};
+
+public:
+    void init(double sampleRate) {
+        // Default flat
+        BiquadParams flat{1.0, 0.0, 0.0, 0.0, 0.0};
+        fundamentalBoost.setImmediate(flat);
+        attackBoost.setImmediate(flat);
+        mudCut.setImmediate(flat);
+    }
+
+    void setProfile(bool isEnabled, double sampleRate, float fundFreq, float fundGainDb,
+                    float attackFreq, float attackGainDb, float mudFreq, float mudCutGainDb, float harmonics) {
+        enabled.store(isEnabled, std::memory_order_relaxed);
+        harmonicsAmount.store(harmonics, std::memory_order_relaxed);
+
+        if (!isEnabled) return;
+
+        // Peaking filter helper
+        auto calcPeaking = [sampleRate](double f, double gDb, double q) -> BiquadParams {
+            double safeF = std::clamp(f, 20.0, sampleRate * 0.49);
+            double A = std::pow(10.0, gDb / 40.0);
+            double w0 = 2.0 * M_PI * safeF / sampleRate;
+            double alpha = std::sin(w0) / (2.0 * q);
+            double b0 = 1.0 + alpha * A;
+            double b1 = -2.0 * std::cos(w0);
+            double b2 = 1.0 - alpha * A;
+            double a0 = 1.0 + alpha / A;
+            double a1 = -2.0 * std::cos(w0);
+            double a2 = 1.0 - alpha / A;
+            return {b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+        };
+
+        fundamentalBoost.setTarget(calcPeaking(fundFreq, fundGainDb, 1.4));
+        attackBoost.setTarget(calcPeaking(attackFreq, attackGainDb, 2.0));
+        mudCut.setTarget(calcPeaking(mudFreq, mudCutGainDb, 1.2));
+    }
+
+    inline void process(float& l, float& r) {
+        if (!enabled.load(std::memory_order_relaxed)) return;
+
+        fundamentalBoost.processStereoSample(l, r);
+        attackBoost.processStereoSample(l, r);
+        mudCut.processStereoSample(l, r);
+
+        float harm = harmonicsAmount.load(std::memory_order_relaxed);
+        if (harm > 0.01f) {
+            // Soft saturation for controlled warm bass harmonics (tanh-like curve)
+            auto saturate = [harm](float in) -> float {
+                float x = in * (1.0f + harm * 0.5f);
+                return x - (x * x * x) * (harm * 0.15f);
+            };
+            l = saturate(l);
+            r = saturate(r);
+        }
+    }
+};
+
+// Dynamics Suite (Compressor & Noise Gate)
+class DynamicsSuite {
+private:
+    std::atomic<bool> compEnabled{true};
+    std::atomic<float> compThresholdDb{-20.0f};
+    std::atomic<float> compRatio{4.0f};
+    std::atomic<float> compMakeupDb{0.0f};
+    float compAttack = 0.05f;
+    float compRelease = 0.001f;
+    float compEnvelope = 0.0f;
+
+    std::atomic<bool> gateEnabled{true};
+    std::atomic<float> gateThresholdDb{-60.0f};
+    std::atomic<float> gateRatio{2.0f};
+    float gateEnvelope = 0.0f;
+    float gateGain = 1.0f;
+
+public:
+    void init(float sampleRate) {
+        compAttack = 1.0f - std::exp(-1.0f / (0.010f * sampleRate)); // 10ms
+        compRelease = 1.0f - std::exp(-1.0f / (0.150f * sampleRate)); // 150ms
+    }
+
+    void setCompressor(bool e, float thresh, float rat, float attackMs, float releaseMs, float makeup, float sampleRate) {
+        compEnabled.store(e, std::memory_order_relaxed);
+        compThresholdDb.store(thresh, std::memory_order_relaxed);
+        compRatio.store(std::max(1.0f, rat), std::memory_order_relaxed);
+        compMakeupDb.store(makeup, std::memory_order_relaxed);
+        compAttack = 1.0f - std::exp(-1.0f / (std::max(0.001f, attackMs * 0.001f) * sampleRate));
+        compRelease = 1.0f - std::exp(-1.0f / (std::max(0.010f, releaseMs * 0.001f) * sampleRate));
+    }
+
+    void setGate(bool e, float thresh, float rat) {
+        gateEnabled.store(e, std::memory_order_relaxed);
+        gateThresholdDb.store(thresh, std::memory_order_relaxed);
+        gateRatio.store(std::max(1.0f, rat), std::memory_order_relaxed);
+    }
+
+    inline void process(float& l, float& r) {
+        float peak = std::max(std::abs(l), std::abs(r));
+
+        // Noise gate
+        if (gateEnabled.load(std::memory_order_relaxed)) {
+            float threshLin = std::pow(10.0f, gateThresholdDb.load(std::memory_order_relaxed) / 20.0f);
+            float targetGate = 1.0f;
+            if (peak < threshLin) {
+                targetGate = 0.0f; // Silence or attenuate
+            }
+            gateGain += (targetGate - gateGain) * 0.05f;
+            l *= gateGain;
+            r *= gateGain;
+        }
+
+        // Compressor
+        if (compEnabled.load(std::memory_order_relaxed)) {
+            float threshLin = std::pow(10.0f, compThresholdDb.load(std::memory_order_relaxed) / 20.0f);
+            float makeupLin = std::pow(10.0f, compMakeupDb.load(std::memory_order_relaxed) / 20.0f);
+
+            if (peak > compEnvelope) {
+                compEnvelope += (peak - compEnvelope) * compAttack;
+            } else {
+                compEnvelope += (peak - compEnvelope) * compRelease;
+            }
+
+            float gain = 1.0f;
+            if (compEnvelope > threshLin && threshLin > 1e-6f) {
+                float dbOver = 20.0f * std::log10(compEnvelope / threshLin);
+                float ratio = compRatio.load(std::memory_order_relaxed);
+                float dbReduction = dbOver * (1.0f - 1.0f / ratio);
+                gain = std::pow(10.0f, -dbReduction / 20.0f);
+            }
+
+            l = l * gain * makeupLin;
+            r = r * gain * makeupLin;
+        }
+    }
+};
+
+// Circular Ring Buffer for AudioPlaybackCapture input PCM
+class AudioRingBuffer {
+private:
+    static const int CAPACITY = 16384 * 2; // ~340ms stereo buffer
+    float buffer[CAPACITY] = {0.0f};
+    std::atomic<int> writeHead{0};
+    std::atomic<int> readHead{0};
+
+public:
+    int write(const float* data, int numSamples) {
+        int w = writeHead.load(std::memory_order_relaxed);
+        int r = readHead.load(std::memory_order_acquire);
+        int available = CAPACITY - ((w - r + CAPACITY) % CAPACITY) - 1;
+        int toWrite = std::min(numSamples, available);
+
+        for (int i = 0; i < toWrite; ++i) {
+            buffer[(w + i) % CAPACITY] = data[i];
+        }
+        writeHead.store((w + toWrite) % CAPACITY, std::memory_order_release);
+        return toWrite;
+    }
+
+    int read(float* outData, int numSamples) {
+        int r = readHead.load(std::memory_order_relaxed);
+        int w = writeHead.load(std::memory_order_acquire);
+        int available = (w - r + CAPACITY) % CAPACITY;
+        int toRead = std::min(numSamples, available);
+
+        for (int i = 0; i < toRead; ++i) {
+            outData[i] = buffer[(r + i) % CAPACITY];
+        }
+        readHead.store((r + toRead) % CAPACITY, std::memory_order_release);
+        return toRead;
+    }
+
+    int availableRead() const {
+        int r = readHead.load(std::memory_order_relaxed);
+        int w = writeHead.load(std::memory_order_relaxed);
+        return (w - r + CAPACITY) % CAPACITY;
+    }
+};
+
+// Global Master Audio Callback for Oboe
+class AudioCallback : public oboe::AudioStreamDataCallback {
+public:
+    std::atomic<float> sampleRate{48000.0f};
+    std::atomic<bool> isBypass{false};
+    std::atomic<float> preampGain{1.0f};
+
+    // Subsonic DC Blocker
+    SmoothedBiquad subsonicHpL;
+    SmoothedBiquad subsonicHpR;
+    std::atomic<bool> subsonicEnabled{true};
+
+    // 25-Band Graphic/Parametric EQ
+    static const int NUM_BANDS = 25;
+    SmoothedBiquad eqBands[NUM_BANDS];
+
+    // Modules
+    SignalGenerator generator;
+    LookaheadTruePeakLimiter limiter;
+    StereoFDNReverb reverb;
+    StereoWidener widener;
+    LowInstrumentEnhancer enhancer;
+    DynamicsSuite dynamics;
+    AudioRingBuffer inputBuffer;
+
+    // Real-Time Telemetry
+    std::atomic<float> meterRmsL{0.0f};
+    std::atomic<float> meterRmsR{0.0f};
+    std::atomic<float> meterPeakL{0.0f};
+    std::atomic<float> meterPeakR{0.0f};
+    std::atomic<uint32_t> clippingCount{0};
+    std::atomic<uint64_t> processedBlocks{0};
+
+    AudioCallback() = default;
+
+    void init(float fs) {
+        sampleRate.store(fs, std::memory_order_relaxed);
+        generator.init(fs);
+        limiter.init(fs);
+        reverb.init(fs);
+        widener.init(fs);
+        enhancer.init(fs);
+        dynamics.init(fs);
+
+        // Subsonic 25 Hz Butterworth 2nd order HPF
+        double w0 = 2.0 * M_PI * 25.0 / fs;
+        double cosw = std::cos(w0);
+        double alpha = std::sin(w0) / (2.0 * 0.7071);
+        double b0 = (1.0 + cosw) / 2.0;
+        double b1 = -(1.0 + cosw);
+        double b2 = (1.0 + cosw) / 2.0;
+        double a0 = 1.0 + alpha;
+        double a1 = -2.0 * cosw;
+        double a2 = 1.0 - alpha;
+        BiquadParams hp{b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+        subsonicHpL.setImmediate(hp);
+        subsonicHpR.setImmediate(hp);
+    }
+
+    oboe::DataCallbackResult onAudioReady(
+            oboe::AudioStream *audioStream,
+            void *audioData,
+            int32_t numFrames) override {
+
+        float *floatData = static_cast<float *>(audioData);
+
+        // 1. Fill input either from internal signal generator or captured input ringbuffer
+        int genMode = generator.getMode();
+        bool hasInput = (inputBuffer.availableRead() >= numFrames * 2);
+
+        float sumSquaresL = 0.0f;
+        float sumSquaresR = 0.0f;
+        float peakL = 0.0f;
+        float peakR = 0.0f;
+        bool clippedInBlock = false;
+
+        bool bypass = isBypass.load(std::memory_order_relaxed);
+        float preamp = preampGain.load(std::memory_order_relaxed);
+
+        for (int i = 0; i < numFrames; ++i) {
+            float inL = 0.0f;
+            float inR = 0.0f;
+
+            if (genMode != SignalGenerator::OFF) {
+                // Internal high-precision test generator
+                generator.generateSample(inL, inR);
+            } else if (hasInput) {
+                float pair[2];
+                inputBuffer.read(pair, 2);
+                inL = pair[0];
+                inR = pair[1];
+            } else {
+                // Silence
+                inL = 0.0f;
+                inR = 0.0f;
+            }
+
+            // If A/B Bypass is active, route pure generator/input directly to output
+            if (bypass) {
+                floatData[2*i] = inL;
+                floatData[2*i + 1] = inR;
+            } else {
+                // Apply Preamp Gain
+                float curL = inL * preamp;
+                float curR = inR * preamp;
+
+                // Subsonic Protection Filter
+                if (subsonicEnabled.load(std::memory_order_relaxed)) {
+                    curL = subsonicHpL.processL(curL);
+                    curR = subsonicHpR.processR(curR);
+                }
+
+                // 25-Band EQ Cascade
+                for (int b = 0; b < NUM_BANDS; ++b) {
+                    eqBands[b].processStereoSample(curL, curR);
+                }
+
+                // Low Instrument Acoustic Enhancer
+                enhancer.process(curL, curR);
+
+                // Dynamics: Gate & Compressor
+                dynamics.process(curL, curR);
+
+                // Spatial: Stereo Widener & FDN Reverb
+                widener.process(curL, curR);
+                reverb.process(curL, curR);
+
+                // True-Peak Lookahead Limiter
+                limiter.process(curL, curR, clippedInBlock);
+
+                floatData[2*i] = curL;
+                floatData[2*i + 1] = curR;
+            }
+
+            // Metering
+            float outL = floatData[2*i];
+            float outR = floatData[2*i + 1];
+            sumSquaresL += outL * outL;
+            sumSquaresR += outR * outR;
+            peakL = std::max(peakL, std::abs(outL));
+            peakR = std::max(peakR, std::abs(outR));
+        }
+
+        // Update atomic telemetry
+        float rmsL = std::sqrt(sumSquaresL / (float)numFrames);
+        float rmsR = std::sqrt(sumSquaresR / (float)numFrames);
+        meterRmsL.store(rmsL, std::memory_order_relaxed);
+        meterRmsR.store(rmsR, std::memory_order_relaxed);
+        meterPeakL.store(peakL, std::memory_order_relaxed);
+        meterPeakR.store(peakR, std::memory_order_relaxed);
+
+        if (clippedInBlock) {
+            clippingCount.fetch_add(1, std::memory_order_relaxed);
+        }
+        processedBlocks.fetch_add(1, std::memory_order_relaxed);
+
+        return oboe::DataCallbackResult::Continue;
+    }
+};
+
+static AudioCallback g_audioCallback;
+static std::shared_ptr<oboe::AudioStream> g_stream;
+
+extern "C" {
+
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_init(
+        JNIEnv* env,
+        jobject /* this */,
+        jint sampleRate) {
+    LOGI("Inicializando motor DSP nativo unificado a %d Hz", sampleRate);
+
+    g_audioCallback.init((float)sampleRate);
+
+    if (g_stream && g_stream->getState() == oboe::StreamState::Open) {
+        g_stream->close();
+    }
+
+    oboe::AudioStreamBuilder builder;
+    builder.setDirection(oboe::Direction::Output)
+           ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+           ->setSharingMode(oboe::SharingMode::Shared)
+           ->setFormat(oboe::AudioFormat::Float)
+           ->setChannelCount(2)
+           ->setSampleRate(sampleRate)
+           ->setDataCallback(&g_audioCallback);
+
+    oboe::Result result = builder.openStream(g_stream);
+    if (result == oboe::Result::OK) {
+        g_stream->requestStart();
+        LOGI("Oboe output stream abierto con exito (LowLatency Shared Float)");
+    } else {
+        LOGE("Fallo al abrir stream Oboe: %s", oboe::convertToText(result));
+    }
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetEnabled(JNIEnv*, jobject, jboolean on) {
-    g_engine.enabled.store(on == JNI_TRUE, std::memory_order_relaxed);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setBypass(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean bypass) {
+    g_audioCallback.isBypass.store(bypass, std::memory_order_relaxed);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetPreamp(JNIEnv*, jobject, jfloat db) {
-    g_engine.preampLin.store(dbToLinear(std::clamp(db, -40.0f, 20.0f)), std::memory_order_relaxed);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setGeneratorMode(
+        JNIEnv* env,
+        jobject /* this */,
+        jint mode) {
+    g_audioCallback.generator.setMode(mode);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetLimiterCeiling(JNIEnv*, jobject, jfloat db) {
-    g_engine.limiter.setCeilingDb(std::clamp(db, -12.0f, 0.0f));
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setGeneratorLevel(
+        JNIEnv* env,
+        jobject /* this */,
+        jfloat level) {
+    g_audioCallback.generator.setLevel(level);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetBandCount(JNIEnv*, jobject, jint count) {
-    g_engine.activeBands.store(std::clamp(count, 0, kMaxBands), std::memory_order_relaxed);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setPreampGain(
+        JNIEnv* env,
+        jobject /* this */,
+        jfloat gainDb) {
+    float safeDb = std::clamp((float)gainDb, -36.0f, 36.0f);
+    g_audioCallback.preampGain.store(std::pow(10.0f, safeDb / 20.0f), std::memory_order_relaxed);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetEqBand(
-        JNIEnv*, jobject, jint index, jfloat freq, jfloat gainDb, jfloat q) {
-    if (index < 0 || index >= kMaxBands) return;
-    const double fs = g_engine.sampleRate.load(std::memory_order_relaxed);
-    const double f  = std::clamp(static_cast<double>(freq), 10.0, fs * 0.45);
-    const double Q  = std::clamp(static_cast<double>(q), 0.1, 10.0);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setEqBand(
+        JNIEnv* env,
+        jobject /* this */,
+        jint bandIndex,
+        jfloat freq,
+        jfloat gain,
+        jfloat q) {
 
-    const double A     = std::pow(10.0, static_cast<double>(gainDb) / 40.0);
-    const double w0    = 2.0 * M_PI * f / fs;
-    const double alpha = std::sin(w0) / (2.0 * Q);
-    const double cosw  = std::cos(w0);
+    if (bandIndex < 0 || bandIndex >= AudioCallback::NUM_BANDS) return;
 
-    const double a0 = 1.0 + alpha / A;
-    g_engine.bands[index].setTarget(
-            (1.0 + alpha * A) / a0,
-            (-2.0 * cosw) / a0,
-            (1.0 - alpha * A) / a0,
-            (-2.0 * cosw) / a0,
-            (1.0 - alpha / A) / a0);
+    double fs = g_audioCallback.sampleRate.load(std::memory_order_relaxed);
+    if (fs <= 0.0) fs = 48000.0;
+
+    double safeFreq = std::clamp((double)freq, 10.0, fs * 0.49);
+    double safeGain = std::clamp((double)gain, -36.0, 36.0);
+    double safeQ = std::clamp((double)q, 0.1, 20.0);
+
+    double A = std::pow(10.0, safeGain / 40.0);
+    double w0 = 2.0 * M_PI * safeFreq / fs;
+    double alpha = std::sin(w0) / (2.0 * safeQ);
+
+    double b0 = 1.0 + alpha * A;
+    double b1 = -2.0 * std::cos(w0);
+    double b2 = 1.0 - alpha * A;
+    double a0 = 1.0 + alpha / A;
+    double a1 = -2.0 * std::cos(w0);
+    double a2 = 1.0 - alpha / A;
+
+    BiquadParams params{b0 / a0, b1 / a0, b2 / a0, a1 / a0, a2 / a0};
+    g_audioCallback.eqBands[bandIndex].setTarget(params);
 }
 
-extern "C" JNIEXPORT jfloat JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeProcessBlock(
-        JNIEnv* env, jobject, jfloatArray interleaved, jint frames) {
-    if (interleaved == nullptr || frames <= 0) return 0.0f;
-    const jsize len = env->GetArrayLength(interleaved);
-    if (len < frames * kChannels) return 0.0f;
-    auto* buf = static_cast<float*>(env->GetPrimitiveArrayCritical(interleaved, nullptr));
-    if (buf == nullptr) return 0.0f;
-    g_engine.processBlock(buf, frames);
-    env->ReleasePrimitiveArrayCritical(interleaved, buf, 0);
-    return g_engine.peakOut.load(std::memory_order_relaxed);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setSubsonic(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat cutoffHz) {
+    g_audioCallback.subsonicEnabled.store(enabled, std::memory_order_relaxed);
 }
 
-extern "C" JNIEXPORT jfloat JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeGainReductionDb(JNIEnv*, jobject) {
-    return g_engine.limiter.gainReductionDb();
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setInstrumentEnhancer(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat fundamentalHz,
+        jfloat bodyDb,
+        jfloat punchDb,
+        jfloat mudCutDb,
+        jfloat harmonics) {
+    double fs = g_audioCallback.sampleRate.load(std::memory_order_relaxed);
+    g_audioCallback.enhancer.setProfile(enabled, fs, fundamentalHz, bodyDb, fundamentalHz * 3.0f, punchDb, 400.0f, mudCutDb, harmonics);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetTone(
-        JNIEnv*, jobject, jfloat bassDb, jfloat bassHz, jfloat trebleDb, jfloat trebleHz, jfloat subDb, jfloat subHz) {
-    g_engine.setTone(bassDb, bassHz, trebleDb, trebleHz, subDb, subHz);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setCompressor(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat thresholdDb,
+        jfloat ratio,
+        jfloat attackMs,
+        jfloat releaseMs,
+        jfloat makeupGainDb) {
+    float fs = g_audioCallback.sampleRate.load(std::memory_order_relaxed);
+    g_audioCallback.dynamics.setCompressor(enabled, thresholdDb, ratio, attackMs, releaseMs, makeupGainDb, fs);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetCompressor(
-        JNIEnv*, jobject, jfloat thresholdDb, jfloat ratio, jfloat attackMs, jfloat releaseMs, jfloat makeupDb) {
-    g_engine.setCompressor(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setNoiseGate(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat thresholdDb,
+        jfloat ratio) {
+    g_audioCallback.dynamics.setGate(enabled, thresholdDb, ratio);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetGate(
-        JNIEnv*, jobject, jfloat thresholdDb, jfloat ratio, jfloat attackMs, jfloat releaseMs, jfloat makeupDb) {
-    g_engine.setGate(thresholdDb, ratio, attackMs, releaseMs, makeupDb);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setReverb(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat roomSize,
+        jfloat damping,
+        jfloat decay,
+        jfloat predelay,
+        jfloat mix) {
+    g_audioCallback.reverb.setParams(enabled, roomSize, damping, mix);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetStereoWidth(
-        JNIEnv*, jobject, jfloat widthFactor) {
-    g_engine.setStereoWidth(widthFactor);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setStereoWidener(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat width,
+        jfloat bassMonoCutoffHz) {
+    g_audioCallback.widener.setParams(enabled, width);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_com_auraline_app_audio_NativeEngine_nativeSetReverb(
-        JNIEnv*, jobject, jfloat mix, jfloat decaySeconds) {
-    g_engine.setReverb(mix, decaySeconds);
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setLimiter(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean enabled,
+        jfloat ceilingDb) {
+    g_audioCallback.limiter.setEnabled(enabled);
+    g_audioCallback.limiter.setCeilingDb(ceilingDb);
 }
+
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_setBluetoothRoute(
+        JNIEnv* env,
+        jobject /* this */,
+        jboolean isBluetooth) {
+    if (isBluetooth) {
+        g_audioCallback.limiter.setCeilingDb(-1.5f); // Safety -1.5 dBFS for Bluetooth
+    } else {
+        g_audioCallback.limiter.setCeilingDb(-1.0f);
+    }
+}
+
+JNIEXPORT jint JNICALL
+Java_com_auraline_app_audio_NativeEngine_writeInputPcm(
+        JNIEnv* env,
+        jobject /* this */,
+        jfloatArray samples,
+        jint offset,
+        jint length) {
+    if (!samples || length <= 0) return 0;
+    jfloat* pcm = env->GetFloatArrayElements(samples, nullptr);
+    int written = g_audioCallback.inputBuffer.write(pcm + offset, length);
+    env->ReleaseFloatArrayElements(samples, pcm, JNI_ABORT);
+    return written;
+}
+
+JNIEXPORT void JNICALL
+Java_com_auraline_app_audio_NativeEngine_getTelemetry(
+        JNIEnv* env,
+        jobject /* this */,
+        jfloatArray outTelemetry) {
+    if (!outTelemetry) return;
+    jsize len = env->GetArrayLength(outTelemetry);
+    if (len < 6) return;
+
+    jfloat tele[6];
+    tele[0] = g_audioCallback.meterRmsL.load(std::memory_order_relaxed);
+    tele[1] = g_audioCallback.meterRmsR.load(std::memory_order_relaxed);
+    tele[2] = g_audioCallback.meterPeakL.load(std::memory_order_relaxed);
+    tele[3] = g_audioCallback.meterPeakR.load(std::memory_order_relaxed);
+    tele[4] = (float)g_audioCallback.clippingCount.load(std::memory_order_relaxed);
+    tele[5] = (float)g_audioCallback.processedBlocks.load(std::memory_order_relaxed);
+
+    env->SetFloatArrayRegion(outTelemetry, 0, 6, tele);
+}
+
+} // extern "C"
