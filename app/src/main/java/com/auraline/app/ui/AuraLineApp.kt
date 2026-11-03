@@ -123,7 +123,10 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
             context,
             Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
-        if (granted) viewModel.runAudioCheck()
+        if (granted) {
+            viewModel.runAudioCheck()
+            viewModel.setAutoCheck(false)
+        }
     }
 
     BackHandler(enabled = tab != 0 || showDiagnostics) {

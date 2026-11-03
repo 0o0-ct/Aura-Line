@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
@@ -72,44 +73,49 @@ fun DiagnosticsScreen(
         stopTone()
         activeTone = type
         scope.launch(Dispatchers.IO) {
-            val sampleRate = 48000
-            val minBuf = AudioTrack.getMinBufferSize(
-                sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            val track = AudioTrack(
-                AudioManager.STREAM_MUSIC,
-                sampleRate,
-                AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT,
-                minBuf * 2,
-                AudioTrack.MODE_STREAM
-            )
-            toneTrack = track
-            track.play()
+            runCatching {
+                val sampleRate = 48000
+                val minBuf = AudioTrack.getMinBufferSize(
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                ).coerceAtLeast(2048)
+                val track = AudioTrack(
+                    AudioManager.STREAM_MUSIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    minBuf * 2,
+                    AudioTrack.MODE_STREAM
+                )
+                toneTrack = track
+                track.play()
 
-            val buffer = ShortArray(1024)
-            var phase = 0.0
-            var sweepFreq = 20.0
+                val buffer = ShortArray(1024)
+                var phase = 0.0
+                var sweepFreq = 20.0
 
-            while (activeTone == type) {
-                for (i in buffer.indices) {
-                    val sample = when (type) {
-                        "60Hz" -> sin(2.0 * Math.PI * 60.0 * i / sampleRate + phase)
-                        "1kHz" -> sin(2.0 * Math.PI * 1000.0 * i / sampleRate + phase)
-                        "8kHz" -> sin(2.0 * Math.PI * 8000.0 * i / sampleRate + phase)
-                        "Pink" -> (Math.random() * 2.0 - 1.0) * 0.3
-                        "Sweep" -> {
-                            sweepFreq += 0.5
-                            if (sweepFreq > 20000.0) sweepFreq = 20.0
-                            sin(2.0 * Math.PI * sweepFreq * i / sampleRate + phase)
+                while (activeTone == type) {
+                    for (i in buffer.indices) {
+                        val sample = when (type) {
+                            "60Hz" -> sin(2.0 * Math.PI * 60.0 * i / sampleRate + phase)
+                            "1kHz" -> sin(2.0 * Math.PI * 1000.0 * i / sampleRate + phase)
+                            "8kHz" -> sin(2.0 * Math.PI * 8000.0 * i / sampleRate + phase)
+                            "Pink" -> (Math.random() * 2.0 - 1.0) * 0.3
+                            "Sweep" -> {
+                                sweepFreq += 0.5
+                                if (sweepFreq > 20000.0) sweepFreq = 20.0
+                                sin(2.0 * Math.PI * sweepFreq * i / sampleRate + phase)
+                            }
+                            else -> 0.0
                         }
-                        else -> 0.0
+                        buffer[i] = (sample.coerceIn(-1.0, 1.0) * 16000).toInt().toShort()
                     }
-                    buffer[i] = (sample.coerceIn(-1.0, 1.0) * 16000).toInt().toShort()
+                    track.write(buffer, 0, buffer.size)
                 }
-                track.write(buffer, 0, buffer.size)
+            }.onFailure {
+                activeTone = null
+                toneTrack = null
             }
         }
     }
@@ -147,6 +153,11 @@ fun DiagnosticsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Diagnóstico del Sistema", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Volver", tint = colors.textPrimary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = Color.Transparent,
                     titleContentColor = colors.textPrimary
