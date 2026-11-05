@@ -258,8 +258,16 @@ private fun FloatingHeader(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    0.0f to colors.background,
+                    0.82f to colors.background.copy(alpha = 0.96f),
+                    1.0f to Color.Transparent
+                )
+            )
             .statusBarsPadding()
             .padding(horizontal = 20.dp, vertical = 14.dp)
+            .padding(bottom = 14.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

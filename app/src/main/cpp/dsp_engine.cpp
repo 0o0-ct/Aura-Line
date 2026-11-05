@@ -299,6 +299,10 @@ public:
         updateThreshold();
     }
 
+    float getCeilingDb() const {
+        return thresholdDb.load(std::memory_order_relaxed);
+    }
+
     void updateThreshold() {
         float db = thresholdDb.load(std::memory_order_relaxed);
         thresholdLin = std::pow(10.0f, db / 20.0f);
@@ -1004,10 +1008,9 @@ Java_com_auraline_app_audio_NativeEngine_setBluetoothRoute(
         JNIEnv* env,
         jobject /* this */,
         jboolean isBluetooth) {
-    if (isBluetooth) {
-        g_audioCallback.limiter.setCeilingDb(-1.5f); // Safety -1.5 dBFS for Bluetooth
-    } else {
-        g_audioCallback.limiter.setCeilingDb(-1.0f);
+    // Bluetooth route notification
+    if (isBluetooth && g_audioCallback.limiter.getCeilingDb() > -0.5f) {
+        g_audioCallback.limiter.setCeilingDb(-0.5f);
     }
 }
 

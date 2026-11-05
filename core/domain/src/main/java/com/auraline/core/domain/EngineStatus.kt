@@ -23,6 +23,16 @@ data class AudioSession(
     val global: Boolean
 )
 
+/** Estados del procesamiento de audio (veraces, sin simulación). */
+enum class AudioProcessingState(val label: String) {
+    PROCESSING_AUDIO("PROCESANDO AUDIO"),
+    AVAILABLE_NO_SESSION("DISPONIBLE, SIN SESIÓN"),
+    LIMITED_COMPATIBILITY("COMPATIBILIDAD LIMITADA"),
+    CAPTURE_AUTHORIZED("CAPTURA AUTORIZADA"),
+    TEST_ENGINE("MOTOR DE PRUEBAS"),
+    PROCESSING_ERROR("ERROR DE PROCESAMIENTO")
+}
+
 /**
  * Estado real del motor tal y como lo reporta el sistema.
  * La UI lo muestra para que el usuario pueda comprobar que el procesado ocurre.
@@ -37,6 +47,9 @@ data class EngineStatus(
     val channels: Int = 2,
     val stages: List<EffectStage> = emptyList(),
     val sessions: List<AudioSession> = emptyList(),
+    val processingState: AudioProcessingState = AudioProcessingState.AVAILABLE_NO_SESSION,
+    val stateDescription: String = "",
+    val activePackageName: String? = null,
     val lastError: String? = null
 ) {
     val activeStages: Int get() = stages.count { it.active }

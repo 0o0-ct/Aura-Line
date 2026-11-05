@@ -7,11 +7,14 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.media.audiofx.AudioEffect
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.auraline.app.R
 import com.auraline.app.ui.MainActivity
 
@@ -22,9 +25,42 @@ import com.auraline.app.ui.MainActivity
  */
 class AudioForegroundService : Service() {
 
+    private var sessionReceiver: AudioEffectSessionReceiver? = null
+
     override fun onCreate() {
         super.onCreate()
         ensureChannel()
+        registerSessionReceiver()
+    }
+
+    private fun registerSessionReceiver() {
+        try {
+            val receiver = AudioEffectSessionReceiver()
+            val filter = IntentFilter().apply {
+                addAction(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+                addAction(AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION)
+                addAction("android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION")
+                addAction("android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION")
+            }
+            ContextCompat.registerReceiver(
+                this,
+                receiver,
+                filter,
+                ContextCompat.RECEIVER_EXPORTED
+            )
+            sessionReceiver = receiver
+            android.util.Log.i("AudioForegroundService", "AudioEffectSessionReceiver registrado dinamicamente")
+        } catch (t: Throwable) {
+            android.util.Log.w("AudioForegroundService", "Fallo al registrar receiver dinamicamente: ${t.message}")
+        }
+    }
+
+    override fun onDestroy() {
+        sessionReceiver?.let {
+            runCatching { unregisterReceiver(it) }
+            sessionReceiver = null
+        }
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

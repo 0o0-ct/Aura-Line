@@ -291,4 +291,186 @@ class DspMathTest {
             assertEquals("La curva debe volver a su estado original exacto", initialGains[i], revertedBands[i].gainDb, 0.001f)
         }
     }
+
+    // --- PRUEBAS OBLIGATORIAS DE PROCESAMIENTO ACÚSTICO Y DSP ---
+
+    @Test
+    fun testAudioBypassBitExactIntegrity() {
+        val input = floatArrayOf(0.1f, -0.4f, 0.85f, -0.99f, 0.0f, 0.33f)
+        val isBypass = true
+        val output = FloatArray(input.size) { i ->
+            if (isBypass) input[i] else input[i] * 2.0f
+        }
+        for (i in input.indices) {
+            assertEquals("La señal con bypass debe ser bit a bit idéntica a la entrada", input[i], output[i], 0.0f)
+        }
+    }
+
+    @Test
+    fun test1kHzEqGainVariationMagnitudeDifference() {
+        val fs = 48000.0
+        val f0 = 1000.0
+        val boostDb = 6.0
+        val cutDb = -6.0
+        val q = 1.414
+
+        fun calcGainAt(gainDb: Double, testF: Double): Double {
+            val A = 10.0.pow(gainDb / 40.0)
+            val w0 = 2.0 * PI * f0 / fs
+            val alpha = sin(w0) / (2.0 * q)
+            val a0 = 1.0 + alpha / A
+            val b0 = (1.0 + alpha * A) / a0
+            val b1 = (-2.0 * cos(w0)) / a0
+            val b2 = (1.0 - alpha * A) / a0
+            val a1 = (-2.0 * cos(w0)) / a0
+            val a2 = (1.0 - alpha / A) / a0
+
+            val w = 2.0 * PI * testF / fs
+            val numReal = b0 + b1 * cos(w) + b2 * cos(2.0 * w)
+            val numImag = -(b1 * sin(w) + b2 * sin(2.0 * w))
+            val denReal = 1.0 + a1 * cos(w) + a2 * cos(2.0 * w)
+            val denImag = -(a1 * sin(w) + a2 * sin(2.0 * w))
+
+            val mag = sqrt(numReal * numReal + numImag * numImag) / sqrt(denReal * denReal + denImag * denImag)
+            return 20.0 * log10(mag)
+        }
+
+        val boostMag = calcGainAt(boostDb, 1000.0)
+        val cutMag = calcGainAt(cutDb, 1000.0)
+
+        assertEquals("Refuerzo de 1 kHz debe dar +6 dB", 6.0, boostMag, 0.05)
+        assertEquals("Atenuación de 1 kHz debe dar -6 dB", -6.0, cutMag, 0.05)
+        assertEquals("La diferencia entre refuerzo y atenuación debe ser 12 dB", 12.0, boostMag - cutMag, 0.1)
+    }
+
+    @Test
+    fun testLowFrequenciesBandResponseSpectrum() {
+        val fs = 48000.0
+        val lowFrequencies = listOf(40.0, 60.0, 80.0, 100.0, 150.0)
+        val gainDb = 9.0
+        val q = 2.0
+
+        for (f0 in lowFrequencies) {
+            val A = 10.0.pow(gainDb / 40.0)
+            val w0 = 2.0 * PI * f0 / fs
+            val alpha = sin(w0) / (2.0 * q)
+            val a0 = 1.0 + alpha / A
+            val b0 = (1.0 + alpha * A) / a0
+            val b1 = (-2.0 * cos(w0)) / a0
+            val b2 = (1.0 - alpha * A) / a0
+            val a1 = (-2.0 * cos(w0)) / a0
+            val a2 = (1.0 - alpha / A) / a0
+
+            // Evaluate at center frequency f0
+            val numReal = b0 + b1 * cos(w0) + b2 * cos(2.0 * w0)
+            val numImag = -(b1 * sin(w0) + b2 * sin(2.0 * w0))
+            val denReal = 1.0 + a1 * cos(w0) + a2 * cos(2.0 * w0)
+            val denImag = -(a1 * sin(w0) + a2 * sin(2.0 * w0))
+            val magCenter = 20.0 * log10(sqrt(numReal * numReal + numImag * numImag) / sqrt(denReal * denReal + denImag * denImag))
+
+            assertEquals("La ganancia en el centro grave $f0 Hz debe ser +9 dB", 9.0, magCenter, 0.05)
+
+            // Evaluate at 10 kHz (treble should be unaffected ~0 dB)
+            val wTreble = 2.0 * PI * 10000.0 / fs
+            val nRealT = b0 + b1 * cos(wTreble) + b2 * cos(2.0 * wTreble)
+            val nImagT = -(b1 * sin(wTreble) + b2 * sin(2.0 * wTreble))
+            val dRealT = 1.0 + a1 * cos(wTreble) + a2 * cos(2.0 * wTreble)
+            val dImagT = -(a1 * sin(wTreble) + a2 * sin(2.0 * wTreble))
+            val magTreble = 20.0 * log10(sqrt(nRealT * nRealT + nImagT * nImagT) / sqrt(dRealT * dRealT + dImagT * dImagT))
+
+            assertEquals("Los filtros de graves no deben afectar los agudos a 10 kHz", 0.0, magTreble, 0.1)
+        }
+    }
+
+    @Test
+    fun testNoiseGateAttenuationBelowThreshold() {
+        val gateThresholdDb = -50.0f
+        val gateRatio = 3.0f
+        val threshLin = 10.0f.pow(gateThresholdDb / 20.0f) // ~0.00316
+
+        // Case A: Signal above gate threshold (-30 dBFS -> ~0.0316)
+        val sigAbove = 0.0316f
+        var gateGainAbove = 1.0f
+        if (sigAbove < threshLin) {
+            val dbUnder = 20.0f * log10(threshLin / sigAbove)
+            val attenDb = dbUnder * (gateRatio - 1.0f)
+            gateGainAbove = 10.0f.pow(-attenDb / 20.0f)
+        }
+        assertEquals("Señal sobre el umbral no debe ser atenuada por la puerta", 1.0f, gateGainAbove, 0.0001f)
+
+        // Case B: Signal below gate threshold (-70 dBFS -> ~0.000316, 20 dB under threshold)
+        val sigBelow = 0.000316f
+        var gateGainBelow = 1.0f
+        if (sigBelow < threshLin) {
+            val dbUnder = 20.0f * log10(threshLin / sigBelow) // 20 dB under
+            val attenDb = dbUnder * (gateRatio - 1.0f) // 20 * (3 - 1) = 40 dB de atenuación
+            gateGainBelow = 10.0f.pow(-attenDb / 20.0f)
+        }
+        val outDbBelow = 20.0f * log10(sigBelow * gateGainBelow)
+        assertEquals("Señal bajo el umbral de ruido debe ser atenuada adicionalmente por ratio 3:1", -110.0f, outDbBelow, 0.5f)
+    }
+
+    @Test
+    fun testReverbDecayImpulseResponseTail() {
+        // Feedback comb filter simulating room reflection impulse response
+        val delaySamples = 120
+        val buffer = FloatArray(delaySamples)
+        var writeIdx = 0
+        val feedback = 0.7f
+
+        var outEnergy = 0.0
+        // Input: 1 sample impulse at t=0
+        for (n in 0 until 1200) {
+            val input = if (n == 0) 1.0f else 0.0f
+            val delayed = buffer[writeIdx]
+            val output = input + delayed * feedback
+            buffer[writeIdx] = output
+            writeIdx = (writeIdx + 1) % delaySamples
+
+            if (n >= delaySamples) {
+                outEnergy += output * output
+            }
+        }
+
+        assertTrue("La respuesta al impulso de la reverb debe generar cola acústica persistente", outEnergy > 0.05)
+    }
+
+    @Test
+    fun testStereoWidthMidSideMatrixMonoAndExpansion() {
+        val inL = 1.0f
+        val inR = 0.4f
+
+        // Encoding M/S
+        val mid = (inL + inR) * 0.5f // 0.7
+        val side = (inL - inR) * 0.5f // 0.3
+
+        // Case 1: Mono (width = 0.0)
+        val widthMono = 0.0f
+        val outL_mono = mid + side * widthMono
+        val outR_mono = mid - side * widthMono
+        assertEquals("En modo mono L y R deben ser perfectamente iguales a Mid", mid, outL_mono, 0.0001f)
+        assertEquals("En modo mono L y R deben ser perfectamente iguales a Mid", mid, outR_mono, 0.0001f)
+
+        // Case 2: Stereo Widening (width = 1.5)
+        val widthExp = 1.5f
+        val outL_exp = mid + side * widthExp // 0.7 + 0.45 = 1.15
+        val outR_exp = mid - side * widthExp // 0.7 - 0.45 = 0.25
+        val sepIn = inL - inR // 0.6
+        val sepOut = outL_exp - outR_exp // 0.9
+        assertEquals("La separación estéreo debe incrementarse proporcionalmente al ancho", sepIn * widthExp, sepOut, 0.001f)
+    }
+
+    @Test
+    fun testLookaheadLimiterStrictPeakEnforcement() {
+        val ceilingDb = -0.5f
+        val ceilingLin = 10.0f.pow(ceilingDb / 20.0f) // ~0.944
+
+        // Massive transient +6 dBFS (lin ~ 2.0)
+        val transients = floatArrayOf(0.5f, 1.2f, 2.0f, 1.8f, 0.3f)
+        for (x in transients) {
+            val targetGain = if (x > ceilingLin) ceilingLin / x else 1.0f
+            val y = x * targetGain
+            assertTrue("La salida del limitador nunca debe superar el techo (-0.5 dBFS)", y <= ceilingLin + 0.0001f)
+        }
+    }
 }

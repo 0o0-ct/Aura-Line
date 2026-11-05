@@ -53,8 +53,8 @@
             android:name=".audio.AudioEffectSessionReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
-                <action android:name="android.media.audiofx.AudioEffect.ACTION_CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
+                <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+                <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
             </intent-filter>
         </receiver>
 
@@ -72,7 +72,7 @@
             android:excludeFromRecents="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|uiMode|density|fontScale">
             <intent-filter>
-                <action android:name="android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
@@ -81,10 +81,10 @@
     <!-- Android 11+: visibilidad para saber qué apps abren sesiones de audio. -->
     <queries>
         <intent>
-            <action android:name="android.media.audiofx.AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+            <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
         </intent>
         <intent>
-            <action android:name="android.media.audiofx.AudioEffect.ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+            <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
         </intent>
     </queries>
 

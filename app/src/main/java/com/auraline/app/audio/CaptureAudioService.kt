@@ -31,7 +31,6 @@ class CaptureAudioService : Service() {
 
     private var mediaProjection: MediaProjection? = null
     private var audioRecord: AudioRecord? = null
-    private var audioTrack: AudioTrack? = null
     private var running = false
     private var worker: Thread? = null
 
@@ -109,23 +108,6 @@ class CaptureAudioService : Service() {
         }
 
         val rec = recordBuilder.build()
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(
-                android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(encoding)
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(channelMaskOut)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
 
         NativeEngine.init(sampleRate)
         // Un único camino de escritura: el motor nativo recibe el estado completo desde
@@ -135,9 +117,7 @@ class CaptureAudioService : Service() {
         )
 
         audioRecord = rec
-        audioTrack = track
         rec.startRecording()
-        track.play()
 
         running = true
         worker = Thread {
@@ -151,11 +131,6 @@ class CaptureAudioService : Service() {
                     }
                     val frames = read / 2
                     NativeEngine.writeInputPcm(floatBuf, 0, frames)
-                    for (i in 0 until read) {
-                        val v = (floatBuf[i] * 32767f).toInt().coerceIn(-32768, 32767)
-                        shortBuf[i] = v.toShort()
-                    }
-                    track.write(shortBuf, 0, read)
                 }
             }
         }.apply { name = "auraline-capture"; start() }
@@ -167,10 +142,7 @@ class CaptureAudioService : Service() {
         worker = null
         runCatching { audioRecord?.stop() }
         runCatching { audioRecord?.release() }
-        runCatching { audioTrack?.stop() }
-        runCatching { audioTrack?.release() }
         audioRecord = null
-        audioTrack = null
         runCatching { mediaProjection?.stop() }
         mediaProjection = null
         NativeEngineBridge.syncState(

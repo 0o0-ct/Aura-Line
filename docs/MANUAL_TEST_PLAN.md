@@ -76,11 +76,12 @@
 
 ### Prueba 7: Integración con Aplicaciones Externas (Spotify / Reproductores)
 1. Abrir Spotify o un reproductor compatible (Poweramp, Musicolet, VLC).
-2. Iniciar reproducción musical.
-3. Volver a Aura-Line. Verificar en **Diagnóstico** que aparezca una sesión activa (`audioSessionId > 0`).
-4. Mover el fader de graves o cambiar de preset (ej. de *Plano* a *Rock*).
-5. **Resultado esperado**: El sonido de la música cambia inmediatamente con la curva seleccionada.
-6. Si la app no emite broadcast de sesión, activar el modo opcional **AudioPlaybackCapture** en Ajustes y autorizar el diálogo del sistema.
+2. En los ajustes de audio del reproductor, activar la opción **Ecualizador**:
+   - Debe abrir directamente AuraLine a través de `EffectPanelActivity` sin errores ni desvíos al ecualizador de fábrica.
+3. Iniciar reproducción musical.
+4. Volver a Aura-Line. Verificar en **Efectos** que el estado indique `PROCESANDO AUDIO` con la sesión activa y el nombre del paquete (ej. `com.spotify.music`).
+5. Mover los faders de 25 bandas o modificar el compresor/limitador.
+6. **Resultado esperado**: El sonido de la música cambia inmediatamente con la curva y dinámica seleccionadas con prioridad `100` en AudioFlinger.
 
 ### Prueba 8: Conexión y Desconexión Bluetooth en Caliente (Hotplug)
 1. Reproducir audio a través del altavoz integrado del teléfono.
@@ -99,3 +100,28 @@
    ```bash
    adb shell dumpsys cpuinfo | grep com.auraline.app
    ```
+
+### Prueba 11: Inspección de Bajo Nivel en AudioFlinger
+1. Ejecutar en terminal:
+   ```bash
+   adb shell dumpsys media.audio_flinger
+   ```
+2. **Resultado esperado**:
+   - En la sección `Effect Chains`, verificar que la sesión del reproductor contenga `DynamicsProcessing`.
+   - Confirmar que `Priority = 100`, `Ctrl = yes` y `Enabled = y`.
+
+### Prueba 12: Simulación de Sesión Externa mediante ADB Broadcast
+1. Para validar la cadena de recepción sin necesidad de reproductores externos instalados:
+   ```bash
+   adb shell am broadcast -a android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION \
+     --ei android.media.extra.AUDIO_SESSION 49057 \
+     --es android.media.extra.PACKAGE_NAME com.spotify.music
+   ```
+2. Verificar en la pestaña **Efectos** de AuraLine que la píldora cambie inmediatamente a color verde: `PROCESANDO AUDIO` (*Procesando audio en tiempo real: Spotify (Sesión 49057) hacia Bluetooth*).
+3. Cerrar la sesión simulada:
+   ```bash
+   adb shell am broadcast -a android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION \
+     --ei android.media.extra.AUDIO_SESSION 49057 \
+     --es android.media.extra.PACKAGE_NAME com.spotify.music
+   ```
+4. Verificar que el estado retorne a `DISPONIBLE, SIN SESIÓN` limpiamente.

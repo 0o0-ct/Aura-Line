@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.auraline.core.domain.AudioProcessingState
 import com.auraline.core.domain.AudioRoute
 import com.auraline.core.domain.AudioSession
 import com.auraline.core.domain.EffectStage
@@ -73,8 +74,38 @@ object AuraLineEngine {
     private var fallbackEq: Equalizer? = null
     private var reverb: EnvironmentalReverb? = null
     private var virtualizer: Virtualizer? = null
-    /** Cadena por sesión de reproductor (DP en API 28+, Equalizer por debajo). LRU: máximo 8. */
-    private val sessionChain = LinkedHashMap<Int, android.media.audiofx.AudioEffect>()
+
+    /** Prioridad elevada de control para que AuraLine tenga soberanía sobre la cadena de efectos. */
+    private const val EFFECT_PRIORITY = 100
+
+    /**
+     * Nodo de efectos dedicado por sesión de reproductor externo.
+     * Gestiona DynamicsProcessing (PreEQ + MBC + Limiter), Reverb estéreo y Virtualizer independientes.
+     */
+    private class SessionNode(
+        val sessionId: Int,
+        var packageName: String?,
+        var dynamicsProcessing: DynamicsProcessing? = null,
+        var fallbackEq: Equalizer? = null,
+        var reverb: EnvironmentalReverb? = null,
+        var virtualizer: Virtualizer? = null,
+        var hasControl: Boolean = true,
+        var errorMessage: String? = null
+    ) {
+        fun release() {
+            runCatching { dynamicsProcessing?.enabled = false; dynamicsProcessing?.release() }
+            dynamicsProcessing = null
+            runCatching { fallbackEq?.enabled = false; fallbackEq?.release() }
+            fallbackEq = null
+            runCatching { reverb?.enabled = false; reverb?.release() }
+            reverb = null
+            runCatching { virtualizer?.enabled = false; virtualizer?.release() }
+            virtualizer = null
+        }
+    }
+
+    /** Registro de sesiones externas activas (Spotify, Poweramp, etc.). LRU: máximo 8. */
+    private val sessionMap = LinkedHashMap<Int, SessionNode>()
     private val maxSessions = 8
 
     private var lastError: String? = null
@@ -116,11 +147,15 @@ object AuraLineEngine {
         runCatching { latch.await(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS) }
     }
 
-    fun onSessionOpened(sessionId: Int) {
+    fun onSessionOpened(sessionId: Int, packageName: String? = null) {
         if (sessionId == GLOBAL_SESSION) return
         executor.execute {
             if (!desired.motorEnabled) return@execute
-            if (sessionChain.containsKey(sessionId)) return@execute
+            val node = sessionMap.getOrPut(sessionId) { SessionNode(sessionId, packageName) }
+            if (packageName != null) {
+                node.packageName = packageName
+            }
+
             // Una pista nueva puede haber soltado la cadena global: se reaplica.
             if (processing != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 applyEngine(desired)
@@ -129,37 +164,45 @@ object AuraLineEngine {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 // DynamicsProcessing por sesión: es el camino fiable en Android 9+.
                 try {
-                    val dp = createDynamicsProcessing(desired, sessionId)
-                    applyToDynamicsProcessing(dp, desired)
-                    sessionChain[sessionId] = dp
-                    trimSessionCache()
-                    Log.i(TAG, "Sesión $sessionId enganchada con DynamicsProcessing")
+                    if (node.dynamicsProcessing == null) {
+                        node.dynamicsProcessing = createDynamicsProcessing(desired, sessionId)
+                    }
+                    node.dynamicsProcessing?.let { dp ->
+                        dp.enabled = true
+                        applyToDynamicsProcessing(dp, desired)
+                        node.hasControl = effectAlive(dp)
+                    }
+                    Log.i(TAG, "Sesión $sessionId ($packageName) enganchada con DynamicsProcessing (prioridad $EFFECT_PRIORITY)")
                 } catch (error: Throwable) {
-                    lastError = "DP sesión $sessionId: ${error.message}"
-                    Log.w(TAG, lastError!!)
+                    node.errorMessage = "DP sesión $sessionId: ${error.message}"
+                    Log.w(TAG, node.errorMessage!!)
                 }
             } else {
                 try {
-                    val eq = Equalizer(0, sessionId)
-                    eq.enabled = true
-                    applyToEqualizer(eq, desired)
-                    sessionChain[sessionId] = eq
-                    trimSessionCache()
-                    Log.i(TAG, "Sesión $sessionId enganchada con Equalizer (API < 28)")
+                    if (node.fallbackEq == null) {
+                        node.fallbackEq = Equalizer(EFFECT_PRIORITY, sessionId)
+                    }
+                    node.fallbackEq?.let { eq ->
+                        eq.enabled = true
+                        applyToEqualizer(eq, desired)
+                        node.hasControl = effectAlive(eq)
+                    }
+                    Log.i(TAG, "Sesión $sessionId ($packageName) enganchada con Equalizer")
                 } catch (error: Throwable) {
-                    lastError = "Equalizer sesión $sessionId: ${error.message}"
-                    Log.w(TAG, lastError!!)
+                    node.errorMessage = "Equalizer sesión $sessionId: ${error.message}"
+                    Log.w(TAG, node.errorMessage!!)
                 }
             }
+
+            updateSessionAuxEffects(node, desired)
+            trimSessionCache()
             publish()
         }
     }
 
     fun onSessionClosed(sessionId: Int) {
         executor.execute {
-            sessionChain.remove(sessionId)?.let { effect ->
-                runCatching { effect.enabled = false; effect.release() }
-            }
+            sessionMap.remove(sessionId)?.release()
             Log.i(TAG, "Sesión $sessionId liberada")
             publish()
         }
@@ -168,8 +211,8 @@ object AuraLineEngine {
     fun shutdown() {
         executor.execute {
             releaseChain()
-            sessionChain.values.forEach { effect -> runCatching { effect.enabled = false; effect.release() } }
-            sessionChain.clear()
+            sessionMap.values.forEach { it.release() }
+            sessionMap.clear()
             publish()
         }
     }
@@ -232,24 +275,83 @@ object AuraLineEngine {
             reverb = null
         }
         if (state.motorEnabled) AuraLineSpectrum.start() else AuraLineSpectrum.stop()
-        sessionChain.values.forEach { effect ->
-            when (effect) {
-                is DynamicsProcessing -> runCatching { applyToDynamicsProcessing(effect, state) }
-                    .onFailure { Log.w(TAG, "Reaplicar DP de sesión: ${it.message}") }
-                is Equalizer -> runCatching { applyToEqualizer(effect, state) }
-                    .onFailure { Log.w(TAG, "Reaplicar EQ de sesión: ${it.message}") }
+
+        // Sincronizar de forma atómica a todas las sesiones de reproductores activos
+        sessionMap.values.forEach { node ->
+            node.dynamicsProcessing?.let { dp ->
+                runCatching {
+                    dp.enabled = true
+                    applyToDynamicsProcessing(dp, state)
+                    node.hasControl = effectAlive(dp)
+                }.onFailure { Log.w(TAG, "Reaplicar DP en sesión ${node.sessionId}: ${it.message}") }
             }
+            node.fallbackEq?.let { eq ->
+                runCatching {
+                    eq.enabled = true
+                    applyToEqualizer(eq, state)
+                    node.hasControl = effectAlive(eq)
+                }.onFailure { Log.w(TAG, "Reaplicar EQ en sesión ${node.sessionId}: ${it.message}") }
+            }
+            updateSessionAuxEffects(node, state)
+        }
+    }
+
+    /**
+     * Aplica o actualiza Reverb y Virtualizer directamente sobre la sesión del reproductor externo.
+     * Esto garantiza que los efectos espaciales y acústicos se escuchen efectivamente en auriculares.
+     */
+    private fun updateSessionAuxEffects(node: SessionNode, state: EqualizerState) {
+        val sessionId = node.sessionId
+        val widthActive = !state.bypass && state.modules.width
+        val reverbActive = !state.bypass && state.modules.reverb && state.effectsEnabled
+
+        // Virtualizer en sesión del reproductor
+        if (widthActive) {
+            val width = state.stereo.expansion.coerceIn(1f, 2f)
+            val strength = ((width - 1f) * 1000f).toInt().coerceIn(0, 1000).toShort()
+            if (strength > 0) {
+                if (node.virtualizer == null) {
+                    node.virtualizer = runCatching { Virtualizer(EFFECT_PRIORITY, sessionId) }
+                        .onFailure { Log.w(TAG, "Virtualizer en sesión $sessionId no disponible: ${it.message}") }
+                        .getOrNull()
+                }
+                node.virtualizer?.let { virt ->
+                    runCatching {
+                        virt.setStrength(strength)
+                        virt.enabled = true
+                    }
+                }
+            } else {
+                runCatching { node.virtualizer?.enabled = false; node.virtualizer?.release() }
+                node.virtualizer = null
+            }
+        } else {
+            runCatching { node.virtualizer?.enabled = false; node.virtualizer?.release() }
+            node.virtualizer = null
+        }
+
+        // Reverb en sesión del reproductor
+        if (reverbActive) {
+            if (node.reverb == null) {
+                node.reverb = runCatching { EnvironmentalReverb(EFFECT_PRIORITY, sessionId) }
+                    .onFailure { Log.w(TAG, "Reverb en sesión $sessionId no disponible: ${it.message}") }
+                    .getOrNull()
+            }
+            node.reverb?.let { rev ->
+                applyReverbParams(rev, state.reverb)
+            }
+        } else {
+            runCatching { node.reverb?.enabled = false; node.reverb?.release() }
+            node.reverb = null
         }
     }
 
     /** Cache LRU: si un reproductor deja sesiones huérfanas, se liberan las más antiguas. */
     private fun trimSessionCache() {
-        while (sessionChain.size > maxSessions) {
-            val oldest = sessionChain.keys.firstOrNull() ?: break
-            sessionChain.remove(oldest)?.let { effect ->
-                runCatching { effect.enabled = false; effect.release() }
-                Log.i(TAG, "Sesión $oldest desalojada por límite de cache")
-            }
+        while (sessionMap.size > maxSessions) {
+            val oldest = sessionMap.keys.firstOrNull() ?: break
+            sessionMap.remove(oldest)?.release()
+            Log.i(TAG, "Sesión $oldest desalojada por límite de cache")
         }
     }
 
@@ -287,10 +389,11 @@ object AuraLineEngine {
         config.setLimiterByChannelIndex(0, limiter)
         config.setLimiterByChannelIndex(1, limiter)
 
-        return DynamicsProcessing(0, session, config.build()).apply {
+        val priority = if (session == GLOBAL_SESSION) 0 else EFFECT_PRIORITY
+        return DynamicsProcessing(priority, session, config.build()).apply {
             enabled = true
             attachWatchdog(this)
-            Log.i(TAG, "Cadena lista (sesión $session): $bandCount bandas + MBC + limitador (cortes ${frequencies.first().toInt()}–${frequencies.last().toInt()} Hz)")
+            Log.i(TAG, "Cadena lista (sesión $session, prioridad $priority): $bandCount bandas + MBC + limitador (cortes ${frequencies.first().toInt()}–${frequencies.last().toInt()} Hz)")
         }
     }
 
@@ -547,21 +650,24 @@ object AuraLineEngine {
                 .onFailure { Log.w(TAG, "Reverb no disponible: ${it.message}") }
                 .getOrNull()
         }
-        val params = state.reverb
         reverb?.let { effect ->
-            runCatching {
-                effect.roomLevel = (params.size * 2000f - 1000f).toInt().toShort()
-                effect.decayTime = (params.decay * 9000f).toInt().coerceIn(200, 10000)
-                effect.decayHFRatio = ((1f - params.damping) * 1000f).toInt().toShort()
-                // Reflexiones tempranas: es lo que hace distinguible una sala de otra.
-                effect.reflectionsLevel = ((params.predelayMix * 700f) - 350f).toInt().toShort()
-                effect.reflectionsDelay = (params.preDelay * 150f).toInt().coerceIn(0, 300)
-                effect.reverbDelay = (params.preDelay * 300f).toInt().coerceIn(0, 500)
-                effect.reverbLevel = (params.mix * 2000f).toInt().toShort()
-                effect.diffusion = (params.filter * 1000f).toInt().toShort()
-                effect.density = 1000
-                effect.enabled = true
-            }
+            applyReverbParams(effect, state.reverb)
+        }
+    }
+
+    private fun applyReverbParams(effect: EnvironmentalReverb, params: com.auraline.core.domain.ReverbParams) {
+        runCatching {
+            effect.roomLevel = (params.size * 2000f - 1000f).toInt().toShort()
+            effect.decayTime = (params.decay * 9000f).toInt().coerceIn(200, 10000)
+            effect.decayHFRatio = ((1f - params.damping) * 1000f).toInt().toShort()
+            // Reflexiones tempranas: es lo que hace distinguible una sala de otra.
+            effect.reflectionsLevel = ((params.predelayMix * 700f) - 350f).toInt().toShort()
+            effect.reflectionsDelay = (params.preDelay * 150f).toInt().coerceIn(0, 300)
+            effect.reverbDelay = (params.preDelay * 300f).toInt().coerceIn(0, 500)
+            effect.reverbLevel = (params.mix * 2000f).toInt().toShort()
+            effect.diffusion = (params.filter * 1000f).toInt().toShort()
+            effect.density = 1000
+            effect.enabled = true
         }
     }
 
@@ -664,28 +770,74 @@ object AuraLineEngine {
         val sampleRate = manager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.toIntOrNull() ?: 48000
 
         val stages = mutableListOf<EffectStage>()
-        if (processing != null && effectAlive(processing)) {
+        val hasActivePlayerSession = sessionMap.values.any { it.hasControl && (it.dynamicsProcessing?.enabled == true || it.fallbackEq?.enabled == true) }
+        val globalDpActive = processing != null && effectAlive(processing)
+        val globalEqActive = fallbackEq != null && effectAlive(fallbackEq)
+
+        if (globalDpActive || hasActivePlayerSession) {
             stages.add(EffectStage("DynamicsProcessing", true, "Motor principal activo"))
             stages.add(EffectStage("PreEQ", desired.modules.equalizer && !desired.bypass, "${builtBandCount} bandas"))
             stages.add(EffectStage("MBC", desired.modules.compressor && !desired.bypass, "3 bandas"))
             stages.add(EffectStage("Limitador", desired.modules.limiter && !desired.bypass, "True-Peak Limiter"))
-        } else if (fallbackEq != null && effectAlive(fallbackEq)) {
+        } else if (globalEqActive) {
             stages.add(EffectStage("Equalizer", true, "Modo compatibilidad"))
         }
 
-        if (reverb != null && effectAlive(reverb)) {
+        val reverbActive = (reverb != null && effectAlive(reverb)) || sessionMap.values.any { it.reverb != null && effectAlive(it.reverb) }
+        if (reverbActive) {
             stages.add(EffectStage("Reverb", true, "Reverberación activa"))
         }
-        if (virtualizer != null && effectAlive(virtualizer)) {
+        val virtualizerActive = (virtualizer != null && effectAlive(virtualizer)) || sessionMap.values.any { it.virtualizer != null && effectAlive(it.virtualizer) }
+        if (virtualizerActive) {
             stages.add(EffectStage("Virtualizer", true, "Expansión estéreo"))
         }
 
-        val sessions = sessionChain.keys.map { id ->
-            AudioSession(id = id, owner = "Sesión $id", global = id == GLOBAL_SESSION)
+        val sessions = sessionMap.values.map { node ->
+            val ownerLabel = node.packageName?.let { pkg ->
+                when {
+                    pkg.contains("spotify", ignoreCase = true) -> "Spotify"
+                    pkg.contains("youtube", ignoreCase = true) -> "YouTube Music"
+                    pkg.contains("poweramp", ignoreCase = true) -> "Poweramp"
+                    pkg.contains("deezer", ignoreCase = true) -> "Deezer"
+                    pkg.contains("vlc", ignoreCase = true) -> "VLC"
+                    pkg.contains("musicolet", ignoreCase = true) -> "Musicolet"
+                    else -> pkg.substringAfterLast('.')
+                }
+            } ?: "Sesión ${node.sessionId}"
+            AudioSession(id = node.sessionId, owner = ownerLabel, global = false)
+        }
+
+        // Determinar estado verídico de procesamiento para la UI
+        val processingState: AudioProcessingState
+        val stateDescription: String
+        val activePkg = sessionMap.values.firstOrNull()?.packageName
+
+        if (!desired.motorEnabled) {
+            processingState = AudioProcessingState.AVAILABLE_NO_SESSION
+            stateDescription = "El motor de audio está apagado. Enciéndelo en la barra superior."
+        } else if (hasActivePlayerSession) {
+            val primary = sessions.first()
+            processingState = AudioProcessingState.PROCESSING_AUDIO
+            stateDescription = "Procesando audio en tiempo real: ${primary.owner} (Sesión ${primary.id}) hacia ${route.label}."
+        } else if (globalDpActive) {
+            val isSamsung = Build.MANUFACTURER.contains("samsung", ignoreCase = true)
+            if (isSamsung) {
+                processingState = AudioProcessingState.AVAILABLE_NO_SESSION
+                stateDescription = "Motor en sesión global. En One UI (Samsung), reproductores externos requieren activar 'Ecualizador' en sus ajustes para procesar audio en auriculares."
+            } else {
+                processingState = AudioProcessingState.PROCESSING_AUDIO
+                stateDescription = "Procesando mezcla global del sistema hacia ${route.label}."
+            }
+        } else if (lastError != null) {
+            processingState = AudioProcessingState.PROCESSING_ERROR
+            stateDescription = "Error de procesamiento: $lastError"
+        } else {
+            processingState = AudioProcessingState.AVAILABLE_NO_SESSION
+            stateDescription = "Motor preparado. Esperando sesión de audio de un reproductor compatible."
         }
 
         _status.value = EngineStatus(
-            running = (processing != null && effectAlive(processing)) || (fallbackEq != null && effectAlive(fallbackEq)),
+            running = (processing != null && effectAlive(processing)) || (fallbackEq != null && effectAlive(fallbackEq)) || hasActivePlayerSession,
             globalScope = true,
             route = route,
             sampleRateHz = sampleRate,
@@ -693,6 +845,9 @@ object AuraLineEngine {
             channels = 2,
             stages = stages,
             sessions = sessions,
+            processingState = processingState,
+            stateDescription = stateDescription,
+            activePackageName = activePkg,
             lastError = lastError
         )
     }

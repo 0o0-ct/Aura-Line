@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.auraline.app.audio.NativeEngineBridge
 import com.auraline.app.domain.AuraLineViewModel
+import com.auraline.core.domain.AudioProcessingState
 import com.auraline.core.domain.ReverbPresets
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraDepth
@@ -64,7 +65,7 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(top = 148.dp, bottom = 140.dp),
+            .padding(top = 176.dp, bottom = 140.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // 1. Tarjeta de compatibilidad y ruta de audio del sistema
@@ -72,7 +73,7 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
             modifier = Modifier.fillMaxWidth(),
             depth = AuraDepth.Raised
         ) {
-            SectionTitle(text = "Compatibilidad y ruta del dispositivo")
+            SectionTitle(text = "Compatibilidad y estado del procesamiento")
             Spacer(modifier = Modifier.height(8.dp))
             if (!state.motorEnabled) {
                 Text(
@@ -88,8 +89,8 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
-                        Text("Ruta de salida activa", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Estado del procesamiento", color = colors.textPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             text = "${engine.route.label} ${engine.outputName?.let { "· $it" } ?: ""}",
                             color = colors.textSecondary,
@@ -97,12 +98,29 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                         )
                     }
                     StatusPill(
-                        text = if (engine.running) "En línea" else "Inactivo",
-                        color = if (engine.running) colors.positive else colors.textSecondary
+                        text = engine.processingState.label,
+                        color = when (engine.processingState) {
+                            AudioProcessingState.PROCESSING_AUDIO -> colors.positive
+                            AudioProcessingState.AVAILABLE_NO_SESSION -> colors.accent
+                            AudioProcessingState.LIMITED_COMPATIBILITY -> colors.warning
+                            AudioProcessingState.CAPTURE_AUTHORIZED -> colors.accent
+                            AudioProcessingState.TEST_ENGINE -> colors.warning
+                            AudioProcessingState.PROCESSING_ERROR -> colors.warning
+                        }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                if (engine.stateDescription.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = engine.stateDescription,
+                        color = if (engine.processingState == AudioProcessingState.PROCESSING_AUDIO) colors.textPrimary else colors.textSecondary,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                     modifier = Modifier
@@ -312,11 +330,11 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
             Spacer(modifier = Modifier.height(6.dp))
             AuraSliderRow(
                 label = "Techo de salida (Ceiling)",
-                valueText = "-1.5 dBFS",
-                value = -1.5f,
-                valueRange = -6.0f..0.0f,
-                onValueChange = { /* Techo calibrado para transmision A2DP/LE Audio */ },
-                enabled = false
+                valueText = String.format(Locale.US, "%.1f dBFS", compressor.limiterCeiling),
+                value = compressor.limiterCeiling,
+                valueRange = -12.0f..-0.1f,
+                onValueChange = { viewModel.setCompressor(compressor.copy(limiterCeiling = it)) },
+                enabled = effectsOn && state.modules.limiter
             )
             Text(
                 text = "Ventana de lookahead de 256 muestras con estimación inter-muestra. Garantiza que los picos transitorios nunca alcancen 0 dBFS para evitar distorsión inter-muestra en conversores D/A externos y códecs Bluetooth.",
