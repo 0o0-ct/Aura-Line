@@ -839,6 +839,50 @@ object AuraLineEngine {
      * Cuando el módulo de ecualización está en bypass se conservan tono y sub-bajo, que son
      * controles independientes de la curva gráfica.
      */
+    private fun parametricToneGain(state: EqualizerState, centerHz: Float): Float {
+        val toneBands = state.tone.bands
+        if (toneBands.isEmpty()) {
+            return toneOffset(state, centerHz) + subBoostAt(state, centerHz)
+        }
+        var toneGain = 0f
+        for (tb in toneBands) {
+            if (!tb.enabled) continue
+            val f = tb.frequencyHz.coerceAtLeast(10f)
+            val g = tb.gainDb
+            val q = tb.q.coerceAtLeast(0.1f)
+            when (tb.filterType) {
+                "LOW_SHELF" -> {
+                    if (centerHz <= f) {
+                        toneGain += g
+                    } else {
+                        val ratio = centerHz / f
+                        toneGain += g / (1f + (ratio - 1f) * (ratio - 1f) * q)
+                    }
+                }
+                "HIGH_SHELF" -> {
+                    if (centerHz >= f) {
+                        toneGain += g
+                    } else {
+                        val ratio = f / centerHz.coerceAtLeast(10f)
+                        toneGain += g / (1f + (ratio - 1f) * (ratio - 1f) * q)
+                    }
+                }
+                else -> { // PEAKING / bell / notch
+                    val octaveDist = kotlin.math.abs(kotlin.math.ln(centerHz.coerceAtLeast(10f) / f) / kotlin.math.ln(2f))
+                    val weighting = 1f + (octaveDist * q * 2.0f).let { it * it }
+                    toneGain += g / weighting
+                }
+            }
+        }
+        toneGain += subBoostAt(state, centerHz)
+        return toneGain.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+    }
+
+    /**
+     * Ganancia final de una banda del PreEq: banda + tono + sub-bajo, aplicada una sola vez.
+     * Cuando el módulo de ecualización está en bypass se conservan tono y sub-bajo, que son
+     * controles independientes de la curva gráfica.
+     */
     internal fun preEqGainDb(
         state: EqualizerState,
         bandGainDb: Float,
@@ -846,7 +890,7 @@ object AuraLineEngine {
         eqActive: Boolean
     ): Float {
         if (state.bypass) return 0f
-        val tone = toneOffset(state, centerHz) + subBoostAt(state, centerHz)
+        val tone = parametricToneGain(state, centerHz)
         val base = if (eqActive) bandGainDb else 0f
         return (base + tone).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
     }

@@ -8,6 +8,30 @@ data class EqBand(
     val enabled: Boolean = true
 )
 
+data class ToneParametricBand(
+    val id: String,
+    val name: String,
+    val frequencyHz: Float,
+    val gainDb: Float = 0f,
+    val q: Float = 0.707f,
+    val filterType: String = "PEAKING", // LOW_SHELF, HIGH_SHELF, PEAKING, LOW_PASS, HIGH_PASS, NOTCH
+    val enabled: Boolean = true,
+    val colorHex: Long = 0xFF2196F3L
+)
+
+fun defaultToneParametricBands(): List<ToneParametricBand> = listOf(
+    ToneParametricBand("sub", "Subgraves", 30f, 0f, 0.707f, "LOW_SHELF", true, 0xFF9C27B0L),
+    ToneParametricBand("deep_bass", "Grave profundo", 50f, 0f, 1.0f, "PEAKING", true, 0xFF3F51B5L),
+    ToneParametricBand("bass", "Graves", 100f, 0f, 0.707f, "LOW_SHELF", true, 0xFF2196F3L),
+    ToneParametricBand("low_mid", "Medios graves", 250f, 0f, 1.0f, "PEAKING", true, 0xFF00BCD4L),
+    ToneParametricBand("mid", "Medios", 1000f, 0f, 1.0f, "PEAKING", true, 0xFF4CAF50L),
+    ToneParametricBand("upper_mid", "Medios altos", 2500f, 0f, 1.0f, "PEAKING", true, 0xFFFFC107L),
+    ToneParametricBand("presence", "Presencia", 4000f, 0f, 1.2f, "PEAKING", true, 0xFFFF9800L),
+    ToneParametricBand("brilliance", "Brillo", 8000f, 0f, 1.0f, "PEAKING", true, 0xFFE91E63L),
+    ToneParametricBand("treble", "Agudos", 12000f, 0f, 0.707f, "HIGH_SHELF", true, 0xFFF50057L),
+    ToneParametricBand("air", "Aire", 18000f, 0f, 0.707f, "HIGH_SHELF", true, 0xFFAA00FFL)
+)
+
 data class ToneControls(
     /** Refuerzo extra de la zona sub-baja (0-100 Hz). */
     val subDb: Float = 0f,
@@ -23,7 +47,17 @@ data class ToneControls(
      * Corte del paso bajo del sub-bajo (Hz). El refuerzo de sub no se limita ya a la primera
      * banda del ecualizador: se aplica como shelf propio hasta esta frecuencia, ajustable.
      */
-    val subCutoffHz: Float = 60f
+    val subCutoffHz: Float = 60f,
+    /** Bandas paramétricas detalladas para el módulo de tono avanzado. */
+    val bands: List<ToneParametricBand> = defaultToneParametricBands().map { band ->
+        when (band.id) {
+            "sub" -> if (subDb != 0f) band.copy(gainDb = subDb) else band
+            "bass" -> if (bassDb != 0f) band.copy(gainDb = bassDb) else band
+            "mid" -> if (midDb != 0f) band.copy(gainDb = midDb) else band
+            "treble" -> if (trebleDb != 0f) band.copy(gainDb = trebleDb) else band
+            else -> band
+        }
+    }
 )
 
 data class StereoControls(

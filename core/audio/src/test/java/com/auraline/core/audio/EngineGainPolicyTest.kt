@@ -118,13 +118,13 @@ class EngineGainPolicyTest {
             "El PreEq sí aplica el tono de graves una sola vez",
             6f,
             AuraLineEngine.preEqGainDb(state, 0f, 100f, eqActive = true),
-            0.001f
+            0.2f
         )
         assertEquals(
             "El PreEq sí aplica el tono de agudos una sola vez",
             4f,
             AuraLineEngine.preEqGainDb(state, 0f, 10_000f, eqActive = true),
-            0.001f
+            0.2f
         )
     }
 

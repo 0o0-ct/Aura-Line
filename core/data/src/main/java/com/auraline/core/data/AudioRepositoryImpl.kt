@@ -399,8 +399,13 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     /** Corte del paso bajo del sub-bajo (20–100 Hz). */
     override fun setSubCutoff(hz: Float) {
-        val tone = _state.value.tone
-        saveState(_state.value.copy(tone = tone.copy(subCutoffHz = clampSubCutoffHz(hz))))
+        val current = _state.value
+        val tone = current.tone
+        val clampedHz = clampSubCutoffHz(hz)
+        val updatedBands = tone.bands.map { band ->
+            if (band.id == "sub") band.copy(frequencyHz = clampedHz) else band
+        }
+        saveState(current.copy(tone = tone.copy(subCutoffHz = clampedHz, bands = updatedBands)))
     }
 
     override fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) {
@@ -419,13 +424,55 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     }
 
     override fun setToneFrequencies(bassHz: Float, trebleHz: Float) {
-        val tone = _state.value.tone
+        val current = _state.value
+        val tone = current.tone
+        val bHz = clampBassCrossHz(bassHz)
+        val tHz = clampTrebleCrossHz(trebleHz).coerceAtLeast(bHz + 800f)
+        val updatedBands = tone.bands.map { band ->
+            when (band.id) {
+                "bass" -> band.copy(frequencyHz = bHz)
+                "treble" -> band.copy(frequencyHz = tHz)
+                else -> band
+            }
+        }
+        saveState(current.copy(tone = tone.copy(bassFrequencyHz = bHz, trebleFrequencyHz = tHz, bands = updatedBands)))
+    }
+
+    override fun setToneParametricBand(bandId: String, gainDb: Float, frequencyHz: Float, q: Float, filterType: String, enabled: Boolean) {
+        val current = _state.value
+        val tone = current.tone
+        val margin = current.toneBoostMarginDb.coerceIn(12f, 24f)
+        val updatedBands = tone.bands.map { band ->
+            if (band.id == bandId) {
+                band.copy(
+                    gainDb = gainDb.coerceIn(-margin, margin),
+                    frequencyHz = frequencyHz.coerceIn(20f, 20000f),
+                    q = q.coerceIn(0.1f, 10f),
+                    filterType = filterType,
+                    enabled = enabled
+                )
+            } else {
+                band
+            }
+        }
+        var subDb = tone.subDb
+        var bassDb = tone.bassDb
+        var midDb = tone.midDb
+        var trebleDb = tone.trebleDb
+        when (bandId) {
+            "sub" -> subDb = gainDb.coerceIn(-margin, margin)
+            "bass" -> bassDb = gainDb.coerceIn(-margin, margin)
+            "mid" -> midDb = gainDb.coerceIn(-12f, 12f)
+            "treble" -> trebleDb = gainDb.coerceIn(-12f, 12f)
+        }
         saveState(
-            _state.value.copy(
+            current.copy(
                 tone = tone.copy(
-                    bassFrequencyHz = clampBassCrossHz(bassHz),
-                    // El cruce Medios/Agudos nunca puede quedar por debajo del Graves/Medios.
-                    trebleFrequencyHz = clampTrebleCrossHz(trebleHz).coerceAtLeast(clampBassCrossHz(bassHz) + 800f)
+                    subDb = subDb,
+                    bassDb = bassDb,
+                    midDb = midDb,
+                    trebleDb = trebleDb,
+                    bands = updatedBands
                 )
             )
         )

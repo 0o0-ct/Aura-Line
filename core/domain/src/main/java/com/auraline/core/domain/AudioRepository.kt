@@ -23,6 +23,7 @@ interface AudioRepository {
     fun setSubCutoff(hz: Float)
     fun setTone(bassDb: Float, midDb: Float, trebleDb: Float)
     fun setToneFrequencies(bassHz: Float, trebleHz: Float)
+    fun setToneParametricBand(bandId: String, gainDb: Float, frequencyHz: Float, q: Float, filterType: String, enabled: Boolean)
     fun setBalance(balance: Float)
     fun setExpansion(expansion: Float)
     fun setVolume(percent: Float)

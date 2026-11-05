@@ -54,6 +54,8 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setSubBass(db: Float) = repository.setSubBass(db)
     fun setSubCutoff(hz: Float) = repository.setSubCutoff(hz)
     fun setToneFrequencies(bassHz: Float, trebleHz: Float) = repository.setToneFrequencies(bassHz, trebleHz)
+    fun setToneParametricBand(bandId: String, gainDb: Float, frequencyHz: Float, q: Float, filterType: String, enabled: Boolean) =
+        repository.setToneParametricBand(bandId, gainDb, frequencyHz, q, filterType, enabled)
     fun setBypass(enabled: Boolean) {
         repository.setBypass(enabled)
         com.auraline.app.audio.NativeEngineBridge.toggleBypass(enabled)
