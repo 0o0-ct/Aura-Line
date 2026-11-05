@@ -198,12 +198,19 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 }
             )
 
+            val minF = 20f
+            val maxF = 20000f
+            val freqSpan = log10(maxF / minF)
+            val currentFreqFraction = ((log10(selectedBand.frequencyHz.coerceIn(minF, maxF) / minF) / freqSpan) * 100f).coerceIn(0f, 100f)
+
             AuraSliderRow(
                 label = "Frecuencia central",
                 valueText = if (selectedBand.frequencyHz >= 1000f) kilo(selectedBand.frequencyHz) else "${selectedBand.frequencyHz.toInt()} Hz",
-                value = selectedBand.frequencyHz,
-                valueRange = 20f..20000f,
-                onValueChange = { newHz ->
+                value = currentFreqFraction,
+                valueRange = 0f..100f,
+                onValueChange = { newFraction ->
+                    val normalized = (newFraction / 100f).coerceIn(0f, 1f)
+                    val newHz = minF * 10f.pow(normalized * freqSpan)
                     viewModel.setToneParametricBand(
                         bandId = selectedBand.id,
                         gainDb = selectedBand.gainDb,
