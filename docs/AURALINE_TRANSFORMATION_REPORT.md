@@ -196,3 +196,4 @@ AuraLine ha alcanzado un nivel de madurez técnica, estabilidad de audio y pulid
 2. El rack de efectos completa el ecosistema de procesamiento de audio en 4 ventanas intuitivas.
 3. El sistema de temas responde fielmente a las 30 paletas monocromáticas sin interferencia de Android 15.
 4. Las pruebas en el Samsung Galaxy S21 Ultra físico confirman la estabilidad y el rendimiento fluido a 120 Hz.
+

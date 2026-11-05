@@ -437,3 +437,4 @@ private fun ModuleRow(
 }
 
 private fun percent(value: Float): String = "${(value * 100).toInt()}%"
+
