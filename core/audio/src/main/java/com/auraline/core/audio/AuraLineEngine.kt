@@ -122,7 +122,7 @@ object AuraLineEngine {
     private val maxSessions = 8
 
     private var lastError: String? = null
-    private val DEBUG_LOG_BANDS = false
+    private val DEBUG_LOG_BANDS = true
     private var builtBandCount = 0
     private val scheduled = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -136,18 +136,31 @@ object AuraLineEngine {
 
     /**
      * Aplica un estado completo. Los cambios en ráfaga (arrastrar un fader) se agrupan en una
-     * sola aplicación para no encolar una llamada IPC por fotograma.
+     * sola aplicación continua, garantizando que el último estado deseado se aplique siempre.
      */
     fun setState(state: EqualizerState) {
         desired = state
         if (!scheduled.compareAndSet(false, true)) return
         executor.execute {
-            scheduled.set(false)
             try {
-                if (state.motorEnabled) applyEngine(state) else releaseChain()
+                while (true) {
+                    val target = desired
+                    scheduled.set(false)
+                    if (target.motorEnabled) {
+                        applyEngine(target)
+                    } else {
+                        releaseChain()
+                    }
+                    if (desired === target) break
+                    if (!scheduled.compareAndSet(false, true)) {
+                        // scheduled ya estaba en true por una llamada concurrente
+                    }
+                }
             } catch (error: Throwable) {
                 lastError = error.message ?: error.javaClass.simpleName
                 Log.e(TAG, "No se pudo aplicar el estado: ${error.message}")
+            } finally {
+                scheduled.set(false)
             }
             publish()
         }
@@ -423,10 +436,14 @@ object AuraLineEngine {
     private fun createDynamicsProcessing(state: EqualizerState, session: Int = GLOBAL_SESSION): DynamicsProcessing {
         val bandCount = state.numBands.coerceIn(20, 25)
         val frequencies = bandFrequencies(state, bandCount)
+        val bandGains = bandGains(state, bandCount)
+        val centers = bandCenters(frequencies)
+        val eqActive = !state.bypass && state.modules.equalizer
 
-        val preEq = DynamicsProcessing.Eq(true, true, bandCount)
+        val preEq = DynamicsProcessing.Eq(true, eqActive, bandCount)
         for (band in 0 until bandCount) {
-            preEq.setBand(band, DynamicsProcessing.EqBand(true, frequencies[band], 0f))
+            val initialGain = preEqGainDb(state, bandGains[band], centers[band], eqActive)
+            preEq.setBand(band, DynamicsProcessing.EqBand(true, frequencies[band], initialGain))
         }
 
         val mbc = DynamicsProcessing.Mbc(true, true, MBC_BANDS)
@@ -567,17 +584,21 @@ object AuraLineEngine {
         dp.setInputGainbyChannel(0, leftGain)
         dp.setInputGainbyChannel(1, rightGain)
 
+        val preEq = DynamicsProcessing.Eq(true, eqActive, bandCount)
         for (band in 0 until bandCount) {
             // El PreEq aplica directamente bandas, tono y sub-bajo. El tono no se repite en el MBC.
-            dp.setPreEqBandAllChannelsTo(
-                band,
-                DynamicsProcessing.EqBand(
-                    true,
-                    frequencies[band],
-                    preEqGainDb(state, bandGains[band], centers[band], eqActive)
-                )
+            val bandGain = preEqGainDb(state, bandGains[band], centers[band], eqActive)
+            val eqBand = DynamicsProcessing.EqBand(
+                true,
+                frequencies[band],
+                bandGain
             )
+            preEq.setBand(band, eqBand)
+            runCatching { dp.setPreEqBandAllChannelsTo(band, eqBand) }
         }
+        runCatching { dp.setPreEqByChannelIndex(0, preEq) }
+        runCatching { dp.setPreEqByChannelIndex(1, preEq) }
+        runCatching { dp.setPreEqAllChannelsTo(preEq) }
 
         if (DEBUG_LOG_BANDS) {
             val active = (0 until bandCount).filter { kotlin.math.abs(bandGains[it]) > 0.5f || state.bypass }
@@ -903,7 +924,11 @@ object AuraLineEngine {
         preEqGainDb(state, bandGainDb, centerHz, eqActive = true)
 
     private fun bandGains(state: EqualizerState, count: Int): FloatArray {
-        return FloatArray(count) { index -> state.bands.getOrNull(index)?.gainDb ?: 0f }
+        val bands = state.bands.ifEmpty { generateEqualizerBands(count) }
+        return FloatArray(count) { index ->
+            val band = bands.getOrNull(index)
+            if (band != null && band.enabled) band.gainDb else 0f
+        }
     }
 
     /** El efecto existe, está habilitado y conserva el control del hilo de audio. */

@@ -111,13 +111,14 @@ object NativeEngineBridge {
             NativeEngine.setBypass(state.bypass)
             NativeEngine.setPreampGain(state.preampDb)
 
-            val bands = state.bands
+            val bands = state.bands.ifEmpty { com.auraline.core.domain.generateEqualizerBands(state.numBands) }
             val numBands = state.numBands.coerceIn(20, 25)
             for (i in 0 until numBands) {
                 val band = bands.getOrNull(i)
                 if (band != null) {
                     val center = bandCenterHz(bands, i)
-                    NativeEngine.setEqBand(i, center, if (state.bypass) 0f else band.gainDb, band.q)
+                    val effectiveGain = if (state.bypass || !band.enabled || !state.modules.equalizer) 0f else band.gainDb
+                    NativeEngine.setEqBand(i, center, effectiveGain, band.q)
                 }
             }
 
