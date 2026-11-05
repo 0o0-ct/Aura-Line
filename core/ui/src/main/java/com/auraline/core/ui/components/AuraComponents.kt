@@ -356,7 +356,7 @@ fun SelectableChip(
 
     val backgroundBrush = if (selected) {
         Brush.verticalGradient(
-            listOf(accent.copy(alpha = 0.20f), Color.Transparent)
+            listOf(accent.copy(alpha = 0.55f), accent.copy(alpha = 0.25f))
         )
     } else {
         Brush.verticalGradient(
@@ -366,7 +366,7 @@ fun SelectableChip(
 
     val borderBrush = if (selected) {
         Brush.verticalGradient(
-            listOf(accent.copy(alpha = 0.5f), accent.copy(alpha = 0.1f))
+            listOf(accent, accent.copy(alpha = 0.5f))
         )
     } else {
         Brush.verticalGradient(
@@ -379,8 +379,8 @@ fun SelectableChip(
         Modifier.neumorphicConcave(
             radius = 999.dp,
             shadowColor = colors.neumorphicCavity,
-            highlightColor = accent.copy(alpha = 0.3f),
-            elevation = 3.dp
+            highlightColor = accent.copy(alpha = 0.5f),
+            elevation = 4.dp
         )
     } else {
         Modifier.neumorphicConvex(
@@ -396,7 +396,7 @@ fun SelectableChip(
         modifier = modifier
             .then(interactionModifier)
             .background(backgroundBrush, shape)
-            .border(1.dp, borderBrush, shape)
+            .border(1.5.dp, borderBrush, shape)
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = {
@@ -413,7 +413,7 @@ fun SelectableChip(
     ) {
         Text(
             text = text,
-            color = if (selected) accent else colors.textSecondary,
+            color = if (selected) colors.textPrimary else colors.textSecondary,
             fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
             maxLines = 1
