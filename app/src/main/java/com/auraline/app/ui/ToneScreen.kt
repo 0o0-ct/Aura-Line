@@ -451,7 +451,10 @@ private fun ParametricToneCurveView(
                             val span = log10(maxF / minF)
                             fun xOf(f: Float): Float = ((log10(f.coerceIn(minF, maxF) / minF)) / span) * size.width
 
-                            val currentX = xOf(band.frequencyHz) + dragAmount.x
+                            val dampenedDragX = dragAmount.x * 0.75f
+                            val dampenedDragY = dragAmount.y * 0.5f
+
+                            val currentX = xOf(band.frequencyHz) + dampenedDragX
                             val normalizedX = (currentX / size.width).coerceIn(0f, 1f)
                             val newFreq = minF * 10f.pow(normalizedX * span)
 
@@ -459,7 +462,7 @@ private fun ParametricToneCurveView(
                             val scale = size.height / 2.3f
                             fun yOf(db: Float) = centerY - (db / maxDb).coerceIn(-1f, 1f) * scale
 
-                            val currentY = yOf(band.gainDb) + dragAmount.y
+                            val currentY = yOf(band.gainDb) + dampenedDragY
                             val newGain = ((centerY - currentY) / scale) * maxDb
 
                             onUpdateBand(
