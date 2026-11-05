@@ -50,6 +50,11 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun setEffectsEnabled(enabled: Boolean) = repository.setEffectsEnabled(enabled)
     fun setPreamp(db: Float) = repository.setPreamp(db)
     fun setBandGain(bandId: Int, gainDb: Float) = repository.setBandGain(bandId, gainDb)
+    fun setBandEnabled(bandId: Int, enabled: Boolean) = repository.setBandEnabled(bandId, enabled)
+    fun setBandGroupGainOffset(region: com.auraline.core.domain.AcousticRegion, deltaDb: Float) =
+        repository.setBandGroupGainOffset(region, deltaDb)
+    fun resetBand(bandId: Int) = repository.resetBand(bandId)
+    fun resetBandGroup(region: com.auraline.core.domain.AcousticRegion) = repository.resetBandGroup(region)
     fun setTone(bassDb: Float, midDb: Float, trebleDb: Float) = repository.setTone(bassDb, midDb, trebleDb)
     fun setSubBass(db: Float) = repository.setSubBass(db)
     fun setSubCutoff(hz: Float) = repository.setSubCutoff(hz)

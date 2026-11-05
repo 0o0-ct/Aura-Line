@@ -391,6 +391,47 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         saveState(current.copy(bands = bands, presetName = "Personalizado"))
     }
 
+    override fun setBandEnabled(bandId: Int, enabled: Boolean) {
+        val current = _state.value
+        val bands = current.bands.map { band ->
+            if (band.id == bandId) band.copy(enabled = enabled) else band
+        }
+        saveState(current.copy(bands = bands, presetName = "Personalizado"))
+    }
+
+    override fun setBandGroupGainOffset(region: com.auraline.core.domain.AcousticRegion, deltaDb: Float) {
+        val current = _state.value
+        val limit = current.gainRangeDb.coerceIn(6f, 36f)
+        val bands = current.bands.map { band ->
+            if (com.auraline.core.domain.getAcousticRegionFor(band.frequencyHz) == region) {
+                band.copy(gainDb = clampBandGainDb(band.gainDb + deltaDb, limit))
+            } else {
+                band
+            }
+        }
+        saveState(current.copy(bands = bands, presetName = "Personalizado"))
+    }
+
+    override fun resetBand(bandId: Int) {
+        val current = _state.value
+        val bands = current.bands.map { band ->
+            if (band.id == bandId) band.copy(gainDb = 0f, enabled = true) else band
+        }
+        saveState(current.copy(bands = bands, presetName = "Personalizado"))
+    }
+
+    override fun resetBandGroup(region: com.auraline.core.domain.AcousticRegion) {
+        val current = _state.value
+        val bands = current.bands.map { band ->
+            if (com.auraline.core.domain.getAcousticRegionFor(band.frequencyHz) == region) {
+                band.copy(gainDb = 0f, enabled = true)
+            } else {
+                band
+            }
+        }
+        saveState(current.copy(bands = bands, presetName = "Personalizado"))
+    }
+
     override fun setSubBass(db: Float) {
         val tone = _state.value.tone
         val margin = _state.value.toneBoostMarginDb.coerceIn(12f, 24f)

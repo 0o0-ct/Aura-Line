@@ -1,5 +1,24 @@
 package com.auraline.core.domain
 
+import kotlin.math.log10
+
+enum class AcousticRegion(
+    val label: String,
+    val rangeHz: ClosedRange<Float>,
+    val colorHex: Long,
+    val description: String
+) {
+    SUBBASS("Subgraves", 20f..60f, 0xFF9C27B0L, "Frecuencias sub-bajas (20-60 Hz). Aportan impacto físico, sensación de profundidad y peso en el pecho."),
+    DEEP_BASS("Graves profundos", 60f..150f, 0xFF3F51B5L, "Graves fundamentales (60-150 Hz). Dan cuerpo al bombo, bajo eléctrico y contrabajo."),
+    UPPER_BASS("Graves superiores", 150f..300f, 0xFF00838FL, "Calidez y pegada (150-300 Hz). Dan grosor a guitarras y vocales masculinas, pero un exceso produce enturbiamiento."),
+    LOW_MID("Medios bajos", 300f..800f, 0xFF00BCD4L, "Cuerpo instrumental (300-800 Hz). Define la madera del piano, la caja de resonancia y la plenitud sin sonido hueco."),
+    MID("Medios", 800f..2000f, 0xFF4CAF50L, "Núcleo vocal e instrumental (800-2000 Hz). Zona sensible donde residen voces principales, guitarras y metales."),
+    HIGH_MID("Medios altos", 2000f..4000f, 0xFFFFC107L, "Ataque y nitidez (2-4 kHz). Clave para la inteligibilidad de la voz y el chasquido del bombo o caja."),
+    PRESENCE("Presencia", 4000f..7000f, 0xFFFF9800L, "Presencia y mordida (4-7 kHz). Aporta cercanía y definición a platillos y voces. Un exceso genera fatiga auditiva."),
+    TREBLE("Agudos", 7000f..12000f, 0xFFE91E63L, "Brillo y detalle (7-12 kHz). Aporta nitidez cristalina, separación de instrumentos y definición de textura."),
+    AIR("Aire", 12000f..20000f, 0xFFAA00FFL, "Aire y apertura (12-20 kHz). Brillo superior holográfico y extensión de armónicos agudos.")
+}
+
 data class EqBand(
     val id: Int,
     val frequencyHz: Float,
@@ -7,6 +26,99 @@ data class EqBand(
     val q: Float = 0.707f,
     val enabled: Boolean = true
 )
+
+data class BandAcousticInfo(
+    val region: AcousticRegion,
+    val primaryInstrument: String,
+    val secondaryInstruments: List<String>,
+    val boostEffect: String,
+    val cutEffect: String,
+    val recommendation: String
+)
+
+fun getAcousticRegionFor(freqHz: Float): AcousticRegion {
+    return AcousticRegion.values().firstOrNull { freqHz >= it.rangeHz.start && freqHz <= it.rangeHz.endInclusive }
+        ?: if (freqHz < 20f) AcousticRegion.SUBBASS else AcousticRegion.AIR
+}
+
+fun getBandAcousticInfo(freqHz: Float): BandAcousticInfo {
+    val region = getAcousticRegionFor(freqHz)
+    return when (region) {
+        AcousticRegion.SUBBASS -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Sub-bajo / Sintetizador 808",
+            secondaryInstruments = listOf("Órgano de tubos", "Bombo electrónico", "Efectos cinemáticos"),
+            boostEffect = "Aumenta la pegada sub-baja y el impacto físico en pecho y subwoofers.",
+            cutEffect = "Elimina vibraciones molestas, retumbe excesivo y protege altavoces pequeños.",
+            recommendation = "Realce moderado (+2 a +4 dB) para géneros urbanos y cine. Atenuar en altavoces de móvil."
+        )
+        AcousticRegion.DEEP_BASS -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Bombo acústico / Bajo eléctrico",
+            secondaryInstruments = listOf("Contrabajo", "Toms de piso", "Sintetizador analógico"),
+            boostEffect = "Engorda la nota fundamental del bajo y da fuerza y solidez al golpe de bombo.",
+            cutEffect = "Limpia la mezcla cuando el grave enmascara otros instrumentos.",
+            recommendation = "Ajustar entre +2 y +5 dB para dar cuerpo rítmico sin saturar la etapa de entrada."
+        )
+        AcousticRegion.UPPER_BASS -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Cuerpo de bajo / Guitarra rítmica",
+            secondaryInstruments = listOf("Voces masculinas graves", "Trompeta", "Trombón", "Violonchelo"),
+            boostEffect = "Añade calidez, resonancia de madera y grosor al sonido general.",
+            cutEffect = "Reduce el sonido encajonado o enturbiado entre 200 y 300 Hz.",
+            recommendation = "Si la música suena 'oscura' o 'embarrada', atenúa esta zona entre -1 y -3 dB."
+        )
+        AcousticRegion.LOW_MID -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Caja de batería / Guitarra acústica",
+            secondaryInstruments = listOf("Piano de cola", "Saxofón tenor", "Sintetizadores pad"),
+            boostEffect = "Refuerza la plenitud instrumental y la resonancia armónica natural.",
+            cutEffect = "Previene el sonido denso o pesado en pasajes orquestales y acústicos.",
+            recommendation = "Mantener cerca de 0 dB o realzar moderadamente para guitarras acústicas y pianos."
+        )
+        AcousticRegion.MID -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Voz principal / Guitarra solista",
+            secondaryInstruments = listOf("Piano", "Violín", "Clarinetes", "Sintetizador lead"),
+            boostEffect = "Adelanta la voz en la mezcla y da cuerpo proyectado a instrumentos solistas.",
+            cutEffect = "Aleja los instrumentos centrales, dando espacio y profundidad a la mezcla.",
+            recommendation = "Es la zona más sensible al oído humano. Ajustes suaves de ±1 a ±3 dB máximo."
+        )
+        AcousticRegion.HIGH_MID -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Presencia vocal / Ataque de caja",
+            secondaryInstruments = listOf("Punta de guitarra eléctrica", "Ataque de bombo", "Saxofón alto"),
+            boostEffect = "Mejora la articulación de palabras en diálogos y da 'chasquido' al golpe.",
+            cutEffect = "Suaviza grabaciones agresivas o chillonas que producen fatiga auditiva.",
+            recommendation = "Ideal para podcast (+2 a +4 dB en 3 kHz) para resaltar conversaciones claramente."
+        )
+        AcousticRegion.PRESENCE -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Platillos (Charles/Crash) / Claridad vocal",
+            secondaryInstruments = listOf("Guitarra acústica", "Caja", "Percusión brillante"),
+            boostEffect = "Aporta nitidez, frescura y sensación de cercanía con el intérprete.",
+            cutEffect = "Reduce sibilancias vocales molestos ('S' dura) y platillos estridentes.",
+            recommendation = "Un ajuste de +2 dB aporta gran definición vocal. Evitar excesos por encima de +5 dB."
+        )
+        AcousticRegion.TREBLE -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Platillos Ride / Armónicos de guitarra",
+            secondaryInstruments = listOf("Triángulo", "Arpa", "Sintetizadores arpegiados"),
+            boostEffect = "Proporciona detalle fino, brillo metálico limpio y articulación cristalina.",
+            cutEffect = "Reduce el siseo de cinta o el ruido de fondo en grabaciones antiguas.",
+            recommendation = "Excelente para dar brillo comercial a pop, rock y música electrónica."
+        )
+        AcousticRegion.AIR -> BandAcousticInfo(
+            region = region,
+            primaryInstrument = "Aire atmosférico / Armónicos superiores",
+            secondaryInstruments = listOf("Reverberación de sala", "Respiración vocal", "Super-altos"),
+            boostEffect = "Sensación de espacio tridimensional, apertura acústica y sofisticación.",
+            cutEffect = "Elimina artefactos digitales de alta frecuencia y aspereza en compresión MP3.",
+            recommendation = "Subir de +2 a +4 dB en equipos de alta fidelidad para mayor tridimensionalidad."
+        )
+    }
+}
+
 
 data class ToneParametricBand(
     val id: String,
@@ -172,6 +284,8 @@ fun toneBoostMarginFor(usageProfileKey: String): Float =
 data class UserPreset(
     val name: String,
     val state: EqualizerState,
+    val category: String = "Personalizado",
+    val description: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )
 

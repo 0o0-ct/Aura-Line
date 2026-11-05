@@ -18,6 +18,10 @@ interface AudioRepository {
     fun setEffectsEnabled(enabled: Boolean)
     fun setPreamp(db: Float)
     fun setBandGain(bandId: Int, gainDb: Float)
+    fun setBandEnabled(bandId: Int, enabled: Boolean)
+    fun setBandGroupGainOffset(region: AcousticRegion, deltaDb: Float)
+    fun resetBand(bandId: Int)
+    fun resetBandGroup(region: AcousticRegion)
     fun setSubBass(db: Float)
     /** Corte del paso bajo del sub-bajo (20–100 Hz). */
     fun setSubCutoff(hz: Float)

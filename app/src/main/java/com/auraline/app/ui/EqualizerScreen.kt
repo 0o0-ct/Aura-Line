@@ -1,7 +1,9 @@
 package com.auraline.app.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -23,12 +25,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,45 +43,53 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.border
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import com.auraline.app.domain.AuraLineViewModel
-import com.auraline.core.ui.components.hapticFeedback
+import com.auraline.core.domain.AcousticRegion
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqBand
+import com.auraline.core.domain.FactoryPreset
 import com.auraline.core.domain.FactoryPresets
 import com.auraline.core.domain.FrequencyGuides
 import com.auraline.core.domain.LowFrequencyRoles
 import com.auraline.core.domain.LowFrequencySources
+import com.auraline.core.domain.LowSource
+import com.auraline.core.domain.PresetCategory
+import com.auraline.core.domain.PresetExporterImporter
 import com.auraline.core.domain.SourceCategory
 import com.auraline.core.domain.bandCenterHz
 import com.auraline.core.domain.bandRoleFor
 import com.auraline.core.domain.focusFor
 import com.auraline.core.domain.generateEqualizerBands
+import com.auraline.core.domain.getAcousticRegionFor
+import com.auraline.core.domain.getBandAcousticInfo
 import com.auraline.core.domain.ownerShortNameFor
 import com.auraline.core.domain.resolveFocus
 import com.auraline.core.ui.components.AuraCard
 import com.auraline.core.ui.components.AuraChip
 import com.auraline.core.ui.components.AuraChipState
 import com.auraline.core.ui.components.AuraDepth
-import com.auraline.core.ui.components.AuraSurface
+import com.auraline.core.ui.components.AuraKnob
 import com.auraline.core.ui.components.AuraSliderRow
+import com.auraline.core.ui.components.AuraSurface
 import com.auraline.core.ui.components.BandFader
 import com.auraline.core.ui.components.ResponseCurve
-import com.auraline.core.ui.components.SpectrumBars
 import com.auraline.core.ui.components.SectionTitle
 import com.auraline.core.ui.components.SelectableChip
+import com.auraline.core.ui.components.SpectrumBars
 import com.auraline.core.ui.components.StatusPill
 import com.auraline.core.ui.components.formatFrequency
 import com.auraline.core.ui.components.formatGain
+import com.auraline.core.ui.components.hapticFeedback
 import com.auraline.core.ui.theme.AuraTheme
 
 private val WindowSizes = listOf(8, 12, 25)
@@ -90,17 +101,26 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
     val state by viewModel.state.collectAsState()
     val engine by viewModel.engine.collectAsState()
     val presets by viewModel.presets.collectAsState()
+    val haptic = hapticFeedback()
+    val scope = rememberCoroutineScope()
 
-    var windowSize by remember { mutableStateOf(0) } // índice en WindowSizes; 0 = todas
+    var windowSize by remember { mutableStateOf(0) } // 0 = 8, 1 = 12, 2 = todas
     var pendingPresetName by remember { mutableStateOf("") }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showExportImportDialog by remember { mutableStateOf(false) }
+    var exportJsonText by remember { mutableStateOf("") }
+    var importJsonInput by remember { mutableStateOf("") }
+    var importError by remember { mutableStateOf<String?>(null) }
     var showGuide by remember { mutableStateOf(false) }
     var showAllPresetsDialog by remember { mutableStateOf(false) }
+    var selectedPresetCategory by remember { mutableStateOf<PresetCategory?>(null) }
+    var highlightedSourceKey by remember { mutableStateOf<String?>(null) }
+    var inspectedBand by remember { mutableStateOf<EqBand?>(null) }
+    var showGroupMacros by remember { mutableStateOf(false) }
 
     val bands = remember(state.bands, state.numBands) {
         state.bands.ifEmpty { generateEqualizerBands(state.numBands) }
     }
-    // Frecuencia real de la banda que posee cada rol de graves.
     val roleBandHz = remember(bands) {
         val centers = bands.indices.map { bandCenterHz(bands, it) }
         LowFrequencyRoles.associateWith { role ->
@@ -109,7 +129,6 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
     }
     val range = state.gainRangeDb.coerceIn(6f, 36f)
     val spectrum by com.auraline.core.audio.AuraLineSpectrum.levels.collectAsState()
-    val scope = rememberCoroutineScope()
     val selectedFactory = FactoryPresets.firstOrNull { it.name == state.presetName }
     val perWindow = WindowSizes[windowSize]
     val pages = remember(bands, perWindow) { bands.chunked(perWindow) }
@@ -140,8 +159,10 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             .padding(top = 148.dp, bottom = 140.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        EngineStatusCard(engine = engine, motorEnabled = state.motorEnabled)
+        // CADENA Y ESTADO DEL MOTOR
+        EngineStatusCard(engine = engine, state = state, onToggleBypass = { viewModel.setBypass(!state.bypass) })
 
+        // CURVA DE RESPUESTA Y ANALIZADOR ESPECTRAL
         AuraSurface(
             modifier = Modifier.fillMaxWidth(),
             depth = AuraDepth.Raised
@@ -153,48 +174,83 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(
-                    onClick = { showGuide = true },
+                    onClick = {
+                        haptic()
+                        showGuide = true
+                    },
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text("Guía", color = colors.accent, fontSize = 12.sp)
+                    Text("Guía acústica", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Spacer(modifier = Modifier.height(6.dp))
+
+            // Rejilla de curvas
             ResponseCurve(bands = bands, gainRangeDb = range)
             Spacer(modifier = Modifier.height(8.dp))
             SpectrumBars(levels = spectrum, edges = bands.map { it.frequencyHz })
         }
 
+        // BIBLIOTECA DE PREAJUSTES CATEGORIZADA
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle(
-                    text = "Preajustes",
+                    text = "Biblioteca de preajustes",
                     modifier = Modifier.weight(1f)
                 )
                 TextButton(
-                    onClick = { showAllPresetsDialog = true },
+                    onClick = {
+                        haptic()
+                        showAllPresetsDialog = true
+                    },
                     contentPadding = PaddingValues(horizontal = 8.dp)
                 ) {
-                    Text("Ver todos", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Explorar catálogo (${FactoryPresets.size})", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
+
+            // Categorías rápidas
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                SelectableChip(
+                    text = "Todos",
+                    selected = selectedPresetCategory == null,
+                    onClick = { selectedPresetCategory = null }
+                )
+                PresetCategory.values().forEach { category ->
+                    SelectableChip(
+                        text = category.label,
+                        selected = selectedPresetCategory == category,
+                        onClick = { selectedPresetCategory = category }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Chips de preajustes filtrados por categoría
+            val filteredPresets = remember(selectedPresetCategory) {
+                if (selectedPresetCategory == null) FactoryPresets else FactoryPresets.filter { it.category == selectedPresetCategory }
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
                     .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FactoryPresets.forEach { preset ->
+                filteredPresets.forEach { preset ->
                     AuraChip(
                         label = preset.name,
-                        state = if (state.presetName == preset.name) {
-                            AuraChipState.Selected
-                        } else {
-                            AuraChipState.Default
-                        },
+                        state = if (state.presetName == preset.name) AuraChipState.Selected else AuraChipState.Default,
                         onClick = {
+                            haptic()
                             if (preset.name == "Plano") viewModel.resetAll()
                             else viewModel.applyFactoryPreset(preset.name)
                             scope.launch { pagerState.animateScrollToPage(0) }
@@ -203,30 +259,28 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     )
                 }
             }
+
             selectedFactory?.hint?.takeIf { it.isNotEmpty() }?.let { hint ->
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = hint, color = colors.textSecondary, fontSize = 11.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(colors.surfaceElevated.copy(alpha = 0.5f))
+                        .padding(8.dp)
+                ) {
+                    Text(text = "Ficha: ${selectedFactory.name}", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text(text = hint, color = colors.textSecondary, fontSize = 11.sp)
+                    if (selectedFactory.tonalCurveSummary.isNotBlank()) {
+                        Text(text = "Curva: ${selectedFactory.tonalCurveSummary}", color = colors.textPrimary, fontSize = 10.sp)
+                    }
+                }
             }
-            val strongest = bands.maxByOrNull { kotlin.math.abs(it.gainDb) }
-            if (strongest != null && kotlin.math.abs(strongest.gainDb) >= 0.5f) {
-                val index = bands.indexOf(strongest)
-                Text(
-                    text = "Aplicado: ${formatGain(strongest.gainDb)} dB en " +
-                        "${formatFrequency(bandCenterHz(bands, index))} Hz",
-                    color = colors.accent,
-                    fontSize = 11.sp
-                )
-            }
-            if (!state.motorEnabled) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "El motor está apagado: actívalo para escuchar el preajuste.",
-                    color = colors.warning,
-                    fontSize = 11.sp
-                )
-            }
+
             if (presets.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(text = "Mis preajustes personalizados", color = colors.accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -238,8 +292,14 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                         SelectableChip(
                             text = name,
                             selected = state.presetName == name,
-                            onClick = { viewModel.applyPreset(name) },
-                            onLongClick = { showDeleteDialog = true }
+                            onClick = {
+                                haptic()
+                                viewModel.applyPreset(name)
+                            },
+                            onLongClick = {
+                                haptic()
+                                showDeleteDialog = true
+                            }
                         )
 
                         if (showDeleteDialog) {
@@ -247,7 +307,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                                 onDismissRequest = { showDeleteDialog = false },
                                 containerColor = colors.surface,
                                 title = { Text("Eliminar preajuste", color = colors.textPrimary) },
-                                text = { Text("¿Deseas eliminar el preajuste de usuario '$name'?", color = colors.textSecondary) },
+                                text = { Text("¿Deseas eliminar el preajuste personalizado '$name'?", color = colors.textSecondary) },
                                 confirmButton = {
                                     TextButton(onClick = {
                                         viewModel.deletePreset(name)
@@ -266,13 +326,95 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             }
         }
 
+        // CONTROL DE LAS 25 BANDAS
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            SectionTitle(
-                text = "Bandas",
-                trailing = "${state.numBands} · ±${range.toInt()} dB"
-            )
-            Spacer(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(
+                    text = "Consola de ${state.numBands} bandas",
+                    trailing = "±${range.toInt()} dB",
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = {
+                        haptic()
+                        showGroupMacros = !showGroupMacros
+                    },
+                    contentPadding = PaddingValues(horizontal = 6.dp)
+                ) {
+                    Text(
+                        text = if (showGroupMacros) "Ocultar grupos" else "Grupos acústicos",
+                        color = colors.accent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
 
+            // Controles de macrogrupo de bandas
+            AnimatedVisibility(visible = showGroupMacros) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceElevated)
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Ajuste por regiones espectrales",
+                        color = colors.textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    AcousticRegion.values().forEach { region ->
+                        val regionColor = Color(region.colorHex)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .background(regionColor, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = region.label,
+                                color = colors.textPrimary,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = {
+                                    haptic()
+                                    viewModel.setBandGroupGainOffset(region, -1f)
+                                },
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(28.dp)
+                            ) { Text("-1", color = colors.textSecondary, fontSize = 10.sp) }
+                            TextButton(
+                                onClick = {
+                                    haptic()
+                                    viewModel.setBandGroupGainOffset(region, 1f)
+                                },
+                                contentPadding = PaddingValues(0.dp),
+                                modifier = Modifier.size(28.dp)
+                            ) { Text("+1", color = colors.accent, fontSize = 10.sp) }
+                            TextButton(
+                                onClick = {
+                                    haptic()
+                                    viewModel.resetBandGroup(region)
+                                },
+                                contentPadding = PaddingValues(0.dp)
+                            ) { Text("0", color = colors.warning, fontSize = 10.sp) }
+                        }
+                    }
+                }
+            }
+
+            // Selectores de ventana y rango
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -290,14 +432,14 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                     onClick = { windowSize = 1 }
                 )
                 SelectableChip(
-                    text = "Todas",
+                    text = "Todas (${bands.size})",
                     selected = windowSize == 2,
                     onClick = { windowSize = 2 }
                 )
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 listOf(6f, 12f, 24f, 30f, 36f).forEach { value ->
                     SelectableChip(
-                        text = "±${value.toInt()}",
+                        text = "±${value.toInt()} dB",
                         selected = range.toInt() == value.toInt(),
                         onClick = { viewModel.setGainRange(value) }
                     )
@@ -306,6 +448,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Faders de las bandas
             if (windowSize == 2) {
                 Row(
                     modifier = Modifier
@@ -315,15 +458,20 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 ) {
                     bands.forEachIndexed { index, band ->
                         val center = bandCenterHz(bands, index)
-                        BandFader(
-                            value = band.gainDb,
-                            onValueChange = { viewModel.setBandGain(band.id, it) },
-                            valueRange = -range..range,
-                            height = 160.dp,
-                            label = formatFrequency(center),
-                            valueText = formatGain(band.gainDb),
-                            highlighted = band.gainDb != 0f,
-                            subtitle = ownerShortNameFor(center) ?: ""
+                        val region = getAcousticRegionFor(center)
+                        val regionColor = Color(region.colorHex)
+                        val isHighlighted = highlightedSourceKey?.let { key ->
+                            focusFor(key)?.let { resolveFocus(bands, it) }?.any { it.first == index }
+                        } ?: (band.gainDb != 0f)
+
+                        BandFaderItem(
+                            band = band,
+                            center = center,
+                            range = range,
+                            highlighted = isHighlighted,
+                            regionColor = regionColor,
+                            onGainChange = { viewModel.setBandGain(band.id, it) },
+                            onInspect = { inspectedBand = band }
                         )
                     }
                 }
@@ -334,7 +482,9 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                         bands = bands,
                         chunk = chunk,
                         range = range,
-                        onGainChange = viewModel::setBandGain
+                        highlightedSourceKey = highlightedSourceKey,
+                        onGainChange = viewModel::setBandGain,
+                        onInspectBand = { inspectedBand = it }
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
@@ -354,7 +504,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                             if (first != null && last != null) {
                                 append("${formatFrequency(first)} – ${formatFrequency(last)} Hz · ")
                             }
-                            append("${pagerState.currentPage + 1}/${pages.size.coerceAtLeast(1)}")
+                            append("Página ${pagerState.currentPage + 1}/${pages.size.coerceAtLeast(1)}")
                         },
                         color = colors.textSecondary,
                         fontSize = 11.sp
@@ -362,32 +512,56 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Doble toque en un fader para volver a 0 dB",
-                color = colors.textSecondary,
-                fontSize = 11.sp
-            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Doble toque: 0 dB · Toque largo: inspeccionar",
+                    color = colors.textSecondary,
+                    fontSize = 10.sp
+                )
+                TextButton(
+                    onClick = {
+                        haptic()
+                        viewModel.resetAll()
+                    },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Reiniciar 25 bandas", color = colors.warning, fontSize = 11.sp)
+                }
+            }
         }
 
+        // FUENTES GRAVES (15 FUENTES)
         LowSourcesCard(
             bands = bands,
             range = range,
+            highlightedKey = highlightedSourceKey,
+            onHighlightSource = { key ->
+                highlightedSourceKey = if (highlightedSourceKey == key) null else key
+            },
             onBandGain = { bandId, gain -> viewModel.setBandGain(bandId, gain) },
             onFocus = { viewModel.focusLowSource(it) }
         )
 
+        // PREAMPLIFICACIÓN Y COMPARACIÓN A/B
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 SectionTitle(
-                    text = "Ganancia de entrada",
+                    text = "Preamplificación de entrada",
                     trailing = "${formatGain(state.preampDb)} dB",
                     modifier = Modifier.weight(1f)
                 )
                 SelectableChip(
-                    text = if (state.bypass) "A/B activo" else "A/B",
+                    text = if (state.bypass) "A/B Comparación (Plana)" else "A/B Comparación",
                     selected = state.bypass,
-                    onClick = { viewModel.setBypass(!state.bypass) }
+                    onClick = {
+                        haptic()
+                        viewModel.setBypass(!state.bypass)
+                    }
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -395,39 +569,65 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                com.auraline.core.ui.components.AuraKnob(
+                AuraKnob(
                     value = state.preampDb,
                     onValueChange = { viewModel.setPreamp(it) },
                     valueRange = -15f..15f,
-                    label = "Preamplificación",
+                    label = "Preamplificador",
                     valueText = "${formatGain(state.preampDb)} dB",
                     diameter = 132.dp
+                )
+            }
+            if (state.autoPreamp) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "AutoPreamp activo: protege automáticamente contra recortes digitales y clipping.",
+                    color = colors.positive,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             if (state.bypass) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Estás escuchando la curva plana para comparar. Pulsa A/B para volver.",
+                    text = "Comparación A/B activa: escuchando la señal plana sin curvas.",
                     color = colors.warning,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
 
+        // HERRAMIENTAS DE GESTIÓN DE PREAJUSTES
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             SelectableChip(
-                text = "Restablecer",
+                text = "Restablecer todo",
                 selected = false,
-                onClick = { viewModel.resetAll() }
+                onClick = {
+                    haptic()
+                    viewModel.resetAll()
+                }
+            )
+            SelectableChip(
+                text = "Exportación / Importación JSON",
+                selected = false,
+                onClick = {
+                    haptic()
+                    exportJsonText = PresetExporterImporter.exportPresetToJson(state.presetName, state)
+                    showExportImportDialog = true
+                }
             )
             SelectableChip(
                 text = "Guardar preajuste",
                 selected = true,
                 onClick = {
+                    haptic()
                     pendingPresetName = state.presetName
                     showSaveDialog = true
                 }
@@ -437,24 +637,31 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
         Spacer(modifier = Modifier.height(96.dp))
     }
 
+    // DIÁLOGOS Y PANELES EMERGENTES
+
+    // Diálogo de guardar preajuste
     if (showSaveDialog) {
         AlertDialog(
             onDismissRequest = { showSaveDialog = false },
             containerColor = colors.surface,
-            title = { Text("Guardar preajuste", color = colors.textPrimary) },
+            title = { Text("Guardar preajuste personalizado", color = colors.textPrimary) },
             text = {
-                OutlinedTextField(
-                    value = pendingPresetName,
-                    onValueChange = { pendingPresetName = it },
-                    singleLine = true,
-                    label = { Text("Nombre") }
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Guarda la curva actual de 25 bandas, preamp y parámetros:", color = colors.textSecondary, fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = pendingPresetName,
+                        onValueChange = { pendingPresetName = it },
+                        singleLine = true,
+                        label = { Text("Nombre del preajuste") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.savePreset(pendingPresetName)
                     showSaveDialog = false
-                }) { Text("Guardar", color = colors.accent) }
+                }) { Text("Guardar", color = colors.accent, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showSaveDialog = false }) {
@@ -464,158 +671,272 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
         )
     }
 
-    if (showGuide) {
+    // Diálogo de Exportar/Importar JSON
+    if (showExportImportDialog) {
         AlertDialog(
-            onDismissRequest = { showGuide = false },
-            containerColor = colors.surface,
-            title = { Text("Guía de frecuencias", color = colors.textPrimary) },
+            onDismissRequest = { showExportImportDialog = false },
+            containerColor = colors.surfaceElevated,
+            title = { Text("Exportación / Importación JSON", color = colors.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
-                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
-                    item {
-                        Text(
-                            text = "Mapa de graves por banda",
-                            color = colors.textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 380.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Formato de preajuste JSON validado de AuraLine:", color = colors.textSecondary, fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = exportJsonText,
+                        onValueChange = { exportJsonText = it },
+                        label = { Text("JSON exportado / para importar") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                    )
+                    importError?.let { err ->
+                        Text(text = err, color = colors.danger, fontSize = 11.sp)
                     }
-                    items(LowFrequencyRoles) { role ->
-                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                            Text(
-                                text = buildString {
-                                    roleBandHz[role]?.let { append("${formatFrequency(it)} Hz · ") }
-                                    append(role.owner.name)
-                                },
-                                color = colors.accent,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = buildString {
-                                    if (role.companions.isNotEmpty()) {
-                                        append("Comparten banda: ")
-                                        append(role.companions.joinToString(", ") { it.name })
-                                        append(". ")
-                                    }
-                                    append(role.owner.tip)
-                                },
-                                color = colors.textSecondary,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "Guía de frecuencias",
-                            color = colors.textPrimary,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    items(FrequencyGuides) { guide ->
-                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
-                            Text(
-                                text = guide.label,
-                                color = colors.accent,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(text = guide.uses, color = colors.textSecondary, fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        TextButton(onClick = {
+                            runCatching {
+                                val userPreset = PresetExporterImporter.importPresetFromJson(exportJsonText)
+                                viewModel.savePreset(userPreset.name)
+                                viewModel.applyPreset(userPreset.name)
+                                importError = null
+                                showExportImportDialog = false
+                            }.onFailure { ex ->
+                                importError = "Error al importar JSON: ${ex.message}"
+                            }
+                        }) {
+                            Text("Importar JSON", color = colors.accent, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { showGuide = false }) {
+                TextButton(onClick = { showExportImportDialog = false }) {
                     Text("Cerrar", color = colors.accent)
                 }
             }
         )
     }
 
-    if (showAllPresetsDialog) {
+    // Diálogo de inspección individual de banda
+    inspectedBand?.let { band ->
+        val center = bandCenterHz(bands, bands.indexOf(band).coerceAtLeast(0))
+        val acousticInfo = getBandAcousticInfo(center)
+        val regionColor = Color(acousticInfo.region.colorHex)
+
         AlertDialog(
-            onDismissRequest = { showAllPresetsDialog = false },
+            onDismissRequest = { inspectedBand = null },
             containerColor = colors.surfaceElevated,
             title = {
-                Text(
-                    text = "Todos los preajustes",
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(12.dp).background(regionColor, CircleShape))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Banda #${band.id + 1} · ${formatFrequency(center)} Hz",
+                        color = colors.textPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                }
             },
             text = {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(350.dp)
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text(
-                        text = "Selecciona un preajuste para aplicarlo instantáneamente:",
-                        color = colors.textSecondary,
-                        fontSize = 12.sp
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "Región: ${acousticInfo.region.label}", color = regionColor, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text(text = "Ganancia: ${formatGain(band.gainDb)} dB", color = colors.accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+
+                    AuraSliderRow(
+                        label = "Ganancia de banda",
+                        valueText = "${formatGain(band.gainDb)} dB",
+                        value = band.gainDb,
+                        valueRange = -range..range,
+                        onValueChange = { viewModel.setBandGain(band.id, it) }
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "Fábrica", color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    FactoryPresets.forEach { preset ->
-                        val isSelected = state.presetName == preset.name
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isSelected) colors.accent.copy(alpha = 0.15f) else colors.surface)
-                                .border(1.dp, if (isSelected) colors.accent else colors.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                                .clickable {
-                                    if (preset.name == "Plano") viewModel.resetAll()
-                                    else viewModel.applyFactoryPreset(preset.name)
-                                    scope.launch { pagerState.animateScrollToPage(0) }
-                                    showAllPresetsDialog = false
-                                }
-                                .padding(12.dp)
-                        ) {
-                            Text(
-                                text = preset.name,
-                                color = if (isSelected) colors.accent else colors.textPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                            if (preset.hint.isNotBlank()) {
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = preset.hint,
-                                    color = colors.textSecondary,
-                                    fontSize = 11.sp
-                                )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        listOf(-1f, -0.5f, 0f, 0.5f, 1f).forEach { step ->
+                            TextButton(onClick = {
+                                viewModel.setBandGain(band.id, (band.gainDb + step).coerceIn(-range, range))
+                            }) {
+                                Text(if (step > 0) "+$step" else "$step", color = colors.accent, fontSize = 11.sp)
                             }
                         }
                     }
-                    if (presets.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(text = "Guardados por ti", color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        presets.forEach { name ->
-                            val isSelected = state.presetName == name
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) colors.accent.copy(alpha = 0.15f) else colors.surface)
-                                    .border(1.dp, if (isSelected) colors.accent else colors.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        viewModel.applyPreset(name)
-                                        scope.launch { pagerState.animateScrollToPage(0) }
-                                        showAllPresetsDialog = false
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.surface)
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = "Instrumento principal:", color = colors.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = acousticInfo.primaryInstrument, color = colors.accent, fontSize = 12.sp)
+                        Text(text = "Comparten rango:", color = colors.textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = acousticInfo.secondaryInstruments.joinToString(", "), color = colors.textSecondary, fontSize = 11.sp)
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(colors.surface)
+                            .padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = "Efecto al aumentar (+):", color = colors.positive, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = acousticInfo.boostEffect, color = colors.textSecondary, fontSize = 11.sp)
+                        Text(text = "Efecto al atenuar (-):", color = colors.warning, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = acousticInfo.cutEffect, color = colors.textSecondary, fontSize = 11.sp)
+                        Text(text = "Consejo de ecualización:", color = colors.accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text(text = acousticInfo.recommendation, color = colors.textPrimary, fontSize = 11.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetBand(band.id)
+                }) {
+                    Text("Reiniciar a 0 dB", color = colors.warning)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { inspectedBand = null }) {
+                    Text("Cerrar", color = colors.accent)
+                }
+            }
+        )
+    }
+
+    // Guía acústica educativa
+    if (showGuide) {
+        AlertDialog(
+            onDismissRequest = { showGuide = false },
+            containerColor = colors.surfaceElevated,
+            title = { Text("Guía acústica de frecuencias", color = colors.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
+                    item {
+                        Text(
+                            text = "Regiones del espectro audible (20 Hz - 20 kHz)",
+                            color = colors.accent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+                    items(AcousticRegion.values()) { reg ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.surface)
+                                .padding(8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(modifier = Modifier.size(8.dp).background(Color(reg.colorHex), CircleShape))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = reg.label, color = Color(reg.colorHex), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "(${reg.rangeHz.start.toInt()} - ${reg.rangeHz.endInclusive.toInt()} Hz)", color = colors.textSecondary, fontSize = 10.sp)
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(text = reg.description, color = colors.textSecondary, fontSize = 11.sp)
+                        }
+                    }
+                    item {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "Guía rápida por instrumento",
+                            color = colors.accent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+                    items(FrequencyGuides) { guide ->
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(text = guide.label, color = colors.textPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(text = guide.uses, color = colors.textSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showGuide = false }) {
+                    Text("Cerrar", color = colors.accent, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
+    // Explorador completo de catálogo de preajustes
+    if (showAllPresetsDialog) {
+        AlertDialog(
+            onDismissRequest = { showAllPresetsDialog = false },
+            containerColor = colors.surfaceElevated,
+            title = { Text("Catálogo completo de preajustes", color = colors.textPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(380.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    PresetCategory.values().forEach { cat ->
+                        val categoryPresets = FactoryPresets.filter { it.category == cat }
+                        if (categoryPresets.isNotEmpty()) {
+                            Text(text = cat.label, color = colors.accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            categoryPresets.forEach { preset ->
+                                val isSelected = state.presetName == preset.name
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(if (isSelected) colors.accent.copy(alpha = 0.15f) else colors.surface)
+                                        .border(1.dp, if (isSelected) colors.accent else colors.outline.copy(alpha = 0.2f), RoundedCornerShape(10.dp))
+                                        .clickable {
+                                            haptic()
+                                            if (preset.name == "Plano") viewModel.resetAll()
+                                            else viewModel.applyFactoryPreset(preset.name)
+                                            showAllPresetsDialog = false
+                                        }
+                                        .padding(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(text = preset.name, color = if (isSelected) colors.accent else colors.textPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text(text = preset.contentType, color = colors.textSecondary, fontSize = 10.sp)
                                     }
-                                    .padding(12.dp)
-                            ) {
-                                Text(
-                                    text = name,
-                                    color = if (isSelected) colors.accent else colors.textPrimary,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(text = preset.hint, color = colors.textSecondary, fontSize = 11.sp)
+                                    Text(text = "Recomendación: ${preset.recommendedUse}", color = colors.textSecondary, fontSize = 10.sp)
+                                }
                             }
                         }
                     }
@@ -631,59 +952,104 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
 }
 
 @Composable
+private fun BandFaderItem(
+    band: EqBand,
+    center: Float,
+    range: Float,
+    highlighted: Boolean,
+    regionColor: Color,
+    onGainChange: (Float) -> Unit,
+    onInspect: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        BandFader(
+            value = band.gainDb,
+            onValueChange = onGainChange,
+            valueRange = -range..range,
+            height = 160.dp,
+            label = formatFrequency(center),
+            valueText = formatGain(band.gainDb),
+            highlighted = highlighted,
+            subtitle = ownerShortNameFor(center) ?: ""
+        )
+        Box(
+            modifier = Modifier
+                .padding(top = 4.dp)
+                .size(6.dp)
+                .background(regionColor, CircleShape)
+                .clickable { onInspect() }
+        )
+    }
+}
+
+@Composable
 private fun BandPage(
     bands: List<EqBand>,
     chunk: List<EqBand>,
     range: Float,
-    onGainChange: (Int, Float) -> Unit
+    highlightedSourceKey: String?,
+    onGainChange: (Int, Float) -> Unit,
+    onInspectBand: (EqBand) -> Unit
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val count = chunk.size.coerceAtLeast(1)
-        // Tablets: con más ancho los faders crecen (hasta 56 dp) y la carrera se alarga.
         val wide = maxWidth >= 560.dp
         val faderHeight = if (wide) 196.dp else 148.dp
-        // El ancho se reparte entre las bandas visibles: con 12 no caben a 34 dp.
         val faderWidth = ((maxWidth - 8.dp) / count).coerceIn(18.dp, if (wide) 56.dp else 40.dp)
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(faderHeight + 67.dp),
+                .height(faderHeight + 72.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
             chunk.forEach { band ->
                 val index = bands.indexOf(band)
                 val center = bandCenterHz(bands, index.coerceAtLeast(0))
-                BandFader(
-                    value = band.gainDb,
-                    onValueChange = { onGainChange(band.id, it) },
-                    valueRange = -range..range,
-                    height = faderHeight,
-                    label = formatFrequency(center),
-                    valueText = formatGain(band.gainDb),
-                    highlighted = band.gainDb != 0f,
-                    faderWidth = faderWidth,
-                    subtitle = ownerShortNameFor(center) ?: ""
-                )
+                val region = getAcousticRegionFor(center)
+                val regionColor = Color(region.colorHex)
+                val isHighlighted = highlightedSourceKey?.let { key ->
+                    focusFor(key)?.let { resolveFocus(bands, it) }?.any { it.first == index }
+                } ?: (band.gainDb != 0f)
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    BandFader(
+                        value = band.gainDb,
+                        onValueChange = { onGainChange(band.id, it) },
+                        valueRange = -range..range,
+                        height = faderHeight,
+                        label = formatFrequency(center),
+                        valueText = formatGain(band.gainDb),
+                        highlighted = isHighlighted,
+                        faderWidth = faderWidth,
+                        subtitle = ownerShortNameFor(center) ?: ""
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .size(7.dp)
+                            .background(regionColor, CircleShape)
+                            .clickable { onInspectBand(band) }
+                    )
+                }
             }
         }
     }
 }
 
-/**
- * Tarjeta "Fuentes graves": cada banda grave tiene un instrumento dueño, y cada
- * instrumento tiene una receta de foco de un toque que se **suma** a la curva actual
- * en lugar de sustituirla.
- */
 @Composable
 private fun LowSourcesCard(
     bands: List<EqBand>,
     range: Float,
+    highlightedKey: String?,
+    onHighlightSource: (String) -> Unit,
     onBandGain: (Int, Float) -> Unit,
     onFocus: (String) -> Unit
 ) {
     val colors = AuraTheme.colors
     var expanded by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf<SourceCategory?>(null) }
     val haptic = hapticFeedback()
 
     AuraCard(modifier = Modifier.fillMaxWidth()) {
@@ -713,7 +1079,7 @@ private fun LowSourcesCard(
                 contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 Text(
-                    text = if (expanded) "Ocultar" else "Ver 15 instrumentos (${LowFrequencySources.size})",
+                    text = if (expanded) "Ocultar" else "Ver 15 fuentes (${LowFrequencySources.size})",
                     color = colors.accent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
@@ -722,7 +1088,7 @@ private fun LowSourcesCard(
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Cada banda grave tiene un dueño. Toca para ver y ajustar los 15 instrumentos en detalle.",
+            text = "Herramienta especializada para moldear el sonido de instrumentos de baja frecuencia.",
             color = colors.textSecondary,
             fontSize = 11.sp
         )
@@ -734,7 +1100,32 @@ private fun LowSourcesCard(
                     .padding(top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                LowFrequencySources.forEach { source ->
+                // Filtros de categoría de fuentes graves
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    SelectableChip(
+                        text = "Todas",
+                        selected = selectedCategory == null,
+                        onClick = { selectedCategory = null }
+                    )
+                    SourceCategory.values().forEach { cat ->
+                        SelectableChip(
+                            text = cat.label,
+                            selected = selectedCategory == cat,
+                            onClick = { selectedCategory = cat }
+                        )
+                    }
+                }
+
+                val sourcesToDisplay = remember(selectedCategory) {
+                    if (selectedCategory == null) LowFrequencySources else LowFrequencySources.filter { it.category == selectedCategory }
+                }
+
+                sourcesToDisplay.forEach { source ->
                     val steps = focusFor(source.key)?.let { resolveFocus(bands, it) }.orEmpty()
                     val primaryStep = steps.firstOrNull()
                     val primaryIndex = primaryStep?.first
@@ -745,13 +1136,14 @@ private fun LowSourcesCard(
                     val gain = primaryIndex?.let { bands.getOrNull(it)?.gainDb } ?: 0f
                     val applied = primaryStep != null && kotlin.math.abs(gain) >= kotlin.math.abs(targetDelta) - 0.5f &&
                         (kotlin.math.sign(gain) == kotlin.math.sign(targetDelta) || targetDelta == 0f)
+                    val isHighlighted = highlightedKey == source.key
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(colors.surface, RoundedCornerShape(14.dp))
-                            .border(1.dp, colors.outline.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+                            .background(if (isHighlighted) colors.accent.copy(alpha = 0.12f) else colors.surface)
+                            .border(1.dp, if (isHighlighted) colors.accent else colors.outline.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -762,7 +1154,7 @@ private fun LowSourcesCard(
                             Box(
                                 modifier = Modifier
                                     .size(8.dp)
-                                    .background(categoryColor(source.category), RoundedCornerShape(50))
+                                    .background(categoryColor(source.category), CircleShape)
                             )
                             Spacer(modifier = Modifier.width(10.dp))
                             Column(modifier = Modifier.weight(1f)) {
@@ -787,16 +1179,26 @@ private fun LowSourcesCard(
                             }
                             Spacer(modifier = Modifier.width(6.dp))
                             SelectableChip(
-                                text = if (applied) "−" else "+",
+                                text = if (isHighlighted) "Ocultar resaltado" else "Resaltar bandas",
+                                selected = isHighlighted,
+                                onClick = { onHighlightSource(source.key) }
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            SelectableChip(
+                                text = if (applied) "Afinación aplicada" else "+ Afinación",
                                 selected = applied,
                                 onClick = { onFocus(source.key) }
                             )
                         }
+
+                        Text(text = source.detail, color = colors.textSecondary, fontSize = 11.sp)
+                        Text(text = "Consejo: ${source.tip}", color = colors.accent, fontSize = 10.sp)
+
                         if (primaryIndex != null) {
                             val primaryBand = bands.getOrNull(primaryIndex)
                             if (primaryBand != null) {
                                 AuraSliderRow(
-                                    label = "${source.shortName} · ${formatFrequency(bandCenterHz(bands, primaryIndex))} Hz",
+                                    label = "Banda principal ${source.shortName} (${formatFrequency(bandCenterHz(bands, primaryIndex))} Hz)",
                                     valueText = formatGain(primaryBand.gainDb),
                                     value = primaryBand.gainDb,
                                     valueRange = -range..range,
@@ -823,7 +1225,11 @@ private fun categoryColor(category: SourceCategory): Color {
 }
 
 @Composable
-fun EngineStatusCard(engine: EngineStatus, motorEnabled: Boolean) {
+fun EngineStatusCard(
+    engine: EngineStatus,
+    state: com.auraline.core.domain.EqualizerState,
+    onToggleBypass: () -> Unit
+) {
     val colors = AuraTheme.colors
     var expanded by remember { mutableStateOf(false) }
     val running = engine.running
@@ -832,7 +1238,7 @@ fun EngineStatusCard(engine: EngineStatus, motorEnabled: Boolean) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Cadena de procesado",
+                    text = "Cadena de procesado de audio",
                     color = colors.textPrimary,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold
@@ -867,7 +1273,7 @@ fun EngineStatusCard(engine: EngineStatus, motorEnabled: Boolean) {
                                 .size(7.dp)
                                 .background(
                                     if (stage.active) colors.positive else colors.outline,
-                                    RoundedCornerShape(50)
+                                    CircleShape
                                 )
                         )
                         Spacer(modifier = Modifier.width(10.dp))
@@ -896,14 +1302,25 @@ fun EngineStatusCard(engine: EngineStatus, motorEnabled: Boolean) {
             }
         }
 
-        TextButton(
-            onClick = { expanded = !expanded },
-            contentPadding = PaddingValues(0.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (expanded) "Ocultar detalle" else "Ver estado real del motor",
-                color = colors.accent,
-                fontSize = 12.sp
+            TextButton(
+                onClick = { expanded = !expanded },
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(
+                    text = if (expanded) "Ocultar detalle" else "Ver estado del motor",
+                    color = colors.accent,
+                    fontSize = 12.sp
+                )
+            }
+            SelectableChip(
+                text = if (state.bypass) "Bypass activo" else "Bypass",
+                selected = state.bypass,
+                onClick = onToggleBypass
             )
         }
     }

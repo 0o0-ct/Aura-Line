@@ -24,7 +24,13 @@ data class LowSource(
     /** Qué es y cómo se oye. */
     val detail: String,
     /** Qué hacer con él en el ecualizador. */
-    val tip: String
+    val tip: String,
+    val keyFrequencyRegion: String = "Graves / Subgraves",
+    val relevantHarmonics: String = "Primer y segundo armónico en 100-300 Hz",
+    val sonicDescription: String = "Sonido profundo de baja frecuencia.",
+    val musicalApplication: String = "Base rítmica y armónica.",
+    val eqAdvice: String = "Ajuste moderado recomendado.",
+    val colorHex: Long = 0xFF00E5CCL
 )
 
 /**
