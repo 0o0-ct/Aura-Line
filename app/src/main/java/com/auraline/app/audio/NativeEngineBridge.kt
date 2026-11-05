@@ -97,7 +97,9 @@ object NativeEngineBridge {
                         sampleRateHz = activeSampleRate
                     )
                 }
-                delay(80) // 12.5 Hz polling for UI meters
+                // Frecuencia adaptativa para ahorro de batería: 12.5 Hz activo, 4 Hz en reposo
+                val intervalMs = if (_telemetry.value.generatorMode != GeneratorMode.OFF) 80L else 250L
+                delay(intervalMs)
             }
         }
     }

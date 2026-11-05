@@ -33,17 +33,21 @@ Capturas en [`docs/capturas`](docs/capturas). APKs compilados en [`dist/`](dist/
 - **Frecuencias de Cruce Ajustables**: Personalización milimétrica de las frecuencias de corte entre bandas de tono.
 - **Panel de Curva de Tono**: Previsualización instantánea en tiempo real de la respuesta de ecualización de tono.
 
-### 🔘 3. Ventana de Efectos
-- **Cadena de 6 Módulos con Bypass**: Conmutadores individuales para Ecualizador, Puerta/Expansor, Compresor multibanda, Limitador de salida, Reverb acústica y Virtualizador estéreo.
-- **Puerta de Ruido / Expansor**: Umbral y ratio ajustables para silenciar siseos de fondo.
-- **Compresor Multibanda**: Umbral de compresión y recuperación transparente.
-- **Reverberación de Entorno**: 8 salas acústicas calibradas (Auditorio, Estudio, Gran Salón, Escenario, etc.).
+### 🔘 3. Ventana de Efectos (Studio Rack)
+- **Cadena de Módulos con Bypass**: Conmutadores individuales para Ecualizador, Puerta de Ruido, Compresor Multibanda, Limitador True-Peak de salida y Reverb acústica FDN estéreo.
+- **Puerta de Ruido / Expansor**: Umbral y ratio ajustables para silenciar siseos de fondo y ruido ambiente.
+- **Compresor Multibanda**: Umbral de compresión y recuperación transparente con visualización reactiva de reducción de ganancia (GR).
+- **Limitador True-Peak con Lookahead**: Techo calibrado a -0.1 dBFS con amortiguación de transitorios inter-sample para proteger DACs de salida.
+- **Reverberación de Entorno y Anchura Estéreo**: 8 salas acústicas calibradas y control de dimensión espacial M/S (Mid/Side).
 
 ### ⚙️ 4. Ajustes y Personalización
-- **Perfiles de Uso Automáticos**: Altavoz del móvil, auriculares con cable, auriculares Bluetooth, altavoces externos y barras de sonido/5.1.
-- **30 Paletas de Color Monocromáticas**: Selector táctil con carrusel horizontal de discos neumórficos y brillo ambiental.
+- **Barra de Navegación Flotante de Cápsula Única**: Dock flotante con elevación suave de 16 dp y eliminación total de capas dobles o bordes internos superpuestos.
+- **30 Paletas de Color Monocromáticas**: Paletas de alto contraste calibradas con renderizado fiel garantizado en Android 12-15 sin distorsión de Material You dinámico.
+- **Perfiles de Uso Automáticos**: Altavoz del móvil, auriculares con cable, auriculares Bluetooth (A2DP / LE Audio), altavoces externos y barras de sonido/5.1.
 - **Diagnóstico Acústico Objetivo**: Emisión de tonos duales (485 Hz y 1771 Hz) y medición por micrófono para verificar la ganancia real del DSP (+10 dB selectividad).
 - **Protección de Batería y Auto-arranque**: Configuración del servicio en primer plano y exención de optimización de batería en One UI / AOSP.
+
+Para más detalles técnicos, consulta el [Informe Técnico de Transformación Integral](docs/AURALINE_TRANSFORMATION_REPORT.md).
 
 ### 🎻 5. Fuentes Graves Dedicadas
 - **Cada banda grave tiene un instrumento dueño**: sub-bajo, bombo, bajo eléctrico, contrabajo, bajo fretless, guitarrón, tuba y sousafón, clarinete bajo y fagot, Minimoog y caja de ritmos 808.

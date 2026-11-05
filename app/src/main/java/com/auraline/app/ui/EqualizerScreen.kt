@@ -137,7 +137,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(top = 148.dp, bottom = 120.dp),
+            .padding(top = 148.dp, bottom = 140.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         EngineStatusCard(engine = engine, motorEnabled = state.motorEnabled)
@@ -811,11 +811,15 @@ private fun LowSourcesCard(
     }
 }
 
-private fun categoryColor(category: SourceCategory): Color = when (category) {
-    SourceCategory.PERCUSION -> Color(0xFFFF9F43)
-    SourceCategory.ELECTRONIC -> Color(0xFF2BD9C0)
-    SourceCategory.STRING -> Color(0xFF7C9CFF)
-    SourceCategory.WIND -> Color(0xFFB388FF)
+@Composable
+private fun categoryColor(category: SourceCategory): Color {
+    val colors = AuraTheme.colors
+    return when (category) {
+        SourceCategory.PERCUSION -> colors.warning
+        SourceCategory.ELECTRONIC -> colors.accent
+        SourceCategory.STRING -> colors.positive
+        SourceCategory.WIND -> colors.textSecondary
+    }
 }
 
 @Composable

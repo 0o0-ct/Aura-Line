@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
@@ -82,6 +83,7 @@ private data class Destination(
 private val destinations = listOf(
     Destination("Ecualizador", Icons.Rounded.GraphicEq),
     Destination("Tono", Icons.Rounded.Tune),
+    Destination("Efectos", Icons.Rounded.AutoAwesome),
     Destination("Ajustes", Icons.Rounded.Settings)
 )
 
@@ -203,6 +205,7 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 when (tab) {
                                     0 -> EqualizerScreen(viewModel = viewModel)
                                     1 -> ToneScreen(viewModel = viewModel)
+                                    2 -> EffectsScreen(viewModel = viewModel)
                                     else -> SettingsScreen(
                                         viewModel = viewModel,
                                         onOpenDiagnostics = { showDiagnostics = true }
@@ -379,10 +382,21 @@ private fun SideRail(
 private fun Modifier.glassDock(shape: RoundedCornerShape): Modifier {
     val colors = AuraTheme.colors
     return this
-        .background(colors.surface.copy(alpha = 0.82f), shape)
+        .shadow(
+            elevation = 16.dp,
+            shape = shape,
+            spotColor = colors.neumorphicShadow,
+            ambientColor = colors.neumorphicShadow.copy(alpha = 0.5f)
+        )
+        .background(colors.surfaceElevated, shape)
         .border(
             1.2.dp,
-            Brush.verticalGradient(listOf(colors.glassBorderTop, colors.glassBorderBottom)),
+            Brush.verticalGradient(
+                listOf(
+                    colors.glassBorderTop,
+                    Color.Transparent
+                )
+            ),
             shape
         )
 }
@@ -396,27 +410,13 @@ private fun DockItem(
     onClick: () -> Unit
 ) {
     val colors = AuraTheme.colors
-    val itemBgColor by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.16f) else Color.Transparent,
-        animationSpec = tween(durationMillis = 200),
-        label = "tabBg"
-    )
-    val itemBorderColor by animateColorAsState(
-        targetValue = if (selected) accent.copy(alpha = 0.45f) else Color.Transparent,
-        animationSpec = tween(durationMillis = 200),
-        label = "tabBorder"
-    )
     val itemTextColor by animateColorAsState(
-        targetValue = if (selected) accent else colors.textSecondary.copy(alpha = 0.7f),
+        targetValue = if (selected) accent else colors.textSecondary.copy(alpha = 0.65f),
         animationSpec = tween(durationMillis = 200),
         label = "tabText"
     )
-    val itemShape = RoundedCornerShape(20.dp)
     Column(
         modifier = modifier
-            .clip(itemShape)
-            .background(itemBgColor, itemShape)
-            .border(if (selected) 1.dp else 0.dp, itemBorderColor, itemShape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -429,7 +429,7 @@ private fun DockItem(
             imageVector = destination.icon,
             contentDescription = destination.label,
             tint = itemTextColor,
-            modifier = Modifier.size(26.dp)
+            modifier = Modifier.size(24.dp)
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
@@ -440,5 +440,15 @@ private fun DockItem(
             letterSpacing = (-0.1).sp,
             maxLines = 1
         )
+        if (selected) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Box(
+                modifier = Modifier
+                    .size(width = 12.dp, height = 2.5.dp)
+                    .background(accent, RoundedCornerShape(1.5.dp))
+            )
+        } else {
+            Spacer(modifier = Modifier.height(4.5.dp))
+        }
     }
 }

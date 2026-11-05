@@ -97,7 +97,7 @@ fun SettingsScreen(
     val checkResult by viewModel.checkResult.collectAsState()
 
     var permissionDenied by remember { mutableStateOf(false) }
-    var showAllPalettes by remember { mutableStateOf(false) }
+    var showAllPalettes by remember { mutableStateOf(true) }
     var previewPalette by remember { mutableStateOf<com.auraline.core.ui.theme.AuraPalette?>(null) }
 
     val powerManager = context.getSystemService(PowerManager::class.java)
@@ -118,7 +118,7 @@ fun SettingsScreen(
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(top = 148.dp, bottom = 120.dp),
+            .padding(top = 148.dp, bottom = 140.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Perfil de uso: ajusta rango, protección, efectos y curva base de golpe
@@ -594,7 +594,7 @@ private fun PalettePreviewCard(
                 .fillMaxWidth()
                 .height(24.dp)
                 .clip(RoundedCornerShape(10.dp))
-                .border(0.5.dp, Color(0x33FFFFFF), RoundedCornerShape(10.dp))
+                .border(0.5.dp, colors.outline.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
         ) {
             palette.colors.forEach { color ->
                 Box(

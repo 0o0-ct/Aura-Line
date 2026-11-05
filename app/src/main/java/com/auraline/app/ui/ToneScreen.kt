@@ -66,7 +66,7 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 18.dp)
-            .padding(top = 148.dp, bottom = 120.dp),
+            .padding(top = 148.dp, bottom = 140.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // Selector directo de perfil de uso en pantalla de Tono
@@ -377,7 +377,7 @@ private fun ToneCurve(
                     // 1. Zonas espectrales sombreadas (Graves, Medios, Agudos)
                     drawRect(
                         brush = Brush.horizontalGradient(
-                            listOf(Color(0x1A34D399), Color(0x0534D399)),
+                            listOf(colors.positive.copy(alpha = 0.12f), colors.positive.copy(alpha = 0.03f)),
                             startX = 0f,
                             endX = xBass
                         ),
@@ -386,7 +386,7 @@ private fun ToneCurve(
                     )
                     drawRect(
                         brush = Brush.horizontalGradient(
-                            listOf(Color(0x05FFFFFF), Color(0x0AFFFFFF), Color(0x05FFFFFF)),
+                            listOf(colors.outline.copy(alpha = 0.04f), colors.outline.copy(alpha = 0.08f), colors.outline.copy(alpha = 0.04f)),
                             startX = xBass,
                             endX = xTreble
                         ),
@@ -395,7 +395,7 @@ private fun ToneCurve(
                     )
                     drawRect(
                         brush = Brush.horizontalGradient(
-                            listOf(Color(0x05A78BFA), Color(0x18A78BFA)),
+                            listOf(colors.accent.copy(alpha = 0.03f), colors.accent.copy(alpha = 0.12f)),
                             startX = xTreble,
                             endX = size.width
                         ),
@@ -415,7 +415,7 @@ private fun ToneCurve(
                     // 3. Corte sub-bajo
                     if (subCutoffHz > 20f) {
                         drawLine(
-                            color = Color(0x80F59E0B),
+                            color = colors.warning.copy(alpha = 0.65f),
                             start = Offset(xSub, 0f),
                             end = Offset(xSub, size.height),
                             strokeWidth = gridStroke,
@@ -425,13 +425,13 @@ private fun ToneCurve(
 
                     // 4. Líneas divisorias de frecuencias de cruce resaltadas
                     drawLine(
-                        color = accent.copy(alpha = 0.85f),
+                        color = colors.positive.copy(alpha = 0.75f),
                         start = Offset(xBass, 0f),
                         end = Offset(xBass, size.height),
                         strokeWidth = dividerStroke
                     )
                     drawLine(
-                        color = Color(0xD0A78BFA),
+                        color = colors.accent.copy(alpha = 0.85f),
                         start = Offset(xTreble, 0f),
                         end = Offset(xTreble, size.height),
                         strokeWidth = dividerStroke
@@ -462,11 +462,11 @@ private fun ToneCurve(
                     )
 
                     // 8. Puntos nodales en las frecuencias de cruce
-                    drawCircle(color = Color.White, radius = nodeRadius, center = bassNode)
-                    drawCircle(color = accent, radius = nodeRadius + 1.5f, center = bassNode, style = Stroke(1.5f))
+                    drawCircle(color = colors.textPrimary, radius = nodeRadius, center = bassNode)
+                    drawCircle(color = colors.positive, radius = nodeRadius + 1.5f, center = bassNode, style = Stroke(1.5f))
 
-                    drawCircle(color = Color.White, radius = nodeRadius, center = trebleNode)
-                    drawCircle(color = Color(0xFFA78BFA), radius = nodeRadius + 1.5f, center = trebleNode, style = Stroke(1.5f))
+                    drawCircle(color = colors.textPrimary, radius = nodeRadius, center = trebleNode)
+                    drawCircle(color = accent, radius = nodeRadius + 1.5f, center = trebleNode, style = Stroke(1.5f))
                 }
             }
     )

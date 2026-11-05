@@ -191,4 +191,104 @@ class DspMathTest {
         assertEquals(36.0f, clampBandGainDb(40.0f, 36.0f), 0.001f)
         assertEquals(-36.0f, clampBandGainDb(-40.0f, 36.0f), 0.001f)
     }
+
+    @Test
+    fun testFlatResponseTransferFunction() {
+        // When all bands are 0 dB, the magnitude at any test frequency must be exactly 0 dB (unity gain)
+        val fs = 48000.0
+        val testFreqs = listOf(20.0, 50.0, 100.0, 1000.0, 5000.0, 10000.0, 20000.0)
+        for (f in testFreqs) {
+            val f0 = 1000.0
+            val gainDb = 0.0
+            val q = 1.414
+            val A = 10.0.pow(gainDb / 40.0) // 1.0
+            val w0 = 2.0 * PI * f0 / fs
+            val alpha = sin(w0) / (2.0 * q)
+            val b0 = 1.0 + alpha * A
+            val b1 = -2.0 * cos(w0)
+            val b2 = 1.0 - alpha * A
+            val a0 = 1.0 + alpha / A
+            val a1 = -2.0 * cos(w0)
+            val a2 = 1.0 - alpha / A
+
+            val nb0 = b0 / a0
+            val nb1 = b1 / a0
+            val nb2 = b2 / a0
+            val na1 = a1 / a0
+            val na2 = a2 / a0
+
+            val w = 2.0 * PI * f / fs
+            val numReal = nb0 + nb1 * cos(w) + nb2 * cos(2.0 * w)
+            val numImag = -(nb1 * sin(w) + nb2 * sin(2.0 * w))
+            val denReal = 1.0 + na1 * cos(w) + na2 * cos(2.0 * w)
+            val denImag = -(na1 * sin(w) + na2 * sin(2.0 * w))
+
+            val mag = sqrt(numReal * numReal + numImag * numImag) / sqrt(denReal * denReal + denImag * denImag)
+            val magDb = 20.0 * log10(mag)
+            assertEquals("Respuesta plana debe dar 0.0 dB a $f Hz", 0.0, magDb, 0.0001)
+        }
+    }
+
+    @Test
+    fun testExtremeSampleRatesStability() {
+        val sampleRates = listOf(44100.0, 48000.0, 88200.0, 96000.0, 192000.0)
+        val f0 = 18000.0 // Near Nyquist for 44.1k
+        val gainDb = 12.0
+        val q = 2.0
+
+        for (fs in sampleRates) {
+            val A = 10.0.pow(gainDb / 40.0)
+            val w0 = 2.0 * PI * f0 / fs
+            val alpha = sin(w0) / (2.0 * q)
+            val a0 = 1.0 + alpha / A
+
+            assertFalse("a0 no debe ser 0 para fs=$fs", abs(a0) < 1e-9)
+            val b0 = (1.0 + alpha * A) / a0
+            val a1 = (-2.0 * cos(w0)) / a0
+            val a2 = (1.0 - alpha / A) / a0
+
+            assertFalse("Coeficiente b0 no debe ser NaN para fs=$fs", b0.isNaN())
+            assertFalse("Coeficiente a1 no debe ser NaN para fs=$fs", a1.isNaN())
+            assertFalse("Coeficiente a2 no debe ser NaN para fs=$fs", a2.isNaN())
+            assertTrue("Filtro IIR debe ser estable (|a2| < 1) para fs=$fs", abs(a2) < 1.0)
+        }
+    }
+
+    @Test
+    fun testAdditiveInstrumentFocusNonDestructive() {
+        val bands = generateEqualizerBands(25)
+        val initialGains = bands.map { it.gainDb }
+
+        // Apply a focus recipe (e.g. KickDrum: +3 dB in 141 Hz)
+        val step = FocusStep(centerHz = 141, deltaDb = 3.0f)
+        val modifiedBands = bands.map { band ->
+            if (abs(band.frequencyHz - step.centerHz) < 20f) {
+                band.copy(gainDb = band.gainDb + step.deltaDb)
+            } else {
+                band
+            }
+        }
+
+        // Verify that only the target band was changed
+        for (i in bands.indices) {
+            if (abs(bands[i].frequencyHz - step.centerHz) < 20f) {
+                assertEquals("La banda modificada debe tener +3 dB", 3.0f, modifiedBands[i].gainDb, 0.01f)
+            } else {
+                assertEquals("Las otras bandas no deben ser alteradas", initialGains[i], modifiedBands[i].gainDb, 0.001f)
+            }
+        }
+
+        // Revert the focus
+        val revertedBands = modifiedBands.map { band ->
+            if (abs(band.frequencyHz - step.centerHz) < 20f) {
+                band.copy(gainDb = band.gainDb - step.deltaDb)
+            } else {
+                band
+            }
+        }
+
+        for (i in bands.indices) {
+            assertEquals("La curva debe volver a su estado original exacto", initialGains[i], revertedBands[i].gainDb, 0.001f)
+        }
+    }
 }

@@ -241,7 +241,7 @@ fun AuraLineTheme(
     accentColor: Color = AuraPalettes.first().accent,
     paletteKey: String = "",
     darkTheme: Boolean = true,
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
