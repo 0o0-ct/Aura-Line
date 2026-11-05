@@ -50,3 +50,4 @@ class EffectPanelActivity : Activity() {
         private const val TAG = "EffectPanelActivity"
     }
 }
+

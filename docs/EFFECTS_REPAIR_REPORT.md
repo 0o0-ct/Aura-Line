@@ -190,3 +190,4 @@ Se ejecutó la suite completa de pruebas unitarias (`DspMathTest.kt`) con 17 pru
 
 La reparación es completa, auditable y basada estrictamente en la arquitectura real de Android y C++17. 
 No se crearon ramas nuevas; todos los cambios residen y se consolidan en la rama activa `main`.
+
