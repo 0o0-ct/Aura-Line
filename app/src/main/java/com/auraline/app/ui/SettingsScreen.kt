@@ -230,6 +230,40 @@ fun SettingsScreen(
             )
         }
 
+        // Protección Acústica y Limitador True-Peak
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            SectionTitle(text = "Protección Acústica y Limitador")
+            Spacer(modifier = Modifier.height(4.dp))
+            SettingSwitch(
+                title = "Protección de nivel (Auto-Headroom)",
+                subtitle = "Atenúa preventivamente la ganancia para evitar clipping digital cuando realzas frecuencias",
+                checked = eqState.autoPreamp,
+                onCheckedChange = { viewModel.setAutoPreamp(it) }
+            )
+            SettingSwitch(
+                title = "Limitador True-Peak",
+                subtitle = "Protección estricta contra sobrecargas inter-sample y distorsión en transitorios",
+                checked = eqState.modules.limiter,
+                onCheckedChange = { viewModel.setModules(eqState.modules.copy(limiter = it)) }
+            )
+            if (eqState.modules.limiter) {
+                Spacer(modifier = Modifier.height(8.dp))
+                AuraSliderRow(
+                    label = "Techo de seguridad (Ceiling)",
+                    valueText = "%.1f dBFS".format(eqState.compressor.limiterCeiling),
+                    value = eqState.compressor.limiterCeiling,
+                    valueRange = -12f..-0.1f,
+                    onValueChange = { viewModel.setCompressor(eqState.compressor.copy(limiterCeiling = it)) }
+                )
+            }
+            SettingSwitch(
+                title = "Puerta de ruido (Noise Gate)",
+                subtitle = "Atenúa suavemente el siseo y ruido digital de fondo en momentos de silencio",
+                checked = eqState.modules.gate,
+                onCheckedChange = { viewModel.setModules(eqState.modules.copy(gate = it)) }
+            )
+        }
+
         // Comportamiento del sistema
         AuraCard(modifier = Modifier.fillMaxWidth()) {
             SectionTitle(text = "Comportamiento")
@@ -245,12 +279,6 @@ fun SettingsScreen(
                 subtitle = "Vibración al mover faders y cambiar interruptores",
                 checked = settings.hapticFeedback,
                 onCheckedChange = { viewModel.setHapticFeedback(it) }
-            )
-            SettingSwitch(
-                title = "Protección de nivel",
-                subtitle = "Compensa parte del refuerzo para que el códec no sature. Desactívala si prefieres volumen máximo",
-                checked = eqState.autoPreamp,
-                onCheckedChange = { viewModel.setAutoPreamp(it) }
             )
             SettingSwitch(
                 title = "Iniciar al encender",

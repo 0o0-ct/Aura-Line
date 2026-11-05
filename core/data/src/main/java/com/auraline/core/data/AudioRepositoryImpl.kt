@@ -98,6 +98,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     init {
         migrateLegacyPresets()
+        migrateCompressorCalibration()
         val loadedSettings = loadSettings()
         _settings.value = loadedSettings
         val loadedState = syncVolumeFromSystem(loadState())
@@ -139,6 +140,38 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             }
         }
         if (changed) editor.apply()
+    }
+
+    /**
+     * La calibración antigua del compresor (-28/4/3 y el preset «estudio» -24/3.5/4) comprimía
+     * toda la música y hacía que el volumen cayera al activar los efectos. Solo se migran los
+     * valores que coinciden exactamente con esos presets de fábrica; una curva personalizada
+     * del usuario no se toca.
+     */
+    private fun migrateCompressorCalibration() {
+        if (statePrefs.getBoolean(KEY_COMPRESSOR_CALIBRATION, false)) return
+        val threshold = statePrefs.getFloat("state_comp_threshold", Float.NaN)
+        val ratio = statePrefs.getFloat("state_comp_ratio", Float.NaN)
+        val makeup = statePrefs.getFloat("state_comp_makeup", Float.NaN)
+        val legacy = listOf(
+            Triple(-28f, 4f, 3f),
+            Triple(-24f, 3.5f, 4f),
+            Triple(-18f, 3f, 0f)
+        ).any { (t, r, m) ->
+            abs(threshold - t) < 0.05f && abs(ratio - r) < 0.05f && abs(makeup - m) < 0.05f
+        }
+        val editor = statePrefs.edit()
+        if (legacy) {
+            val defaults = CompressorParams()
+            editor.putFloat("state_comp_threshold", defaults.threshold)
+                .putFloat("state_comp_ratio", defaults.ratio)
+                .putFloat("state_comp_attack", defaults.attackMs)
+                .putFloat("state_comp_release", defaults.releaseMs)
+                .putFloat("state_comp_makeup", defaults.makeupGain)
+                .putFloat("state_comp_ceiling", defaults.limiterCeiling)
+            Log.i(TAG, "Calibración de compresor heredada migrada a valores moderados")
+        }
+        editor.putBoolean(KEY_COMPRESSOR_CALIBRATION, true).apply()
     }
 
     // --- lectura / escritura de estado -------------------------------------
@@ -251,6 +284,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
 
     private fun loadState(): EqualizerState {
         val p = statePrefs
+        val compressorDefaults = CompressorParams()
         val numBands = p.getInt("state_num_bands", 25).coerceIn(20, 25)
         val defaults = generateEqualizerBands(numBands)
         // Acepta el formato antiguo ("g,g,g") y el nuevo ("f:g,f:g").
@@ -306,12 +340,12 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
                 width = p.getBoolean("module_width", true)
             ),
             compressor = sanitize(CompressorParams(
-                threshold = p.getFloat("state_comp_threshold", -18f),
-                ratio = p.getFloat("state_comp_ratio", 3f),
-                attackMs = p.getFloat("state_comp_attack", 10f),
-                releaseMs = p.getFloat("state_comp_release", 120f),
-                makeupGain = p.getFloat("state_comp_makeup", 0f),
-                limiterCeiling = p.getFloat("state_comp_ceiling", -1f)
+                threshold = p.getFloat("state_comp_threshold", compressorDefaults.threshold),
+                ratio = p.getFloat("state_comp_ratio", compressorDefaults.ratio),
+                attackMs = p.getFloat("state_comp_attack", compressorDefaults.attackMs),
+                releaseMs = p.getFloat("state_comp_release", compressorDefaults.releaseMs),
+                makeupGain = p.getFloat("state_comp_makeup", compressorDefaults.makeupGain),
+                limiterCeiling = p.getFloat("state_comp_ceiling", compressorDefaults.limiterCeiling)
             ))
         )
     }
@@ -832,7 +866,11 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     }
 
     private companion object {
+        const val TAG = "AuraLine"
         const val PROBE_DURATION = 2.2
+
+        /** Marca de migración única de la calibración defectuosa del compresor. */
+        const val KEY_COMPRESSOR_CALIBRATION = "compressor_calibration_v2"
 
         /** Los preajustes de las tablas son de mezcla; aquí se aplican más marcados. */
         const val PRESET_GAIN_SCALE = 1.8f

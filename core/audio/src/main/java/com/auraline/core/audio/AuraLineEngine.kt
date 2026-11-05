@@ -51,11 +51,17 @@ object AuraLineEngine {
     /** Separación mínima entre los cruces Graves/Medios y Medios/Agudos (Hz). */
     private const val CROSS_MIN_GAP_HZ = 800f
 
-    /** Tercer corte del MBC: separa medios-altos de agudos para que Agudos tenga su propia banda. */
-    private const val TREBLE_SPLIT_HZ = 9_000f
+    /**
+     * Corte superior del MBC. Debe cubrir todo el espectro audible: un corte a 9 kHz dejaba
+     * fuera la última octava (9–20 kHz) y oscurecía el sonido al activar el compresor.
+     */
+    private const val MBC_TOP_HZ = 20_000f
 
-    /** Energía aproximada que añade la reverb al nivel medio, por unidad de mezcla. */
-    private const val REVERB_ENERGY_DB = 3f
+    /** Rodilla del compresor. Una rodilla suave evita bombeo y cambios bruscos de nivel. */
+    private const val COMPRESSOR_KNEE_DB = 6f
+
+    /** Umbral de seguridad del modo Bluetooth cuando el usuario desactiva el preamp automático. */
+    private const val BLUETOOTH_SAFE_BOOST_DB = 14f
 
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "auraline-engine").apply { priority = Thread.NORM_PRIORITY + 1 }
@@ -74,6 +80,13 @@ object AuraLineEngine {
     private var fallbackEq: Equalizer? = null
     private var reverb: EnvironmentalReverb? = null
     private var virtualizer: Virtualizer? = null
+
+    /**
+     * Cuando hay una cadena por sesión controlando un reproductor, la cadena global se
+     * suspende para no procesar el mismo audio dos veces (doble EQ, doble compresión y
+     * caída de volumen). Se reactiva al cerrar la última sesión controlada.
+     */
+    private var globalSuppressed = false
 
     /** Prioridad elevada de control para que AuraLine tenga soberanía sobre la cadena de efectos. */
     private const val EFFECT_PRIORITY = 100
@@ -195,7 +208,10 @@ object AuraLineEngine {
             }
 
             updateSessionAuxEffects(node, desired)
+            // La caché LRU puede desalojar la única sesión controlada: primero se recorta y
+            // después se decide si la cadena global debe seguir suspendida.
             trimSessionCache()
+            syncGlobalSuppression()
             publish()
         }
     }
@@ -203,6 +219,7 @@ object AuraLineEngine {
     fun onSessionClosed(sessionId: Int) {
         executor.execute {
             sessionMap.remove(sessionId)?.release()
+            syncGlobalSuppression()
             Log.i(TAG, "Sesión $sessionId liberada")
             publish()
         }
@@ -249,8 +266,8 @@ object AuraLineEngine {
 
         val dp = processing
         if (dp != null) {
-            dp.enabled = true
-            applyToDynamicsProcessing(dp, state)
+            dp.enabled = !globalSuppressed
+            if (!globalSuppressed) applyToDynamicsProcessing(dp, state)
             // El ecualizador de 5 bandas del dispositivo quedaría duplicado sobre el DP.
             fallbackEq?.let { runCatching { it.release() } }
             fallbackEq = null
@@ -261,16 +278,24 @@ object AuraLineEngine {
                     .getOrNull()
             }
             fallbackEq?.let { eq ->
-                eq.enabled = true
-                applyToEqualizer(eq, state)
+                eq.enabled = !globalSuppressed
+                if (!globalSuppressed) applyToEqualizer(eq, state)
             }
         }
 
-        if (!state.bypass && state.modules.width) applyVirtualizer(state) else {
+        if (globalSuppressed) {
+            // La cadena por sesión ya procesa este audio; la global queda suspendida.
+        } else if (state.effectsEnabled && !state.bypass && state.modules.width) {
+            applyVirtualizer(state)
+        } else {
             runCatching { virtualizer?.enabled = false; virtualizer?.release() }
             virtualizer = null
         }
-        if (!state.bypass && state.modules.reverb) applyReverb(state) else {
+        if (globalSuppressed) {
+            // Igual que arriba: evita reverb global duplicada sobre la sesión del reproductor.
+        } else if (!state.bypass && state.modules.reverb) {
+            applyReverb(state)
+        } else {
             runCatching { reverb?.enabled = false; reverb?.release() }
             reverb = null
         }
@@ -294,6 +319,46 @@ object AuraLineEngine {
             }
             updateSessionAuxEffects(node, state)
         }
+        syncGlobalSuppression()
+    }
+
+    /**
+     * Mantiene una sola cadena activa por audio: si una sesión de reproductor tiene una cadena
+     * propia bajo control, la global (sesión 0) se apaga; al cerrar la última sesión, vuelve.
+     */
+    private fun syncGlobalSuppression() {
+        val shouldSuppress = sessionMap.values.any { node ->
+            node.hasControl && (node.dynamicsProcessing?.enabled == true || node.fallbackEq?.enabled == true)
+        }
+        if (shouldSuppress == globalSuppressed) return
+        globalSuppressed = shouldSuppress
+
+        if (shouldSuppress) {
+            runCatching { processing?.enabled = false }
+            runCatching { fallbackEq?.enabled = false }
+            runCatching { reverb?.enabled = false }
+            runCatching { virtualizer?.enabled = false }
+            Log.i(TAG, "Cadena global suspendida: sesión de reproductor controlada")
+            return
+        }
+
+        processing?.let { dp ->
+            runCatching {
+                dp.enabled = true
+                applyToDynamicsProcessing(dp, desired)
+            }
+        }
+        fallbackEq?.let { eq ->
+            runCatching {
+                eq.enabled = true
+                applyToEqualizer(eq, desired)
+            }
+        }
+        if (desired.effectsEnabled && !desired.bypass) {
+            if (desired.modules.reverb) applyReverb(desired)
+            if (desired.modules.width) applyVirtualizer(desired)
+        }
+        Log.i(TAG, "Cadena global reactivada: no quedan sesiones controladas")
     }
 
     /**
@@ -302,7 +367,7 @@ object AuraLineEngine {
      */
     private fun updateSessionAuxEffects(node: SessionNode, state: EqualizerState) {
         val sessionId = node.sessionId
-        val widthActive = !state.bypass && state.modules.width
+        val widthActive = state.effectsEnabled && !state.bypass && state.modules.width
         val reverbActive = !state.bypass && state.modules.reverb && state.effectsEnabled
 
         // Virtualizer en sesión del reproductor
@@ -365,13 +430,16 @@ object AuraLineEngine {
         }
 
         val mbc = DynamicsProcessing.Mbc(true, true, MBC_BANDS)
+        val mbcSettings = compressorBandSettings(state)
+        val cutoffs = mbcCutoffs(state)
         for (band in 0 until MBC_BANDS) {
-            mbc.setBand(band, compressorBand(mbcCutoffs(state)[band], state, band))
+            mbc.setBand(band, compressorBand(cutoffs[band], mbcSettings))
         }
 
+        val limiterCeiling = limiterCeilingDb(state, _status.value.route == AudioRoute.BLUETOOTH)
         val limiter = DynamicsProcessing.Limiter(
-            state.modules.limiter,
-            true, 0, 5f, 60f, 10f, -2f, 0f
+            state.modules.limiter && !state.bypass,
+            true, 0, 1f, 80f, 50f, limiterCeiling, 0f
         )
 
         val config = DynamicsProcessing.Config.Builder(
@@ -404,7 +472,7 @@ object AuraLineEngine {
     private fun attachWatchdog(effect: DynamicsProcessing) {
         runCatching {
             effect.setEnableStatusListener { _, enabled ->
-                if (!enabled && desired.motorEnabled) {
+                if (!enabled && desired.motorEnabled && !globalSuppressed) {
                     Log.w(TAG, "El sistema desactivó el efecto; reenganchando")
                     executor.execute {
                         runCatching {
@@ -423,39 +491,55 @@ object AuraLineEngine {
     }
 
     /**
-     * El MBC no debe comprimir ni expandir cuando los módulos están apagados: se configura en
-     * ratio 1:1 con umbral/gate fuera de rango para que la banda quede pasante y el audio de
-     * esa etapa sea idéntico a la entrada (bypass real). Con ratios bajos y umbrales altos el
-     * propio MBC actúa como ganancia fija por región — así Graves/Medios/Agudos se suman sin
-     * duplicar filtros y sin depender sólo de la rejilla del PreEq.
+     * Parámetros del MBC que no dependen de la frecuencia de corte.
+     *
+     * El maquillaje del compresor se aplica SIEMPRE como `postGain` (después de comprimir).
+     * Aplicarlo como `preGain` hacía que el compresor recibiera más nivel, aumentara la
+     * reducción de ganancia y el volumen percibido cayera al activar los efectos.
      */
-    private fun compressorBand(cutoffHz: Float, state: EqualizerState, bandIndex: Int): DynamicsProcessing.MbcBand {
-        val compressor = state.compressor
-        val gate = state.gate
+    internal data class MbcBandSettings(
+        val attackMs: Float,
+        val releaseMs: Float,
+        val ratio: Float,
+        val thresholdDb: Float,
+        val gateThresholdDb: Float,
+        val expanderRatio: Float,
+        val preGainDb: Float,
+        val postGainDb: Float
+    )
+
+    internal fun compressorBandSettings(state: EqualizerState): MbcBandSettings {
         val compressing = state.effectsEnabled && state.modules.compressor && !state.bypass
         val gateActive = state.effectsEnabled && state.modules.gate && !state.bypass
-        val regionGain = if (state.bypass) 0f else toneRegionDb(state, bandIndex)
-        return DynamicsProcessing.MbcBand(
-            true,
-            cutoffHz,
-            if (compressing) compressor.attackMs.coerceIn(1f, 100f) else 1f,
-            if (compressing) compressor.releaseMs.coerceIn(10f, 500f) else 10f,
-            if (compressing) compressor.ratio.coerceIn(1f, 20f) else 1f,
-            if (compressing) compressor.threshold.coerceIn(-60f, 0f) else 0f,
-            if (compressing) 6f else 0f,
-            if (gateActive) gate.thresholdDb.coerceIn(-80f, -20f) else -80f,
-            if (gateActive) gate.ratio.coerceIn(1f, 10f) else 1f,
-            (if (compressing) compressor.makeupGain.coerceIn(0f, 24f) / 2f else 0f) + regionGain,
-            0f
+        val compressor = state.compressor
+        val gate = state.gate
+        return MbcBandSettings(
+            attackMs = if (compressing) compressor.attackMs.coerceIn(1f, 100f) else 1f,
+            releaseMs = if (compressing) compressor.releaseMs.coerceIn(10f, 500f) else 10f,
+            ratio = if (compressing) compressor.ratio.coerceIn(1f, 20f) else 1f,
+            thresholdDb = if (compressing) compressor.threshold.coerceIn(-60f, 0f) else 0f,
+            gateThresholdDb = if (gateActive) gate.thresholdDb.coerceIn(-80f, -20f) else -80f,
+            expanderRatio = if (gateActive) gate.ratio.coerceIn(1f, 10f) else 1f,
+            // El tono ya se aplica una sola vez en el PreEq. El MBC no debe duplicarlo.
+            preGainDb = 0f,
+            postGainDb = if (compressing) compressor.makeupGain.coerceIn(-12f, 24f) else 0f
         )
     }
 
-    /** Ganancia de tono (Graves/Medios/Agudos) que corresponde a cada banda del MBC. */
-    private fun toneRegionDb(state: EqualizerState, bandIndex: Int): Float = when (bandIndex) {
-        0 -> state.tone.bassDb
-        1 -> state.tone.midDb
-        else -> state.tone.trebleDb
-    }.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+    private fun compressorBand(cutoffHz: Float, settings: MbcBandSettings): DynamicsProcessing.MbcBand =
+        DynamicsProcessing.MbcBand(
+            true,
+            cutoffHz,
+            settings.attackMs,
+            settings.releaseMs,
+            settings.ratio,
+            settings.thresholdDb,
+            COMPRESSOR_KNEE_DB,
+            settings.gateThresholdDb,
+            settings.expanderRatio,
+            settings.preGainDb,
+            settings.postGainDb
+        )
 
     private fun applyToDynamicsProcessing(dp: DynamicsProcessing, state: EqualizerState) {
         val bandCount = state.numBands.coerceIn(20, 25)
@@ -464,62 +548,34 @@ object AuraLineEngine {
         AuraLineSpectrum.setBandEdges(frequencies)
         val centers = bandCenters(frequencies)
 
-        // Headroom real: suma precisa de la ganancia máxima de la curva (bandas + sub-bajo),
-        // el realce por región del MBC, la compensación de volumen y la energía de la reverb.
-        val peakBand = (0 until bandCount).maxOfOrNull { band ->
-            appliedBandGain(state, bandGains[band], centers[band]).coerceAtLeast(0f)
+        val eqActive = !state.bypass && state.modules.equalizer
+
+        // Headroom real: solo la ganancia positiva que realmente aplica el PreEq (bandas +
+        // tono + sub-bajo, una sola vez). El maquillaje del compresor es postGain y la reverb
+        // es un envío auxiliar: ninguno debe atenuar la entrada; el limitador protege los picos.
+        val peakBand = if (state.bypass) 0f else (0 until bandCount).maxOfOrNull { band ->
+            preEqGainDb(state, bandGains[band], centers[band], eqActive).coerceAtLeast(0f)
         } ?: 0f
-        val mbcPeak = if (state.bypass) 0f
-        else (0 until MBC_BANDS).maxOf { toneRegionDb(state, it).coerceAtLeast(0f) }
-        val effectsActive = state.effectsEnabled && !state.bypass
-        val makeup = if (effectsActive) state.compressor.makeupGain.coerceAtLeast(0f) else 0f
-        val reverbEnergy = if (effectsActive) state.reverb.mix * REVERB_ENERGY_DB else 0f
-        val totalBoost = peakBand + mbcPeak + makeup + reverbEnergy
 
         val isBluetooth = _status.value.route == AudioRoute.BLUETOOTH
-        // En Bluetooth A2DP/LE Audio, los códecs (SBC/AAC/LDAC) recortan estrictamente a 0 dBFS
-        // y los filtros de reconstrucción generan sobreimpulsos inter-sample (True Peak).
-        // Se reserva un margen de seguridad de 2.0 dB para evitar distorsión áspera y chillona.
-        val codecMargin = if (isBluetooth) 2.0f else 0.5f
+        val headroom = headroomDb(state, peakBand, isBluetooth)
 
-        val headroom = if (state.autoPreamp) {
-            if (totalBoost > TARGET_HEADROOM_DB) {
-                // Compensación exacta y suave: evita clipping sin destruir el carácter tonal
-                (totalBoost - TARGET_HEADROOM_DB + codecMargin).coerceIn(0f, MAX_HEADROOM_DB)
-            } else {
-                0f
-            }
-        } else {
-            // Protección mínima de seguridad en Bluetooth cuando el usuario apaga autoPreamp
-            if (isBluetooth && totalBoost > 14f) {
-                ((totalBoost - 14f) * 0.75f).coerceIn(0f, 18f)
-            } else {
-                0f
-            }
-        }
-        val maxBoost = headroom
-
-        val balance = state.stereo.balance / 100f
-        val preamp = state.preampDb - maxBoost
+        val balance = if (state.bypass) 0f else state.stereo.balance / 100f
+        val preamp = if (state.bypass) 0f else (state.preampDb - headroom).coerceIn(-60f, 36f)
         val leftGain = preamp + if (balance > 0f) -balance * 12f else 0f
         val rightGain = preamp + if (balance < 0f) balance * 12f else 0f
         dp.setInputGainbyChannel(0, leftGain)
         dp.setInputGainbyChannel(1, rightGain)
 
-        val eqActive = !state.bypass && state.modules.equalizer
         for (band in 0 until bandCount) {
-            // El PreEq aplica directamente bandas, tono y sub-bajo. Esto garantiza que
-            // los cruces de frecuencia y los ajustes de tono sean audibles de inmediato.
-            val tone = toneOffset(state, centers[band])
-            val sub = subBoostAt(state, centers[band])
-            val gain = if (eqActive) {
-                (bandGains[band] + tone + sub).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
-            } else {
-                (tone + sub).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
-            }
+            // El PreEq aplica directamente bandas, tono y sub-bajo. El tono no se repite en el MBC.
             dp.setPreEqBandAllChannelsTo(
                 band,
-                DynamicsProcessing.EqBand(true, frequencies[band], gain.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB))
+                DynamicsProcessing.EqBand(
+                    true,
+                    frequencies[band],
+                    preEqGainDb(state, bandGains[band], centers[band], eqActive)
+                )
             )
         }
 
@@ -533,18 +589,16 @@ object AuraLineEngine {
             )
         }
 
+        val cutoffs = mbcCutoffs(state)
+        val mbcSettings = compressorBandSettings(state)
         for (band in 0 until MBC_BANDS) {
-            dp.setMbcBandAllChannelsTo(band, compressorBand(mbcCutoffs(state)[band], state, band))
+            dp.setMbcBandAllChannelsTo(band, compressorBand(cutoffs[band], mbcSettings))
         }
 
-        // Limitador de seguridad Brickwall con ataque ultrarrápido (1ms) y ratio alto (50:1)
-        // para impedir que transitorios de graves saturen el codificador Bluetooth
-        val limiterCeiling = if (isBluetooth) {
-            // Techo de seguridad a -1.5 dBFS en Bluetooth para evitar clipping en códecs SBC/AAC
-            minOf(-1.5f, state.compressor.limiterCeiling.coerceIn(-12f, 0f))
-        } else {
-            state.compressor.limiterCeiling.coerceIn(-12f, -0.2f)
-        }
+        // Limitador de seguridad Brickwall con ataque ultrarrápido (1 ms) y ratio alto (50:1)
+        // para impedir que transitorios de graves saturen el codificador Bluetooth.
+        // No aplica atenuación estática: solo actúa sobre los picos que superan el techo.
+        val limiterCeiling = limiterCeilingDb(state, isBluetooth)
 
         dp.setLimiterAllChannelsTo(
             DynamicsProcessing.Limiter(
@@ -561,14 +615,51 @@ object AuraLineEngine {
     }
 
     /**
+     * Atenuación de entrada destinada exclusivamente a evitar clipping por realces de EQ/tono.
+     *
+     * No cuenta el maquillaje del compresor ni la reverb: contarlos atenuaba la señal incluso
+     * con una curva plana y era una de las causas de la pérdida de volumen al activar efectos.
+     * Con una curva neutral devuelve exactamente 0 dB.
+     */
+    internal fun headroomDb(state: EqualizerState, peakBoostDb: Float, isBluetooth: Boolean): Float {
+        if (state.bypass) return 0f
+        val boost = peakBoostDb.coerceAtLeast(0f)
+        // En Bluetooth los códecs recortan a 0 dBFS y los filtros de reconstrucción generan
+        // sobreimpulsos inter-sample; se reserva un margen adicional.
+        val codecMargin = if (isBluetooth) 2.0f else 0.5f
+        return if (state.autoPreamp) {
+            if (boost > TARGET_HEADROOM_DB) {
+                (boost - TARGET_HEADROOM_DB + codecMargin).coerceIn(0f, MAX_HEADROOM_DB)
+            } else {
+                0f
+            }
+        } else {
+            if (isBluetooth && boost > BLUETOOTH_SAFE_BOOST_DB) {
+                ((boost - BLUETOOTH_SAFE_BOOST_DB) * 0.75f).coerceIn(0f, MAX_HEADROOM_DB)
+            } else {
+                0f
+            }
+        }
+    }
+
+    internal fun limiterCeilingDb(state: EqualizerState, isBluetooth: Boolean): Float =
+        if (isBluetooth) {
+            minOf(-1.5f, state.compressor.limiterCeiling.coerceIn(-12f, 0f))
+        } else {
+            state.compressor.limiterCeiling.coerceIn(-12f, -0.2f)
+        }
+
+    /**
      * Cruces del MBC a tres bandas: la frontera Graves/Medios y la de Medios/Agudos siguen los
      * controles de la pantalla Tono, con una separación mínima para que nunca se crucen entre sí.
+     * La banda superior termina en 20 kHz para no perder la última octava audible.
      */
-    private fun mbcCutoffs(state: EqualizerState): FloatArray {
+    internal fun mbcCutoffs(state: EqualizerState): FloatArray {
         val low = state.tone.bassFrequencyHz.coerceIn(40f, 400f)
         val high = state.tone.trebleFrequencyHz.coerceIn(2_000f, 16_000f)
             .coerceAtLeast(low + CROSS_MIN_GAP_HZ)
-        return floatArrayOf(low, high, TREBLE_SPLIT_HZ)
+            .coerceAtMost(MBC_TOP_HZ - CROSS_MIN_GAP_HZ)
+        return floatArrayOf(low, high, MBC_TOP_HZ)
     }
 
     /**
@@ -590,7 +681,8 @@ object AuraLineEngine {
             val centerHz = try { eq.getCenterFreq(band.toShort()) / 1000f } catch (_: Throwable) { continue }
             val nearest = frequencies.indices.minByOrNull { abs(frequencies[it] - centerHz) }
             val base = nearest?.let { gains[it] } ?: 0f
-            val ordered = regionGainForLegacyEq(state, base, centerHz) + state.preampDb
+            val ordered = if (state.bypass) 0f
+            else regionGainForLegacyEq(state, base, centerHz) + state.preampDb
             if (ordered > max / 100f || ordered < min / 100f) clippedAt = maxOf(clippedAt, abs(ordered))
         }
         if (clippedAt > 0f) {
@@ -604,7 +696,7 @@ object AuraLineEngine {
             val base = if (nearest != null) gains[nearest] else 0f
             // Tono + sub-bajo repartidos igual que en la cadena DynamicsProcessing.
             val millibels = if (state.bypass) {
-                (state.preampDb * 100f).toInt()
+                0
             } else {
                 ((regionGainForLegacyEq(state, base, centerHz) + state.preampDb) * 100f).toInt()
             }
@@ -615,6 +707,11 @@ object AuraLineEngine {
     }
 
     private fun applyVirtualizer(state: EqualizerState) {
+        if (!state.effectsEnabled || state.bypass || !state.modules.width) {
+            runCatching { virtualizer?.enabled = false; virtualizer?.release() }
+            virtualizer = null
+            return
+        }
         val width = state.stereo.expansion.coerceIn(1f, 2f)
         val strength = ((width - 1f) * 1000f).toInt().coerceIn(0, 1000).toShort()
         if (strength == 0.toShort()) {
@@ -682,6 +779,11 @@ object AuraLineEngine {
         reverb = null
         runCatching { virtualizer?.enabled = false; virtualizer?.release() }
         virtualizer = null
+        // Las cadenas por sesión también pertenecen al motor: apagarlo debe silenciarlas,
+        // no sólo la cadena global.
+        sessionMap.values.forEach { it.release() }
+        sessionMap.clear()
+        globalSuppressed = false
         lastError = null
     }
 
@@ -723,32 +825,38 @@ object AuraLineEngine {
         val sub = state.tone.subDb
         if (sub == 0f || centerHz > 100f) return 0f
         val cutoff = state.tone.subCutoffHz.coerceIn(20f, 100f)
+        // La rampa conserva el signo: con sub negativo también debe atenuar (antes un
+        // `coerceAtLeast(0f)` anulaba todos los cortes de sub-bajo).
         val shaped = when {
             centerHz <= cutoff -> sub
             else -> sub * (1f - (centerHz - cutoff) / (100f - cutoff))
-        }.coerceAtLeast(0f).let { if (sub < 0f) -(it) else it }
+        }
         return shaped.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
     }
 
     /**
-     * Curva final que ve el usuario en la pantalla de bandas: ganancia de la banda más el
-     * realce regional del tono (para estimaciones como el headroom; los filtros reales aplican
-     * cada parte en su propia etapa, sin duplicar estanterías).
+     * Ganancia final de una banda del PreEq: banda + tono + sub-bajo, aplicada una sola vez.
+     * Cuando el módulo de ecualización está en bypass se conservan tono y sub-bajo, que son
+     * controles independientes de la curva gráfica.
      */
-    private fun appliedBandGain(state: EqualizerState, bandGainDb: Float, centerHz: Float): Float {
+    internal fun preEqGainDb(
+        state: EqualizerState,
+        bandGainDb: Float,
+        centerHz: Float,
+        eqActive: Boolean
+    ): Float {
+        if (state.bypass) return 0f
         val tone = toneOffset(state, centerHz) + subBoostAt(state, centerHz)
-        return if (state.bypass) 0f else (bandGainDb + tone).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+        val base = if (eqActive) bandGainDb else 0f
+        return (base + tone).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
     }
 
     /**
      * Ganancia por región para el ecualizador `Equalizer` de sesiones y dispositivos antiguos.
-     * Aquí no hay MBC ni shelves independientes, así que Graves/Medios/Agudos sí se suman a la
-     * banda que les corresponde (interpretación documentada en la auditoría).
+     * Comparte exactamente la misma curva que el PreEq para que ambos caminos suenen igual.
      */
-    private fun regionGainForLegacyEq(state: EqualizerState, bandGainDb: Float, centerHz: Float): Float {
-        val tone = toneOffset(state, centerHz) + subBoostAt(state, centerHz)
-        return if (state.bypass) 0f else (bandGainDb + tone).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
-    }
+    private fun regionGainForLegacyEq(state: EqualizerState, bandGainDb: Float, centerHz: Float): Float =
+        preEqGainDb(state, bandGainDb, centerHz, eqActive = true)
 
     private fun bandGains(state: EqualizerState, count: Int): FloatArray {
         return FloatArray(count) { index -> state.bands.getOrNull(index)?.gainDb ?: 0f }

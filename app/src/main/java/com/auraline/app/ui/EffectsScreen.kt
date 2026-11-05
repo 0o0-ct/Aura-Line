@@ -417,11 +417,11 @@ fun EffectsScreen(viewModel: AuraLineViewModel) {
                 )
                 viewModel.setCompressor(
                     com.auraline.core.domain.CompressorParams(
-                        threshold = -24f,
-                        ratio = 3.5f,
+                        threshold = -18f,
+                        ratio = 2f,
                         attackMs = 15f,
                         releaseMs = 180f,
-                        makeupGain = 4f
+                        makeupGain = 2.5f
                     )
                 )
             }) {

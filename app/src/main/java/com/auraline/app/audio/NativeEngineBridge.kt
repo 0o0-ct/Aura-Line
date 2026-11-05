@@ -121,10 +121,12 @@ object NativeEngineBridge {
                 }
             }
 
-            // Dynamics
+            // Dynamics: el interruptor maestro de efectos también gobierna la cadena nativa,
+            // igual que DynamicsProcessing. Sin esto, el motor de captura comprimía y abría
+            // la puerta incluso con los efectos en bypass.
             val comp = state.compressor
             NativeEngine.setCompressor(
-                enabled = state.modules.compressor && !state.bypass,
+                enabled = state.effectsEnabled && state.modules.compressor && !state.bypass,
                 thresholdDb = comp.threshold,
                 ratio = comp.ratio,
                 attackMs = comp.attackMs,
@@ -134,7 +136,7 @@ object NativeEngineBridge {
 
             val gate = state.gate
             NativeEngine.setNoiseGate(
-                enabled = state.modules.gate && !state.bypass,
+                enabled = state.effectsEnabled && state.modules.gate && !state.bypass,
                 thresholdDb = gate.thresholdDb,
                 ratio = gate.ratio
             )
@@ -152,7 +154,7 @@ object NativeEngineBridge {
 
             val stereo = state.stereo
             NativeEngine.setStereoWidener(
-                enabled = state.modules.width && !state.bypass,
+                enabled = state.effectsEnabled && state.modules.width && !state.bypass,
                 width = if (stereo.mono) 0f else stereo.expansion,
                 bassMonoCutoffHz = 120f
             )

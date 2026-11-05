@@ -50,11 +50,19 @@ data class ReverbParams(
 )
 
 data class CompressorParams(
-    val threshold: Float = -28f,
-    val ratio: Float = 4f,
+    /**
+     * Umbral moderado: solo comprime los picos y las partes más fuertes. Un umbral de -28 dB
+     * con ratio 4 comprimía toda la música y era la principal causa de la caída de volumen.
+     */
+    val threshold: Float = -16f,
+    val ratio: Float = 2f,
     val attackMs: Float = 10f,
-    val releaseMs: Float = 200f,
-    val makeupGain: Float = 3f,
+    val releaseMs: Float = 180f,
+    /**
+     * Ganancia de maquillaje aplicada DESPUÉS de comprimir. Restaura el nivel medio sin
+     * aumentar la reducción de ganancia del propio compresor.
+     */
+    val makeupGain: Float = 2f,
     /** Techo del limitador final en dBFS (≤ 0): ningún pico debe superarlo. */
     val limiterCeiling: Float = -1f
 )

@@ -83,7 +83,6 @@ private data class Destination(
 private val destinations = listOf(
     Destination("Ecualizador", Icons.Rounded.GraphicEq),
     Destination("Tono", Icons.Rounded.Tune),
-    Destination("Efectos", Icons.Rounded.AutoAwesome),
     Destination("Ajustes", Icons.Rounded.Settings)
 )
 
@@ -205,7 +204,6 @@ fun AuraLineApp(viewModel: AuraLineViewModel) {
                                 when (tab) {
                                     0 -> EqualizerScreen(viewModel = viewModel)
                                     1 -> ToneScreen(viewModel = viewModel)
-                                    2 -> EffectsScreen(viewModel = viewModel)
                                     else -> SettingsScreen(
                                         viewModel = viewModel,
                                         onOpenDiagnostics = { showDiagnostics = true }
