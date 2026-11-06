@@ -43,10 +43,10 @@ object AuraLineEngine {
     private const val TARGET_HEADROOM_DB = 3.0f
 
     /** Rango máximo de atenuación de headroom para proteger salidas digitales (Bluetooth A2DP/LE). */
-    private const val MAX_HEADROOM_DB = 36f
+    private const val MAX_HEADROOM_DB = 54f
 
     /** Tope por banda del PreEq y por región del MBC (permite más de 24 dB sin clipping). */
-    private const val MAX_BAND_GAIN_DB = 36f
+    private const val MAX_BAND_GAIN_DB = 48f
 
     /** Separación mínima entre los cruces Graves/Medios y Medios/Agudos (Hz). */
     private const val CROSS_MIN_GAP_HZ = 800f
