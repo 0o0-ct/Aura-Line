@@ -150,6 +150,7 @@ fun DiagnosticsScreen(
     }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize().padding(top = 110.dp, bottom = 100.dp),
         topBar = {
             TopAppBar(
                 title = { Text("Diagnóstico del Sistema", fontWeight = FontWeight.Bold) },
