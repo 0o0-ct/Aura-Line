@@ -5,9 +5,11 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -341,6 +343,7 @@ fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
  * En reposo: botón táctil extruido suave con doble sombra.
  * Seleccionado: cápsula de cristal translúcido con brillo de neón y borde especular Apple.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SelectableChip(
     text: String,
@@ -397,18 +400,19 @@ fun SelectableChip(
             .then(interactionModifier)
             .background(backgroundBrush, shape)
             .border(1.5.dp, borderBrush, shape)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = {
+            .clip(shape)
+            .combinedClickable(
+                onClick = {
+                    haptic()
+                    onClick()
+                },
+                onLongClick = onLongClick?.let {
+                    {
                         haptic()
-                        onClick()
-                    },
-                    onLongPress = {
-                        haptic()
-                        onLongClick?.invoke()
+                        it()
                     }
-                )
-            }
+                }
+            )
             .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
         Text(
