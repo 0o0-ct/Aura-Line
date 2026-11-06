@@ -98,6 +98,7 @@ fun SettingsScreen(
 
     var permissionDenied by remember { mutableStateOf(false) }
     var showAllPalettes by remember { mutableStateOf(true) }
+    var showPaletteColors by remember { mutableStateOf(true) }
     var previewPalette by remember { mutableStateOf<com.auraline.core.ui.theme.AuraPalette?>(null) }
 
     val powerManager = context.getSystemService(PowerManager::class.java)
@@ -166,10 +167,21 @@ fun SettingsScreen(
                 featuredKeys.mapNotNull { key -> AuraPalettes.firstOrNull { it.key == key } }
             }
 
-            SectionTitle(
-                text = "Identidad visual",
-                trailing = currentPalette.label
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionTitle(
+                    text = "Identidad visual",
+                    trailing = currentPalette.label
+                )
+                SelectableChip(
+                    text = if (showPaletteColors) "Ocultar colores" else "Mostrar colores",
+                    selected = showPaletteColors,
+                    onClick = { showPaletteColors = !showPaletteColors }
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Elige una atmósfera para toda la experiencia. Puedes previsualizarla antes de aplicarla.",
@@ -187,6 +199,7 @@ fun SettingsScreen(
                             PalettePreviewCard(
                                 palette = palette,
                                 selected = settings.theme.paletteKey == palette.key,
+                                showColors = showPaletteColors,
                                 onClick = {
                                     haptic()
                                     previewPalette = palette
@@ -568,6 +581,7 @@ private fun SettingSwitch(
 private fun PalettePreviewCard(
     palette: com.auraline.core.ui.theme.AuraPalette,
     selected: Boolean,
+    showColors: Boolean = true,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -576,7 +590,7 @@ private fun PalettePreviewCard(
 
     Column(
         modifier = modifier
-            .height(94.dp)
+            .height(if (showColors) 94.dp else 68.dp)
             .then(
                 if (selected) Modifier.neumorphicConcave(
                     radius = 18.dp,
@@ -617,20 +631,22 @@ private fun PalettePreviewCard(
                 Box(modifier = Modifier.size(7.dp).background(colors.accent, CircleShape))
             }
         }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(24.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .border(0.5.dp, colors.outline.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-        ) {
-            palette.colors.forEach { color ->
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(color)
-                )
+        if (showColors) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(0.5.dp, colors.outline.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+            ) {
+                palette.colors.forEach { color ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(color)
+                    )
+                }
             }
         }
     }
