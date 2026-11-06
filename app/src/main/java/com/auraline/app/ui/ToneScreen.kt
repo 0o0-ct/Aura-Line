@@ -3,7 +3,6 @@ package com.auraline.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -411,20 +410,6 @@ private fun ParametricToneCurveView(
                 ),
                 shape
             )
-            .pointerInput(bands, maxDb) {
-                detectTapGestures(
-                    onTap = { tapOffset ->
-                        val minF = 20f
-                        val maxF = 20000f
-                        val span = log10(maxF / minF)
-                        fun xOf(f: Float): Float = ((log10(f.coerceIn(minF, maxF) / minF)) / span) * size.width
-                        val closest = bands.minByOrNull { b ->
-                            abs(tapOffset.x - xOf(b.frequencyHz))
-                        }
-                        closest?.let { onSelectBand(it.id) }
-                    }
-                )
-            }
             .pointerInput(bands, maxDb) {
                 var draggingBandId: String? = null
                 detectDragGestures(

@@ -888,7 +888,25 @@ object AuraLineEngine {
                         toneGain += g / (1f + (ratio - 1f) * (ratio - 1f) * q)
                     }
                 }
-                else -> { // PEAKING / bell / notch
+                "NOTCH" -> {
+                    val octaveDist = kotlin.math.abs(kotlin.math.ln(centerHz.coerceAtLeast(10f) / f) / kotlin.math.ln(2f))
+                    if (octaveDist < 0.25f) {
+                        toneGain -= kotlin.math.abs(g)
+                    }
+                }
+                "HIGH_PASS" -> {
+                    if (centerHz < f) {
+                        val ratio = centerHz / f
+                        toneGain -= kotlin.math.abs(g) * (1f - ratio).coerceIn(0f, 1f)
+                    }
+                }
+                "LOW_PASS" -> {
+                    if (centerHz > f) {
+                        val ratio = f / centerHz
+                        toneGain -= kotlin.math.abs(g) * (1f - ratio).coerceIn(0f, 1f)
+                    }
+                }
+                else -> { // PEAKING / bell
                     val octaveDist = kotlin.math.abs(kotlin.math.ln(centerHz.coerceAtLeast(10f) / f) / kotlin.math.ln(2f))
                     val weighting = 1f + (octaveDist * q * 2.0f).let { it * it }
                     toneGain += g / weighting
