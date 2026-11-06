@@ -159,7 +159,6 @@ fun SettingsScreen(
 
         // Paleta curada con acceso opcional a las 30 variantes existentes.
         AuraCard(modifier = Modifier.fillMaxWidth()) {
-            val currentPalette = AuraPalettes.firstOrNull { it.key == settings.theme.paletteKey } ?: AuraPalettes.first()
             val featuredKeys = listOf("p25", "p20", "p1", "p9", "p15", "p4")
             val visiblePalettes = if (showAllPalettes) {
                 AuraPalettes
@@ -173,8 +172,7 @@ fun SettingsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SectionTitle(
-                    text = "Identidad visual",
-                    trailing = currentPalette.label
+                    text = "Identidad visual"
                 )
                 SelectableChip(
                     text = if (showPaletteColors) "Ocultar colores" else "Mostrar colores",
