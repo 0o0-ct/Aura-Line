@@ -170,8 +170,12 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SectionTitle(
-                    text = "Identidad visual"
+                Text(
+                    text = "IDENTIDAD VISUAL",
+                    color = colors.textSecondary.copy(alpha = 0.85f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.2.sp
                 )
                 SelectableChip(
                     text = if (showAllPalettes) "Selección curada" else "Explorar 30 paletas",
