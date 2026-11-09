@@ -344,7 +344,18 @@ fun SettingsScreen(
                         val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                             data = Uri.parse("package:${context.packageName}")
                         }
-                        runCatching { context.startActivity(intent) }
+                        val success = runCatching { context.startActivity(intent) }.isSuccess
+                        if (!success) {
+                            runCatching {
+                                context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                            }.onFailure {
+                                runCatching {
+                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = Uri.parse("package:${context.packageName}")
+                                    })
+                                }
+                            }
+                        }
                     }) {
                         Text("Configurar", color = colors.accent)
                     }
