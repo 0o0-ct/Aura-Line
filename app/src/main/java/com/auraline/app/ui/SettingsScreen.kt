@@ -32,6 +32,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.SurroundSound
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -139,9 +146,18 @@ fun SettingsScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 UsageProfiles.forEach { profile ->
+                    val icon = when (profile.key) {
+                        "mobile" -> Icons.Rounded.PhoneAndroid
+                        "wired" -> Icons.Rounded.Headphones
+                        "bluetooth" -> Icons.Rounded.Bluetooth
+                        "external" -> Icons.Rounded.Speaker
+                        "surround" -> Icons.Rounded.SurroundSound
+                        else -> Icons.Rounded.Tune
+                    }
                     SelectableChip(
-                        text = profile.name,
+                        text = "",
                         selected = settings.usageProfile == profile.key,
+                        icon = icon,
                         onClick = { viewModel.applyUsageProfile(profile.key) }
                     )
                 }

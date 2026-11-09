@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +30,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BookmarkAdd
+import androidx.compose.material.icons.rounded.ImportExport
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -600,37 +606,43 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             }
         }
 
-        // HERRAMIENTAS DE GESTIÓN DE PREAJUSTES
+        // HERRAMIENTAS DE GESTIÓN DE PREAJUSTES (Iconos)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             SelectableChip(
-                text = "Restablecer todo",
+                text = "",
                 selected = false,
+                icon = Icons.Rounded.RestartAlt,
                 onClick = {
                     haptic()
                     viewModel.resetAll()
-                }
+                },
+                modifier = Modifier.weight(1f)
             )
             SelectableChip(
-                text = "Exportación / Importación JSON",
+                text = "",
                 selected = false,
+                icon = Icons.Rounded.ImportExport,
                 onClick = {
                     haptic()
                     exportJsonText = PresetExporterImporter.exportPresetToJson(state.presetName, state)
                     showExportImportDialog = true
-                }
+                },
+                modifier = Modifier.weight(1f)
             )
             SelectableChip(
-                text = "Guardar preajuste",
+                text = "",
                 selected = true,
+                icon = Icons.Rounded.BookmarkAdd,
                 onClick = {
                     haptic()
                     pendingPresetName = state.presetName
                     showSaveDialog = true
-                }
+                },
+                modifier = Modifier.weight(1f)
             )
         }
 

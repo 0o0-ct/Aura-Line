@@ -18,6 +18,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.RestartAlt
+import androidx.compose.material.icons.rounded.Speaker
+import androidx.compose.material.icons.rounded.SurroundSound
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -93,9 +101,18 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 UsageProfiles.forEach { profile ->
+                    val icon = when (profile.key) {
+                        "mobile" -> Icons.Rounded.PhoneAndroid
+                        "wired" -> Icons.Rounded.Headphones
+                        "bluetooth" -> Icons.Rounded.Bluetooth
+                        "external" -> Icons.Rounded.Speaker
+                        "surround" -> Icons.Rounded.SurroundSound
+                        else -> Icons.Rounded.Tune
+                    }
                     SelectableChip(
-                        text = profile.name,
+                        text = "",
                         selected = settings.usageProfile == profile.key,
+                        icon = icon,
                         onClick = { viewModel.applyUsageProfile(profile.key) }
                     )
                 }
@@ -366,8 +383,9 @@ fun ToneScreen(viewModel: AuraLineViewModel) {
             horizontalArrangement = Arrangement.End
         ) {
             SelectableChip(
-                text = "Restablecer controles",
+                text = "",
                 selected = false,
+                icon = Icons.Rounded.RestartAlt,
                 onClick = { viewModel.resetControls() }
             )
         }

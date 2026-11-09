@@ -30,8 +30,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -346,10 +348,11 @@ fun StatusPill(text: String, color: Color, modifier: Modifier = Modifier) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SelectableChip(
-    text: String,
+    text: String = "",
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    icon: ImageVector? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = AuraTheme.colors
@@ -394,6 +397,10 @@ fun SelectableChip(
         )
     }
 
+    val horizontalPadding = if (text.isEmpty()) 18.dp else 14.dp
+    val verticalPadding = if (text.isEmpty()) 12.dp else 8.dp
+    val iconSize = if (text.isEmpty()) 22.dp else 16.dp
+
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -413,15 +420,30 @@ fun SelectableChip(
                     }
                 }
             )
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
     ) {
-        Text(
-            text = text,
-            color = if (selected) colors.textPrimary else colors.textSecondary,
-            fontSize = 12.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            maxLines = 1
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            icon?.let {
+                Icon(
+                    imageVector = it,
+                    contentDescription = text.ifEmpty { null },
+                    tint = if (selected) colors.textPrimary else colors.textSecondary,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+            if (text.isNotEmpty()) {
+                Text(
+                    text = text,
+                    color = if (selected) colors.textPrimary else colors.textSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
