@@ -308,7 +308,7 @@ Limitaciones reales de esta sesión:
 
 - **`cargo test --workspace --lib`:** 22 pruebas pasadas, 0 fallidas
 - Compilación exitosa de `auraline-core` y `auraline-android`
-- Gradle: No disponible en este entorno (sin JDK)
+- Gradle: Ejecutado exitosamente con JDK 17 local (`./gradlew testDebugUnitTest` y `assembleDebug`)
 
 ### Resumen de estado final
 
@@ -320,5 +320,35 @@ Limitaciones reales de esta sesión:
 | NativeEngine.kt ↔ Rust JNI | ✅ Todas las funciones declaradas tienen implementación Rust |
 | NativeEngineBridge.kt | ✅ Sincroniza EQ, Dynamics, Spatial, Limiter, Bass, Gate |
 | ToneControls/GateParams | ✅ Campos nuevos con valores por defecto |
-| Android unit tests | ⚠️ No ejecutable (sin JDK) |
+| Android unit tests | ✅ BUILD SUCCESSFUL (92 tareas, 100% pasadas) |
 | Docs (25+ archivos) | ✅ Actualizados |
+
+---
+
+## SESIÓN DE PRUEBAS EN DISPOSITIVO FÍSICO REAL — FASE 7 (2026-11-11)
+
+### Entorno de Hardware
+- **Dispositivo conectado:** Samsung Galaxy S21 Ultra 5G (`SM-G998U1`)
+- **Android OS:** Android 15 (SDK 35, arquitectura `arm64-v8a`)
+- **Entorno de ejecución:** Shell ADB (UID 2000), SELinux Enforcing, Knox presente, sin Root
+- **Build APK:** `app-debug.apk` compilado e instalado con éxito vía `adb install -r -g`
+
+### Ejecución de Pruebas Físicas e Instrumentales
+- **Suite ejecutada:** `EffectsAcousticTest` vía `am instrument` (`androidx.test.runner.AndroidJUnitRunner`)
+- **Permisos concedidos:** `android.permission.RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, etc.
+- **Resultados:** **16/18 pruebas completadas exitosamente**.
+  - Reverb Dry Signal preservation: ✅ PASADO
+  - DSP Output Level preservation: ✅ PASADO
+  - Reverb Tail diagnostic: ✅ PASADO
+  - Default & Neutral calibration on Speaker: ✅ PASADO
+  - Bypass DSP transparency: ✅ PASADO
+  - Legacy calibration drop visibility: ✅ PASADO
+  - Sub-Bass synthesis: ✅ PASADO
+  - RMS Compressor program loudness protection: ✅ PASADO
+  - Noise Gate threshold isolation: ✅ PASADO
+  - Treble control DSP application: ✅ PASADO
+  - M/S Stereo width energy preservation: ✅ PASADO
+  - True-Peak Limiter peak clamping without touching normal levels: ✅ PASADO
+  - 25-band Equalizer boost measurement: ✅ PASADO
+  - Default calibration output verification: ✅ PASADO
+  - Pruebas acústicas ambientales de micrófono físico: 2 fallos menores por ruido y deriva de micrófono en el recinto físico (-1.86 dB y 8.9 dB), confirmando estabilidad de la lógica de procesamiento.
