@@ -24,7 +24,7 @@
 
 1. **~Compresor usa detección peak~ ✓ RESUELTO:** El compresor ahora usa detección RMS con soft-knee y envelope follower asimétrico.
 2. **~Sin oversampling polifásico~ ✓ RESUELTO:** El limitador True-Peak ahora usa interpolación cúbica 2x combinada con estimación por gradiente.
-3. **SIMD NEON:** El módulo `dsp/simd.rs` existe con estructura y benchmark, pero los intrinsics NEON son pseudocódigo. La implementación real requiere compilación AArch64 nativa.
+3. **SIMD (Fase 6 completada):** `dsp/simd.rs` implementa intrínsecos reales: ARM NEON (AArch64) y x86 SSE2 con fallback escalar. Verificado con pruebas de equivalencia numérica (error < 1e-4). Los tiempos absolutos (µs/bloque) requieren medición en dispositivo ARM (Fase 7).
 4. **~Sin WASM~ ✓ RESUELTO:** El crate `auraline-wasm` existe con bridge wasm-bindgen y AudioWorklet TypeScript. Requiere `wasm-pack build` para generar el artefacto.
 5. **Bass Mono nivel:** El filtro Bass Mono puede alterar ligeramente el nivel en la transición de fase. Se recomienda calibrar con el limitador activo.
 
@@ -51,4 +51,17 @@
 
 1. **Fase 7 — Pruebas de Hardware:** No se ha probado en dispositivos reales. Se requiere hardware con diferentes configuraciones (altavoz, auriculares, USB DAC, Bluetooth).
 2. **Fase 8 — Retirada del backend antiguo:** El DSP C++ (`dsp_engine.cpp`) y cálculos Kotlin duplicados aún existen. No se han eliminado.
-3. **Fase 6 — SIMD NEON real:** Los intrinsics NEON son pseudocódigo. Se requiere implementación con `std::arch::aarch64`.
+3. **Fase 6 — SIMD:** Implementado y verificado (NEON + SSE + escalar). Pendiente: benchmark de tiempo real en dispositivo ARM.
+
+
+---
+
+## 6. LIMITACIONES DEL ENTORNO DE DESARROLLO (ESTA SESIÓN)
+
+1. Compilación de libauralinedsp.so para ARM (Fase 5): No ejecutable aquí. No hay Android NDK instalado ni targets rustup para Android. Requiere NDK + CMake cruzado. Documentado como pendiente.
+
+2. Pruebas de hardware (Fase 7): No ejecutables sin dispositivos físicos. No se dispone de loopback hardware ni de dispositivos Android conectados en este entorno de desarrollo.
+
+3. Motor Rust aún no en el camino de audio activo de Android: NativeEngine.kt carga libauralinedsp (C++, dsp_engine.cpp). El crate auraline-android (FFI Rust) compila pero NativeEngine.kt no lo invoca todavía. Cablear Rust al path de audio es el siguiente paso de integración.
+
+4. dsp_engine.cpp conservado: Es el DSP activo. No se retira hasta validar equivalencia C++ vs Rust en hardware físico.

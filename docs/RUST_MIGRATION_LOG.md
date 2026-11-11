@@ -240,3 +240,42 @@
 | Android unit tests | ✅ BUILD SUCCESSFUL |
 | Docs (14+ archivos) | ✅ Actualizados |
 
+
+
+---
+
+## SESIÓN DE VERIFICACIÓN E IMPLEMENTACIÓN (2026-11-11)
+
+### Fase 6 — Optimización SIMD (COMPLETADA)
+
+Implementación real de intrinsics SIMD en rust/crates/auraline-core/src/dsp/simd.rs:
+
+1. ARM NEON (AArch64): biquad_process_neon usando float32x2_t con canal-paralelismo (L y R en lanes independientes). Intrinsics estables de std::arch::aarch64.
+2. x86 SSE2 (x86_64): biquad_process_sse usando __m128 en las dos lanes bajas.
+3. Fallback escalar: biquad_process_scalar como referencia matemática, compilado en todos los targets.
+4. Despacho por cfg: biquad_process selecciona automáticamente NEON / SSE / scalar según el target.
+5. Helpers: eq_cascade_process, neon_available(), sse_available(), active_simd_backend(), benchmark_biquad().
+
+Pruebas (todas pasando, 22 tests en auraline-core):
+- test_simd_equivalence: salida SIMD vs escalar, error máximo < 1e-4.
+- test_simd_state_roundtrip: determinismo.
+- test_simd_bypass_identity: estado cero + b0=1 ⇒ pasa la señal sin modificar.
+- test_eq_cascade_flat_pass: cascada con b0=1 no altera la señal.
+
+Nota sobre benchmarks: Los tiempos por bloque (µs) requieren medición en dispositivo ARM real (Fase 7). En este entorno (x86_64 Linux, sin NDK Android) solo se verifica equivalencia numérica.
+
+### Fase 8 — Limpieza del backend C++ (PARCIAL, cautelosa)
+
+Regla aplicada: retirar una vez validada la equivalencia matemática. Como la equivalencia C++→Rust no se ha validado en hardware real, dsp_engine.cpp se conserva porque es el camino de audio activo (CMakeLists.txt lo compila en libauralinedsp; NativeEngine.kt lo carga con System.loadLibrary).
+
+Eliminado (código muerto, huérfano, no en el build):
+- app/src/main/cpp/compressor.cpp
+- app/src/main/cpp/reverb.cpp
+
+Mantenido (camino de audio activo):
+- app/src/main/cpp/dsp_engine.cpp — se retirará tras cablear NativeEngine al FFI de Rust, validar equivalencia en dispositivo físico y confirmar que no hay regresión de audio.
+
+Limitaciones reales de esta sesión:
+1. Fase 5 (libauralinedsp.so para arm64-v8a/armeabi-v7a): No compilable aquí (no hay Android NDK ni targets Android).
+2. Fase 7 (pruebas de hardware): No ejecutable sin dispositivos físicos.
+3. Motor Rust aún no es el camino de audio activo de Android (NativeEngine.kt carga libauralinedsp C++).
