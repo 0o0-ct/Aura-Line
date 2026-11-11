@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/auraline-core",
+    "crates/auraline-android",
+]
+resolver = "2"

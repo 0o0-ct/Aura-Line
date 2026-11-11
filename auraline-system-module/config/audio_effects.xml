@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<audio_effects_conf version="2.0" xmlns="http://schemas.android.com/audio/audio_effects_conf/v2_0">
+    <libraries>
+        <library name="auralinedsp" path="libauralinedsp.so"/>
+    </libraries>
+    <effects>
+        <effect name="auraline_dsp" library="auralinedsp" uuid="4c2b9a10-2384-11ee-be56-0242ac120002"/>
+    </effects>
+    <postprocess>
+        <stream type="music">
+            <apply effect="auraline_dsp"/>
+        </stream>
+    </postprocess>
+</audio_effects_conf>

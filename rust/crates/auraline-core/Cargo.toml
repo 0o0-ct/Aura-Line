@@ -1,0 +1,11 @@
+[package]
+name = "auraline-core"
+version = "1.0.0"
+edition = "2021"
+authors = ["AuraLine Audio Engineering Team"]
+description = "High-performance, real-time safe DSP audio processing engine in pure Rust"
+
+[dependencies]
+
+[dev-dependencies]
+approx = "0.5"

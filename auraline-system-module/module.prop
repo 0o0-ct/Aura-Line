@@ -1,0 +1,6 @@
+id=auraline-dsp-system
+name=AuraLine DSP System Module
+version=v1.0.0
+versionCode=100
+author=AuraLine Audio Engineering Team
+description=Systemless Audio Effects HAL integration for AuraLine high-performance Rust DSP engine.
