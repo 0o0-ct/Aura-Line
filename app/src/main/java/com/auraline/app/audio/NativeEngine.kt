@@ -38,6 +38,13 @@ object NativeEngine {
     external fun setStereoWidener(enabled: Boolean, width: Float, bassMonoCutoffHz: Float)
     external fun setLimiter(enabled: Boolean, ceilingDb: Float)
     external fun setBluetoothRoute(isBluetooth: Boolean)
+    // Bass Processing
+    external fun setBassEnhancement(enabled: Boolean, amount: Float, cutoffHz: Float)
+    external fun setSubBass(enabled: Boolean, amount: Float, cutoffHz: Float)
+    external fun setBassMono(enabled: Boolean, cutoffHz: Float)
+    // Headphone Profile
+    external fun applyHeadphoneProfile(profileIndex: Int)
+    external fun applyTargetCurve(curveIndex: Int)
     external fun writeInputPcm(samples: FloatArray, offset: Int, length: Int): Int
     external fun getTelemetry(outTelemetry: FloatArray)
 

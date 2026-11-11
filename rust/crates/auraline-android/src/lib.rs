@@ -219,6 +219,7 @@ pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setCompressor(
                 attack_ms,
                 release_ms,
                 makeup_gain_db,
+                6.0, // knee_db default
                 sr,
             );
         }
@@ -309,6 +310,127 @@ pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setBluetoothRoute(
             if let Ok(mut guard) = mutex.lock() {
                 if guard.limiter.get_ceiling_db() > -0.5 {
                     guard.limiter.set_ceiling_db(-0.5);
+                }
+            }
+        }
+    }
+}
+
+// --- Bass Processing JNI ---
+
+#[no_mangle]
+pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setBassEnhancement(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    enabled: u8,
+    amount: c_float,
+    cutoff_hz: c_float,
+) {
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let sr = guard.sample_rate;
+            guard.bass_enhancement.set_params(
+                enabled != 0,
+                amount,
+                cutoff_hz,
+                sr,
+            );
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setSubBass(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    enabled: u8,
+    amount: c_float,
+    cutoff_hz: c_float,
+) {
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let sr = guard.sample_rate;
+            guard.sub_bass.set_params(
+                enabled != 0,
+                amount,
+                cutoff_hz,
+                sr,
+            );
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setBassMono(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    enabled: u8,
+    cutoff_hz: c_float,
+) {
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let sr = guard.sample_rate;
+            guard.bass_mono.set_params(
+                enabled != 0,
+                cutoff_hz,
+                sr,
+            );
+        }
+    }
+}
+
+// --- Headphone Profile & Target Curve JNI ---
+
+#[no_mangle]
+pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_applyHeadphoneProfile(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    profile_index: i32,
+) {
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let profiles = auraline_core::presets::HEADPHONE_PROFILES;
+            let idx = (profile_index as usize).min(profiles.len().saturating_sub(1));
+            let profile = &profiles[idx];
+            let sr = guard.sample_rate;
+
+            // Reset all EQ bands first
+            for i in 0..auraline_core::equalizer::MAX_EQ_BANDS {
+                guard.eq_cascade.set_band(i, sr, 1000.0, 0.0, 1.0);
+            }
+
+            // Apply profile EQ bands
+            for (i, &(freq, gain_db, q)) in profile.eq_bands.iter().enumerate() {
+                if i < auraline_core::equalizer::MAX_EQ_BANDS {
+                    guard.eq_cascade.set_band(i, sr, freq, gain_db, q);
+                }
+            }
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_applyTargetCurve(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    curve_index: i32,
+) {
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let curves = auraline_core::presets::TARGET_CURVES;
+            let idx = (curve_index as usize).min(curves.len().saturating_sub(1));
+            let curve = &curves[idx];
+            let sr = guard.sample_rate;
+
+            // Reset all EQ bands first
+            for i in 0..auraline_core::equalizer::MAX_EQ_BANDS {
+                guard.eq_cascade.set_band(i, sr, 1000.0, 0.0, 1.0);
+            }
+
+            // Apply target curve EQ bands
+            for (i, &(freq, gain_db, q)) in curve.eq_bands.iter().enumerate() {
+                if i < auraline_core::equalizer::MAX_EQ_BANDS {
+                    guard.eq_cascade.set_band(i, sr, freq, gain_db, q);
                 }
             }
         }

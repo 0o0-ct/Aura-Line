@@ -2,5 +2,6 @@
 members = [
     "crates/auraline-core",
     "crates/auraline-android",
+    "crates/auraline-wasm",
 ]
 resolver = "2"

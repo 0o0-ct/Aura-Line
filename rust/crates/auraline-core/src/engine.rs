@@ -1,11 +1,14 @@
 //! Master Real-Time Safe DSP Audio Engine for AuraLine
 //!
-//! Integrates Preamp, Subsonic Protection, 25-Band EQ Cascade, Low Instrument Enhancer,
-//! Dynamics Suite (Gate + Compressor), Spatial (Widener + FDN Reverb), Lookahead True-Peak Limiter,
-//! Signal Generator, and Real-Time Telemetry in a zero-allocation audio processing callback loop.
+//! Integrates Preamp, Subsonic Protection, 25-Band EQ Cascade, Bass Processing
+//! (Enhancement, Sub-bass, Bass Mono), Low Instrument Enhancer, Dynamics Suite
+//! (Gate + RMS Compressor), Spatial (Widener + FDN Reverb), Lookahead True-Peak
+//! Limiter with Polyphase Oversampling, Signal Generator, and Real-Time Telemetry
+//! in a zero-allocation audio processing callback loop.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use crate::analyzer::signal_generator::{GeneratorMode, SignalGenerator};
+use crate::bass::{BassEnhancement, BassMono, SubBassGenerator};
 use crate::dynamics::DynamicsSuite;
 use crate::equalizer::EqualizerCascade;
 use crate::filters::biquad::{high_pass, AtomicF64, SmoothedBiquad};
@@ -34,6 +37,11 @@ pub struct AuraLineCoreEngine {
     pub enhancer: LowInstrumentEnhancer,
     pub dynamics: DynamicsSuite,
     pub telemetry: TelemetryCollector,
+
+    // Bass Processing
+    pub bass_enhancement: BassEnhancement,
+    pub sub_bass: SubBassGenerator,
+    pub bass_mono: BassMono,
 }
 
 impl AuraLineCoreEngine {
@@ -56,6 +64,10 @@ impl AuraLineCoreEngine {
             enhancer: LowInstrumentEnhancer::new(),
             dynamics: DynamicsSuite::new(fs_f32),
             telemetry: TelemetryCollector::new(),
+            // Bass Processing
+            bass_enhancement: BassEnhancement::new(fs),
+            sub_bass: SubBassGenerator::new(fs),
+            bass_mono: BassMono::new(fs),
         };
 
         // Initialize Subsonic 25 Hz 2nd order Butterworth HPF
@@ -119,17 +131,22 @@ impl AuraLineCoreEngine {
                 // 25-Band EQ
                 self.eq_cascade.process(&mut cur_l, &mut cur_r);
 
+                // Bass Processing (before dynamics for proper level control)
+                self.bass_mono.process(&mut cur_l, &mut cur_r);
+                self.bass_enhancement.process(&mut cur_l, &mut cur_r);
+                self.sub_bass.process(&mut cur_l, &mut cur_r);
+
                 // Acoustic Enhancer
                 self.enhancer.process(&mut cur_l, &mut cur_r);
 
-                // Dynamics (Gate + Comp)
+                // Dynamics (Gate + RMS Compressor)
                 self.dynamics.process(&mut cur_l, &mut cur_r);
 
                 // Spatial (Widener + Reverb)
                 self.widener.process(&mut cur_l, &mut cur_r);
                 self.reverb.process(&mut cur_l, &mut cur_r);
 
-                // True Peak Limiter
+                // True Peak Limiter with Polyphase Oversampling
                 self.limiter.process(&mut cur_l, &mut cur_r, &mut clipped);
 
                 audio_buffer[2 * i] = cur_l;

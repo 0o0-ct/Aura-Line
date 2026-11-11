@@ -1,10 +1,12 @@
 //! AuraLine Core DSP Library in pure Rust
 //!
 //! Provides real-time safe audio algorithms, biquad filters, Linkwitz-Riley crossovers,
-//! FDN stereo reverb, Mid/Side stereo widener, Dynamics suite, Lookahead True-Peak limiter,
-//! signal generator, and telemetry.
+//! FDN stereo reverb, Mid/Side stereo widener, Dynamics suite (Gate + RMS Compressor),
+//! Bass Processing (Enhancement, Sub-bass, Bass Mono), Lookahead True-Peak limiter with
+//! polyphase oversampling, signal generator, headphone profiles, and telemetry.
 
 pub mod analyzer;
+pub mod bass;
 pub mod dsp;
 pub mod dynamics;
 pub mod engine;
@@ -17,6 +19,8 @@ pub mod stereo;
 pub mod telemetry;
 
 pub use engine::AuraLineCoreEngine;
+pub use bass::{BassEnhancement, BassMono, SubBassGenerator};
+pub use presets::{HEADPHONE_PROFILES, TARGET_CURVES, HeadphoneProfile, TargetCurve};
 
 #[cfg(test)]
 mod tests {

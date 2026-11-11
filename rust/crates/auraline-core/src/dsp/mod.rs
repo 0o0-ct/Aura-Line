@@ -1,7 +1,10 @@
 //! AuraLine DSP Core Module
-//! Re-exports core filters, dynamics, limiter, reverb, stereo, and telemetry modules.
+//! Re-exports core filters, dynamics, limiter, reverb, stereo, bass, and telemetry modules.
+
+pub mod simd;
 
 pub use crate::analyzer::*;
+pub use crate::bass::*;
 pub use crate::dynamics::*;
 pub use crate::engine::*;
 pub use crate::equalizer::*;

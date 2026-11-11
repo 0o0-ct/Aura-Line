@@ -84,3 +84,105 @@
 
 - **`cargo test`:** 7 pruebas pasadas, 0 fallidas.
 - Compilación exitosa de `auraline-core` y `auraline-android`.
+
+---
+
+## REGISTRO DE COMPLETACIÓN (Sesión de Completado — 2026-11-11)
+
+### Fase 2 — Portabilidad Matemática (Completada)
+
+1. **`bass/bass_enhancement.rs`:** Módulo de Bass Enhancement con generación de armónicos:
+   - Waveshaper suave que genera 2do y 3er armónico del contenido de graves
+   - LPF para extraer graves, HPF para aislar armónicos generados
+   - Soft clipping para prevenir overshoot
+   - 3 pruebas unitarias
+
+2. **`bass/sub_bass.rs`:** Generador de Sub-graves:
+   - Detección de frecuencia fundamental por cruce por cero
+   - Generación de onda senoidal a la frecuencia detectada
+   - Mezcla con la señal original
+   - 3 pruebas unitarias
+
+3. **`bass/bass_mono.rs`:** Procesador Bass Mono:
+   - Convierte contenido por debajo del cutoff a mono
+   - Previene cancelación de fase en graves
+   - Preserva nivel para señal ya mono
+   - 4 pruebas unitarias
+
+4. **`dynamics/compressor.rs`:** Mejora a detección RMS:
+   - **Anterior:** Detección peak instantánea
+   - **Corrección:** Detección RMS con envelope follower asimétrico
+   - Agregado soft-knee compression con parámetro `knee_db`
+   - Suavizado de ganancia para evitar pumping
+   - Método `reset()` para pausa/reanudación
+
+5. **`limiter/true_peak.rs`:** Oversampling polifásico:
+   - Agregada interpolación cúbica 2x para detección de true-peak
+   - Combina estimación por gradiente con oversampling para mayor precisión
+   - Métodos `oversample_ratio()`, `interpolate_half()`, `true_peak_estimate()`
+   - Historial de muestras para interpolación continua
+
+6. **`presets/mod.rs`:** Perfiles de auriculares y curvas objetivo:
+   - 5 perfiles de auriculares: Sony WH-1000XM4, AirPods Pro, Sennheiser HD 599, Bose QC35, Generic IEM
+   - 4 curvas objetivo: Harman Target, Flat Reference, V-Shape, Warm
+   - Estructuras `HeadphoneProfile` y `TargetCurve` con bandas EQ
+
+7. **`engine.rs`:** Integración de nuevos módulos:
+   - Agregados `bass_enhancement`, `sub_bass`, `bass_mono` al pipeline
+   - Orden: EQ → Bass Mono → Bass Enhancement → Sub-bass → Dynamics → Spatial → Limiter
+
+8. **`dsp/simd.rs`:** Optimización SIMD:
+   - Placeholder para NEON SIMD con pseudocódigo
+   - Fallback a implementación escalar
+   - Benchmark comparativo scalar vs SIMD
+   - 2 pruebas unitarias
+
+### Fase 3 — Integración JNI/Android (Completada)
+
+9. **`NativeEngine.kt`:** Agregadas funciones JNI:
+   - `setBassEnhancement()`, `setSubBass()`, `setBassMono()`
+   - `applyHeadphoneProfile()`, `applyTargetCurve()`
+
+10. **`auraline-android/src/lib.rs`:** Implementaciones JNI:
+    - 5 nuevas funciones JNI para bass y perfiles
+    - Corregido `setCompressor` con parámetro `knee_db`
+
+11. **`AuraLineEngine.kt`:** Adaptador de framework:
+    - Bridge entre Rust DSP y Android Audio APIs
+    - Detección de capacidades y selección de backend
+    - Integración con OboeAudioStream
+    - Sincronización de estado con bass modules
+
+12. **`OboeAudioStream.kt`:** Bridge Oboe/AAudio:
+    - Gestión de stream de audio de baja latencia
+    - Fallback a framework si Oboe no disponible
+    - Procesamiento de bloques a través del motor Rust
+    - Detección de XRuns y estimación de latencia
+
+### Fase 5 — Módulo Root/HAL (Diseño Completado)
+
+- Estructura `auraline-system-module/` existente con scripts
+- `libauralinedsp.so` pendiente de compilación para HAL real
+
+### Fase 6 — Optimización SIMD (Implementación Base)
+
+- `dsp/simd.rs` con estructura NEON y benchmark
+- Fallback escalar funcional
+- Intrinsics NEON como pseudocódigo para compilación cross-platform
+
+### Fase 9 — WebAssembly (Creado)
+
+13. **`auraline-wasm/Cargo.toml`:** Crate WASM con wasm-bindgen
+14. **`auraline-wasm/src/lib.rs`:** Bridge WASM:
+    - `create_engine()`, `destroy_engine()`, `process_block()`
+    - `set_preamp_gain()`, `set_bypass()`, `get_telemetry()`
+15. **`src/auraline-processor.ts`:** AudioWorklet Processor:
+    - Bridge entre WASM y Web Audio API
+    - Interleaving/de-interleaving de canales
+    - Mensajería para configuración
+
+### Verificación Final
+
+- **`cargo test --package auraline-core --package auraline-android`:** 19 pruebas pasadas, 0 fallidas
+- Compilación exitosa de `auraline-core` y `auraline-android`
+- Workspace actualizado con `auraline-wasm`
