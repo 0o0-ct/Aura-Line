@@ -279,3 +279,46 @@ Limitaciones reales de esta sesión:
 1. Fase 5 (libauralinedsp.so para arm64-v8a/armeabi-v7a): No compilable aquí (no hay Android NDK ni targets Android).
 2. Fase 7 (pruebas de hardware): No ejecutable sin dispositivos físicos.
 3. Motor Rust aún no es el camino de audio activo de Android (NativeEngine.kt carga libauralinedsp C++).
+
+---
+
+## SESIÓN DE COMPLETACIÓN FINAL (2026-11-11)
+
+### JNI — Funciones faltantes completadas
+
+1. **`auraline-android/src/lib.rs`:** Agregadas 2 funciones JNI que faltaban:
+   - `Java_com_auraline_app_audio_NativeEngine_writeInputPcm`: Procesa bloques PCM entrantes a través del motor Rust. Valida punteros nulos, longitudes y offsets.
+   - `Java_com_auraline_app_audio_NativeEngine_getTelemetry`: Lee el snapshot de telemetría atómica (RMS L/R, Peak L/R, clipping count, processed blocks) y lo escribe en el buffer FloatArray de Kotlin.
+
+2. **`NativeEngine.kt`:** Corregido `setNoiseGate` de 3 a 5 parámetros (agregados `attackMs` y `releaseMs`) para coincidir con la implementación Rust.
+
+3. **`core/domain/EqBand.kt`:** Agregados campos a `ToneControls`:
+   - `bassEnhancementAmount: Float = 0.5f`
+   - `bassCutoffHz: Float = 150f`
+   - `subBassAmount: Float = 0.3f`
+   - `subBassCutoffHz: Float = 60f`
+   - Agregados campos a `GateParams`: `attackMs: Float = 10f`, `releaseMs: Float = 100f`
+
+4. **`NativeEngineBridge.kt`:** Actualizado `syncState()` para sincronizar:
+   - Bass Enhancement, Sub-bass y Bass Mono con el motor Rust
+   - Noise Gate con attackMs/releaseMs
+   - Los módulos bass respetan `effectsEnabled`, `modules.bassEnhancement/subBass/bassMono` y `bypass`
+
+### Verificación
+
+- **`cargo test --workspace --lib`:** 22 pruebas pasadas, 0 fallidas
+- Compilación exitosa de `auraline-core` y `auraline-android`
+- Gradle: No disponible en este entorno (sin JDK)
+
+### Resumen de estado final
+
+| Componente | Estado |
+|---|---|
+| `auraline-core` (Rust tests) | ✅ 22/22 pasadas |
+| `auraline-android` (JNI bindings) | ✅ 21 funciones JNI completas |
+| `auraline-wasm` (WebAssembly) | ✅ Compilación corregida |
+| NativeEngine.kt ↔ Rust JNI | ✅ Todas las funciones declaradas tienen implementación Rust |
+| NativeEngineBridge.kt | ✅ Sincroniza EQ, Dynamics, Spatial, Limiter, Bass, Gate |
+| ToneControls/GateParams | ✅ Campos nuevos con valores por defecto |
+| Android unit tests | ⚠️ No ejecutable (sin JDK) |
+| Docs (25+ archivos) | ✅ Actualizados |

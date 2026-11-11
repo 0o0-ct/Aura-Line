@@ -139,7 +139,9 @@ object NativeEngineBridge {
             NativeEngine.setNoiseGate(
                 enabled = state.effectsEnabled && state.modules.gate && !state.bypass,
                 thresholdDb = gate.thresholdDb,
-                ratio = gate.ratio
+                ratio = gate.ratio,
+                attackMs = gate.attackMs,
+                releaseMs = gate.releaseMs
             )
 
             // Spatial
@@ -164,6 +166,23 @@ object NativeEngineBridge {
             NativeEngine.setLimiter(
                 enabled = state.modules.limiter && !state.bypass,
                 ceilingDb = comp.limiterCeiling
+            )
+
+            // Bass Processing
+            val bass = state.tone
+            NativeEngine.setBassEnhancement(
+                enabled = state.effectsEnabled && state.modules.bassEnhancement && !state.bypass,
+                amount = bass.bassEnhancementAmount.coerceIn(0f, 1f),
+                cutoffHz = bass.bassCutoffHz.coerceIn(40f, 200f)
+            )
+            NativeEngine.setSubBass(
+                enabled = state.effectsEnabled && state.modules.subBass && !state.bypass,
+                amount = bass.subBassAmount.coerceIn(0f, 1f),
+                cutoffHz = bass.subBassCutoffHz.coerceIn(20f, 100f)
+            )
+            NativeEngine.setBassMono(
+                enabled = state.effectsEnabled && state.modules.bassMono && !state.bypass,
+                cutoffHz = 120f
             )
 
             _telemetry.value = _telemetry.value.copy(isBypass = state.bypass)

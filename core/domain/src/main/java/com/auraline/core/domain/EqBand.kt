@@ -160,6 +160,14 @@ data class ToneControls(
      * banda del ecualizador: se aplica como shelf propio hasta esta frecuencia, ajustable.
      */
     val subCutoffHz: Float = 60f,
+    /** Intensidad del Bass Enhancement (0-1). */
+    val bassEnhancementAmount: Float = 0.5f,
+    /** Frecuencia de corte para Bass Enhancement (Hz). */
+    val bassCutoffHz: Float = 150f,
+    /** Intensidad del Sub-bass generator (0-1). */
+    val subBassAmount: Float = 0.3f,
+    /** Frecuencia de corte para Sub-bass (Hz). */
+    val subBassCutoffHz: Float = 60f,
     /** Bandas paramétricas detalladas para el módulo de tono avanzado. */
     val bands: List<ToneParametricBand> = defaultToneParametricBands().map { band ->
         when (band.id) {
@@ -231,7 +239,11 @@ data class GateParams(
     /** Por debajo de este nivel la señal se atenúa. */
     val thresholdDb: Float = -60f,
     /** 1 = puerta cerrada; valores mayores expansión más agresiva. */
-    val ratio: Float = 2f
+    val ratio: Float = 2f,
+    /** Tiempo de cierre (ms). */
+    val attackMs: Float = 10f,
+    /** Tiempo de apertura (ms). */
+    val releaseMs: Float = 100f
 )
 
 data class EqualizerState(

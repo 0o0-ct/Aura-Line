@@ -33,7 +33,7 @@ object NativeEngine {
     external fun setSubsonic(enabled: Boolean, cutoffHz: Float)
     external fun setInstrumentEnhancer(enabled: Boolean, fundamentalHz: Float, bodyDb: Float, punchDb: Float, mudCutDb: Float, harmonics: Float)
     external fun setCompressor(enabled: Boolean, thresholdDb: Float, ratio: Float, attackMs: Float, releaseMs: Float, makeupGainDb: Float)
-    external fun setNoiseGate(enabled: Boolean, thresholdDb: Float, ratio: Float)
+    external fun setNoiseGate(enabled: Boolean, thresholdDb: Float, ratio: Float, attackMs: Float, releaseMs: Float)
     external fun setReverb(enabled: Boolean, roomSize: Float, damping: Float, decay: Float, predelay: Float, mix: Float)
     external fun setStereoWidener(enabled: Boolean, width: Float, bassMonoCutoffHz: Float)
     external fun setLimiter(enabled: Boolean, ceilingDb: Float)

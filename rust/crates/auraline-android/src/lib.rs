@@ -437,6 +437,52 @@ pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_applyTargetCurve(
     }
 }
 
+// --- PCM Input & Telemetry JNI ---
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_auraline_app_audio_NativeEngine_writeInputPcm(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    samples: *mut c_float,
+    offset: c_int,
+    length: c_int,
+) -> c_int {
+    if samples.is_null() || length <= 0 || offset < 0 {
+        return 0;
+    }
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            let slice = std::slice::from_raw_parts_mut(samples.add(offset as usize), length as usize);
+            guard.process_block(slice);
+            return length;
+        }
+    }
+    0
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn Java_com_auraline_app_audio_NativeEngine_getTelemetry(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    out: *mut c_float,
+) {
+    if out.is_null() {
+        return;
+    }
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(guard) = mutex.lock() {
+            let tel = guard.telemetry.read_snapshot();
+            let slice = std::slice::from_raw_parts_mut(out, 6);
+            slice[0] = tel.0; // rms_l
+            slice[1] = tel.1; // rms_r
+            slice[2] = tel.2; // peak_l
+            slice[3] = tel.3; // peak_r
+            slice[4] = tel.4 as f32; // clipping_count
+            slice[5] = tel.5 as f32; // processed_blocks
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
