@@ -220,7 +220,10 @@ data class ModuleState(
     val compressor: Boolean = true,
     val limiter: Boolean = true,
     val reverb: Boolean = true,
-    val width: Boolean = true
+    val width: Boolean = true,
+    val bassEnhancement: Boolean = false,
+    val subBass: Boolean = false,
+    val bassMono: Boolean = true
 )
 
 /** Puerta de ruido y expansor, aplicados en las bandas del compresor multibanda. */

@@ -3,8 +3,8 @@ package com.auraline.app.audio
 import android.content.Context
 import android.util.Log
 import com.auraline.core.domain.EqualizerState
-import com.auraline.app.audio.privilege.PrivilegeManager
 import com.auraline.app.audio.privilege.AudioBackendSelector
+import com.auraline.app.audio.privilege.AudioCapabilityDetector
 
 /**
  * AuraLineEngine — Framework adapter that bridges the Rust DSP engine with
@@ -43,12 +43,12 @@ class AuraLineEngine(private val context: Context) {
             NativeEngineBridge.initialize(context)
 
             // Detect capabilities and select backend
-            val capabilities = PrivilegeManager.inspectCapabilities(context)
-            val backend = AudioBackendSelector.selectBackend(capabilities)
+            val report = AudioCapabilityDetector.detect(context)
+            val backend = report.selectedBackend
 
-            Log.i(tag, "Selected backend: $backend for ${capabilities.manufacturer} ${capabilities.model}")
-            Log.i(tag, "Access level: ${capabilities.accessLevel}")
-            Log.i(tag, "Audio HAL: ${capabilities.audioHalType}")
+            Log.i(tag, "Selected backend: $backend for ${report.capabilities.manufacturer} ${report.capabilities.model}")
+            Log.i(tag, "Access level: ${report.capabilities.accessLevel}")
+            Log.i(tag, "Audio HAL: ${report.capabilities.audioHalType}")
 
             // Initialize Oboe stream for Rust-owned PCM processing
             if (backend == com.auraline.app.audio.privilege.AudioIntegrationMode.RustOwnedPcm) {
@@ -194,22 +194,7 @@ class AuraLineEngine(private val context: Context) {
     fun isRunning(): Boolean = initialized
 }
 
-// Extension properties for EqualizerState bass modules
-val EqualizerState.modules: EffectModules
-    get() = this::class.java.getMethod("getModules").invoke(this) as? EffectModules
-        ?: EffectModules()
 
-data class EffectModules(
-    val equalizer: Boolean = true,
-    val compressor: Boolean = true,
-    val gate: Boolean = true,
-    val reverb: Boolean = false,
-    val width: Boolean = true,
-    val limiter: Boolean = true,
-    val bassEnhancement: Boolean = false,
-    val subBass: Boolean = false,
-    val bassMono: Boolean = true,
-)
 
 val EqualizerState.bassEnhancementAmount: Float
     get() = 0.5f
