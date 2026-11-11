@@ -1,1 +1,0 @@
-{"rustc":14855408524073039412,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[5508051976647095748,"build_script_build",false,13167763508458455164]],"local":[{"RerunIfChanged":{"output":"release/build/wasm-bindgen-shared-a7dec1e47fdda5d7/output","paths":["src/lib.rs","src/tys.rs"]}}],"rustflags":[],"config":0,"compile_kind":0}

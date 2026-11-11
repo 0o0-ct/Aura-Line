@@ -9,6 +9,11 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Rust build artifacts
+target/
+rust/target/
+**/target/
+
 # Toolchain bundled in the repo (see jdk/README)
 jdk/
 gradle/dist/
