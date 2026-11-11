@@ -35,6 +35,36 @@ class DspMathTest {
     }
 
     @Test
+    fun testEqualizerBandGridIsUniformlyLogarithmicWithUnifiedQ() {
+        val bands = generateEqualizerBands(25)
+        assertEquals(25, bands.size)
+
+        assertEquals("El primer centro debe ser 20 Hz (subgraves extremos)", 20f, bands.first().frequencyHz, 0.01f)
+        assertEquals("El último centro debe ser 20 kHz (agudos extremos)", 20000f, bands.last().frequencyHz, 0.01f)
+
+        var previous = bands.first().frequencyHz
+        for (i in bands.indices) {
+            val freq = bands[i].frequencyHz
+            assertTrue("Frecuencia $freq Hz debe estar en rango audible 20..20000 Hz", freq in 20f..20000f)
+            if (i > 0) {
+                assertTrue("La banda $i ($freq Hz) debe ser mayor que la anterior ($previous Hz)", freq > previous)
+                val ratio = freq / previous
+                assertTrue(
+                    "El espaciado entre bandas debe ser uniforme en escala logarítmica (ratio $ratio)",
+                    ratio in 1.25..1.45
+                )
+            }
+            assertEquals("La banda $i debe usar el Q unificado ($EQ_BAND_Q)", EQ_BAND_Q, bands[i].q, 0.001f)
+            previous = freq
+        }
+
+        // La frecuencia que muestra la UI (centro) es la que aplica el filtro: mismo valor.
+        bands.forEachIndexed { i, band ->
+            assertEquals("El centro de la banda $i debe ser su frecuencia", band.frequencyHz, bandCenterHz(bands, i), 0.001f)
+        }
+    }
+
+    @Test
     fun testBiquadPeakingEqMagnitudeTransferFunction() {
         val fs = 48000.0
         val f0 = 1000.0 // 1 kHz
@@ -259,8 +289,8 @@ class DspMathTest {
         val bands = generateEqualizerBands(25)
         val initialGains = bands.map { it.gainDb }
 
-        // Apply a focus recipe (e.g. KickDrum: +3 dB in 141 Hz)
-        val step = FocusStep(centerHz = 141, deltaDb = 3.0f)
+        // Apply a focus recipe (e.g. KickDrum: +3 dB en el centro de bombo ~150 Hz)
+        val step = FocusStep(centerHz = 150, deltaDb = 3.0f)
         val modifiedBands = bands.map { band ->
             if (abs(band.frequencyHz - step.centerHz) < 20f) {
                 band.copy(gainDb = band.gainDb + step.deltaDb)

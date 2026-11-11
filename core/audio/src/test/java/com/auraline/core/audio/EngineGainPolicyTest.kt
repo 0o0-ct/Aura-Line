@@ -230,7 +230,7 @@ class EngineGainPolicyTest {
                 if (i == 9) b.copy(gainDb = 12f) else b
             }
         )
-        val center = 948.7f
+        val center = generateEqualizerBands(25)[9].frequencyHz
         val gain = AuraLineEngine.preEqGainDb(state, 12f, center, eqActive = true)
         assertEquals("La ganancia calculada de la banda debe ser exactamente 12 dB", 12f, gain, 0.1f)
     }
@@ -243,7 +243,7 @@ class EngineGainPolicyTest {
                 if (i == 9) b.copy(gainDb = 12f) else b
             }
         )
-        val center = 948.7f
+        val center = generateEqualizerBands(25)[9].frequencyHz
         val gain = AuraLineEngine.preEqGainDb(state, 12f, center, eqActive = false)
         assertEquals("Con ecualizador desactivado, la ganancia de la banda debe ser 0 dB", 0f, gain, 0.1f)
     }

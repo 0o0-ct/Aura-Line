@@ -5,7 +5,7 @@ import {
   EngineStatus,
   EqualizerState,
 } from "./types";
-import { bandCenterHz, bandProbeHz } from "./constants";
+import { bandCenterHz, bandProbeHz, EQ_BAND_Q } from "./constants";
 
 class AuraAudioEngine {
   private ctx: AudioContext | null = null;
@@ -146,7 +146,7 @@ class AuraAudioEngine {
       filter.type = "peaking";
       filter.frequency.value = 1000;
       filter.gain.value = 0;
-      filter.Q.value = 1.414;
+      filter.Q.value = EQ_BAND_Q;
       this.eqFilters.push(filter);
     }
 
@@ -267,10 +267,16 @@ class AuraAudioEngine {
       if (!filter) {
         filter = ctx.createBiquadFilter();
         filter.type = "peaking";
-        filter.Q.value = 1.414;
+        filter.Q.value = EQ_BAND_Q;
         this.eqFilters.push(filter);
       }
-      filter.frequency.setTargetAtTime(band.frequencyHz, ctx.currentTime, 0.02);
+      // La frecuencia que aplica el filtro es el centro audible de la banda, que es exactamente
+      // la frecuencia que la UI muestra en el deslizador. Antes se usaba `band.frequencyHz`
+      // directamente y el deslizador mostraba el centro geométrico: la ganancia se aplicaba en el
+      // corte y no en el centro, produciendo resultados distintos al esperado.
+      const center = bandCenterHz(state.bands, index) || band.frequencyHz;
+      filter.frequency.setTargetAtTime(center, ctx.currentTime, 0.02);
+      filter.Q.setTargetAtTime(band.q > 0 ? band.q : EQ_BAND_Q, ctx.currentTime, 0.02);
       filter.gain.setTargetAtTime(eqActive && band.enabled ? band.gainDb : 0, ctx.currentTime, 0.02);
     });
 

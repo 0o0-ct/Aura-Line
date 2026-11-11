@@ -14,6 +14,11 @@ target/
 rust/target/
 **/target/
 
+# Web
+node_modules/
+.next/
+dist/
+
 # Toolchain bundled in the repo (see jdk/README)
 jdk/
 gradle/dist/

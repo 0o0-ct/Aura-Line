@@ -251,11 +251,13 @@ val LowFrequencySources: List<LowSource> = listOf(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Las diez bandas graves de la rejilla de 25 bandas (centros 50 → 948 Hz) y el
- * instrumento que cada una posee.
+ * Roles por banda de graves.
  *
- * La ventana de centro cubre también la rejilla de 20 bandas (20..25): si una banda
- * cae fuera de toda ventana, simplemente no muestra dueño.
+ * Ventanas de centro sobre la rejilla de 25 bandas logarítmicas (20 Hz → 20 kHz). El
+ * propietario de cada banda es la fuente instrumental cuyo registro fundamental o armónico
+ * coincide con la zona; las compañías comparten la misma ventana.
+ *
+ * Si una banda cae fuera de toda ventana (rejilla ampliada), se asigna el rol más cercano.
  */
 val LowFrequencyRoles: List<BandRole> = listOf(
     BandRole(
@@ -311,8 +313,15 @@ val LowFrequencyRoles: List<BandRole> = listOf(
 )
 
 /** Dueño de la banda que cae en esta frecuencia centro, si lo hay. */
-fun bandRoleFor(centerHz: Float): BandRole? =
-    LowFrequencyRoles.firstOrNull { centerHz >= it.centerWindow.first && centerHz <= it.centerWindow.last }
+fun bandRoleFor(centerHz: Float): BandRole? {
+    LowFrequencyRoles.firstOrNull { centerHz >= it.centerWindow.first && centerHz <= it.centerWindow.last }?.let { return it }
+    // Bandas fuera de las ventanas definidas (rejilla ampliada): se asigna el rol más cercano.
+    return LowFrequencyRoles.minByOrNull { role ->
+        val window = role.centerWindow
+        val distance = if (centerHz < window.first) window.first - centerHz else if (centerHz > window.last) centerHz - window.last else 0f
+        distance
+    }
+}
 
 /** Nombre corto del dueño de la banda, para pintar bajo el fader. */
 fun ownerShortNameFor(centerHz: Float): String? = bandRoleFor(centerHz)?.owner?.shortName

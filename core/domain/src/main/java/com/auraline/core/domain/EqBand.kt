@@ -19,11 +19,22 @@ enum class AcousticRegion(
     AIR("Aire", 12000f..20000f, 0xFFAA00FFL, "Aire y apertura (12-20 kHz). Brillo superior holográfico y extensión de armónicos agudos.")
 }
 
+/**
+ * Q unificado para el ecualizador gráfico en todos los motores (Web Audio, Android nativo y Rust).
+ * Valor coherente con la rejilla logarítmica de 25 bandas (~3.46, ancho de banda adaptado).
+ */
+const val EQ_BAND_Q: Float = 3.46f
+
+/** Rejilla canónica de 25 centros de banda: logarítmica uniforme entre 20 Hz y 20 kHz. */
+val EQUALIZER_BAND_CENTERS_HZ: List<Float> = listOf(
+    20f, 27f, 36f, 47f, 63f, 84f, 112f, 150f, 200f, 267f, 356f, 474f, 632f, 843f, 1125f, 1500f, 2000f, 2667f, 3557f, 4743f, 6325f, 8434f, 11247f, 14998f, 20000f
+)
+
 data class EqBand(
     val id: Int,
     val frequencyHz: Float,
     val gainDb: Float = 0f,
-    val q: Float = 0.707f,
+    val q: Float = 3.46f,
     val enabled: Boolean = true
 )
 
@@ -336,48 +347,44 @@ data class AppSettings(
  * Rejilla de cortes para un ecualizador gráfico realizable.
  *
  * `DynamicsProcessing` reparte el espectro en bins de FFT (~47 Hz con bloque de 1024 a 48 kHz)
- * y descarta en silencio toda banda cuyo rango quede vacío. Por eso la rejilla es lineal hasta
- * 1 kHz (pasos de 100 Hz, dos bins) y logarítmica por encima: así ninguna banda queda muerta.
+ * y descarta en silencio toda banda cuya rango quede vacío. Por eso la rejilla se define con
+ * centros logarítmicos uniformes entre 20 Hz y 20 kHz (25 bandas) y ninguna banda queda muerta.
  */
 fun generateEqualizerBands(count: Int, gainRangeDb: Float = 12f): List<EqBand> {
-    val bands = count.coerceIn(20, 25)
-    val lowBands = Math.round(bands * 0.40f).coerceIn(6, 12)
-    val crossover = 1000f
-
-    val cutoffs = ArrayList<Float>(bands)
-    for (index in 1..lowBands) {
-        cutoffs.add(crossover * index / lowBands)
-    }
-    val highBands = bands - lowBands
-    if (highBands > 0) {
-        val ratio = Math.pow((20000.0 / crossover), 1.0 / highBands)
-        for (index in 1..highBands) {
-            cutoffs.add((crossover * Math.pow(ratio, index.toDouble())).toFloat())
+    val bandCount = count.coerceIn(20, 25)
+    val centers: List<Float> =
+        if (bandCount >= EQUALIZER_BAND_CENTERS_HZ.size) {
+            EQUALIZER_BAND_CENTERS_HZ
+        } else {
+            val low = 20f
+            val high = 20000f
+            val ratio = Math.pow((high / low).toDouble(), 1.0 / (bandCount - 1).toDouble())
+            (0 until bandCount).map { (low * Math.pow(ratio, it.toDouble())).toFloat() }.toList()
         }
-    }
 
-    return cutoffs.mapIndexed { index, cutoff ->
-        EqBand(id = index, frequencyHz = cutoff.coerceIn(20f, 20000f), gainDb = 0f)
+    return centers.mapIndexed { index, frequencyHz ->
+        EqBand(
+            id = index,
+            frequencyHz = frequencyHz.coerceIn(20f, 20000f),
+            gainDb = 0f,
+            q = EQ_BAND_Q,
+            enabled = true
+        )
     }
 }
 
 /**
- * Frecuencia de sondeo dentro de la parte alta de la banda.
- *
- * El DSP cuantiza los cortes a bins (~50 Hz con bloque de 960), así que el borde real de una
- * banda no coincide exactamente con su corte nominal. Sondeando cerca del corte pero dentro
- * de la banda, la medida cae siempre en el rango que de verdad se procesa.
+ * Frecuencia de sondeo dentro de la banda: el centro audible donde se aplica la ganancia.
  */
 fun bandProbeHz(bands: List<EqBand>, index: Int): Float {
-    val cutoff = bands.getOrNull(index)?.frequencyHz ?: return 0f
-    val previous = if (index == 0) 0f else bands.getOrNull(index - 1)?.frequencyHz ?: 0f
-    val width = (cutoff - previous).coerceAtLeast(cutoff * 0.1f)
-    return cutoff - width * 0.15f
+    return bands.getOrNull(index)?.frequencyHz ?: 0f
 }
 
-/** Centro audible de la banda, el valor que tiene sentido mostrar al usuario. */
+/**
+ * Centro audible de la banda, el valor que tiene sentido mostrar al usuario y procesar en el DSP.
+ * `frequencyHz` ya contiene el centro de la banda (rejilla logarítmica), por lo que el valor se
+ * devuelve tal cual: la frecuencia mostrada y la aplicada son exactamente la misma.
+ */
 fun bandCenterHz(bands: List<EqBand>, index: Int): Float {
-    val cutoff = bands.getOrNull(index)?.frequencyHz ?: return 0f
-    val previous = if (index == 0) 0f else bands.getOrNull(index - 1)?.frequencyHz ?: 0f
-    return if (previous <= 0f) cutoff / 2f else kotlin.math.sqrt(previous * cutoff)
+    return bands.getOrNull(index)?.frequencyHz ?: 0f
 }

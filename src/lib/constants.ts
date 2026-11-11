@@ -417,9 +417,23 @@ export const LowFrequencyRoles: BandRole[] = [
 ];
 
 export function bandRoleFor(centerHz: number): BandRole | undefined {
-  return LowFrequencyRoles.find(
+  const exact = LowFrequencyRoles.find(
     (role) => centerHz >= role.centerWindow[0] && centerHz <= role.centerWindow[1]
   );
+  if (exact) return exact;
+  // Bandas fuera de las ventanas definidas (rejilla ampliada): se asigna el rol más cercano.
+  const distanceTo = (start: number, end: number) =>
+    centerHz < start ? start - centerHz : centerHz > end ? centerHz - end : 0;
+  let best = LowFrequencyRoles[0];
+  let bestDistance = distanceTo(best.centerWindow[0], best.centerWindow[1]);
+  for (const role of LowFrequencyRoles) {
+    const d = distanceTo(role.centerWindow[0], role.centerWindow[1]);
+    if (d < bestDistance) {
+      best = role;
+      bestDistance = d;
+    }
+  }
+  return best;
 }
 
 export function ownerShortNameFor(centerHz: number): string | undefined {
@@ -450,43 +464,55 @@ export function focusFor(key: string): SourceFocus | undefined {
 }
 
 // Band generation & frequency calculation
+// Rejilla canónica de 25 bandas: centros logarítmicos uniformes en 20 Hz - 20 kHz.
+// Distribución logarítmica (en lugar de la distribución híbrida lineal/logarítmica anterior):
+// cada banda cubre un rango equivalente en octavas, evitando el salto proporcional grande entre
+// bandas graves y el exceso de densidad en las frecuencias agudas.
+export const EQUALIZER_BAND_CENTERS_HZ: number[] = [
+  20, 27, 36, 47, 63, 84, 112, 150, 200, 267, 356, 474, 632, 843, 1125, 1500, 2000, 2667, 3557, 4743, 6325, 8434, 11247, 14998, 20000,
+];
+
+// Q unificado para el ecualizador gráfico en todos los motores (web, Android y Rust).
+// Valor coherente con la separación de la rejilla logarítmica propuesta (~3.46).
+export const EQ_BAND_Q = 3.46;
+
+function logSpaceCenters(count: number): number[] {
+  const low = 20;
+  const high = 20000;
+  const ratio = Math.pow(high / low, 1 / (count - 1));
+  const centers: number[] = [];
+  for (let i = 0; i < count; i++) {
+    centers.push(Math.round(low * Math.pow(ratio, i) * 10) / 10);
+  }
+  return centers;
+}
+
 export function generateEqualizerBands(count: number, gainRangeDb: number = 12): EqBand[] {
-  const bands = Math.min(25, Math.max(20, count));
-  const lowBands = Math.min(12, Math.max(6, Math.round(bands * 0.4)));
-  const crossover = 1000;
+  const bandCount = Math.min(25, Math.max(20, count));
+  const centers =
+    bandCount >= EQUALIZER_BAND_CENTERS_HZ.length
+      ? [...EQUALIZER_BAND_CENTERS_HZ]
+      : logSpaceCenters(bandCount);
 
-  const cutoffs: number[] = [];
-  for (let index = 1; index <= lowBands; index++) {
-    cutoffs.push((crossover * index) / lowBands);
-  }
-  const highBands = bands - lowBands;
-  if (highBands > 0) {
-    const ratio = Math.pow(20000.0 / crossover, 1.0 / highBands);
-    for (let index = 1; index <= highBands; index++) {
-      cutoffs.push(crossover * Math.pow(ratio, index));
-    }
-  }
-
-  return cutoffs.map((cutoff, index) => ({
+  return centers.map((frequencyHz, index) => ({
     id: index,
-    frequencyHz: Math.min(20000, Math.max(20, cutoff)),
+    // `frequencyHz` es el centro audible de la banda: la etiqueta mostrada en la UI, el filtro
+    // que aplica el motor y la frecuencia central procesada por el DSP son exactamente la misma.
+    frequencyHz: Math.min(20000, Math.max(20, frequencyHz)),
     gainDb: 0,
-    q: 1.414,
+    q: EQ_BAND_Q,
     enabled: true,
   }));
 }
 
 export function bandCenterHz(bands: EqBand[], index: number): number {
-  const cutoff = bands[index]?.frequencyHz ?? 0;
-  const previous = index === 0 ? 0 : bands[index - 1]?.frequencyHz ?? 0;
-  return previous <= 0 ? cutoff / 2 : Math.sqrt(previous * cutoff);
+  // El centro de la banda es su propia frecuencia central (la que procesa el filtro).
+  return bands[index]?.frequencyHz ?? 0;
 }
 
 export function bandProbeHz(bands: EqBand[], index: number): number {
-  const cutoff = bands[index]?.frequencyHz ?? 0;
-  const previous = index === 0 ? 0 : bands[index - 1]?.frequencyHz ?? 0;
-  const width = Math.max(cutoff * 0.1, cutoff - previous);
-  return cutoff - width * 0.15;
+  // La sonda se ubica en el centro de la campana: ahí es donde se aplica la ganancia.
+  return bands[index]?.frequencyHz ?? 0;
 }
 
 export function resolveFocus(bands: EqBand[], focus: SourceFocus): Array<[number, number]> {

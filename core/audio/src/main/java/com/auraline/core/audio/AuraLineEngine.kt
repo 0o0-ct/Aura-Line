@@ -818,11 +818,8 @@ object AuraLineEngine {
         }
     }
 
-    /** Centro audible de cada banda, para decidir a qué región del tono pertenece. */
-    private fun bandCenters(cutoffs: FloatArray): FloatArray =
-        FloatArray(cutoffs.size) { index ->
-            if (index == 0) cutoffs[0] / 2f else kotlin.math.sqrt(cutoffs[index - 1] * cutoffs[index])
-        }
+    /** Centros audible de cada banda: la rejilla ya almacena el centro en `frequencyHz`. */
+    private fun bandCenters(centers: FloatArray): FloatArray = centers
 
     /** Graves / medios / agudos: tres regiones contiguas sobre la rejilla de bandas. */
     private fun toneOffset(state: EqualizerState, centerHz: Float): Float {
