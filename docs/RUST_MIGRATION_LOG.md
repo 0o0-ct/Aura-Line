@@ -186,3 +186,57 @@
 - **`cargo test --package auraline-core --package auraline-android`:** 19 pruebas pasadas, 0 fallidas
 - Compilación exitosa de `auraline-core` y `auraline-android`
 - Workspace actualizado con `auraline-wasm`
+
+---
+
+## NUEVA SECCIÓN — CORRECCIONES DE VERIFICACIÓN (2026-11-11)
+
+### Corrección del Crate `auraline-wasm` (Fase 9)
+
+1. **Bug detectado durante la auditoría:**
+   - `rust/crates/auraline-wasm/src/lib.rs` línea 26 declaraba:
+     `pub extern "C" {` con atributo `#[wasm_bindgen]` anterior.
+   - Esto producía el error de compilación:
+     `error: expected \`extern\` (auraline-wasm (lib) generated 1 error)`.
+   - **Causa:** la sintaxis `pub extern "C"` no es válida para un bloque `extern "C"` con `wasm_bindgen` en wasm-bindgen 0.2. El bloque `extern "C"` debe ir precedido directamente de `#[wasm_bindgen]` sin el modificador `pub`.
+   - **Corrección aplicada:**
+     ```rust
+     // ANTES
+     #[wasm_bindgen]
+     pub extern "C" {
+         #[wasm_bindgen(js_namespace = console)]
+         fn log(s: &str);
+     }
+     // DESPUÉS
+     #[wasm_bindgen]
+     extern "C" {
+         #[wasm_bindgen(js_namespace = console)]
+         fn log(s: &str);
+     }
+     ```
+2. **Verificación:**`cargo build --package auraline-wasm` → compilación exitosa (2 advertencias no críticas de bloques `unsafe` innecesarios).
+3. **Impacto:** El crate `auraline-wasm` (WebAssembly bridge con AudioWorklet) ahora compila correctamente, permitiendo la Fase 9 completarse.
+
+### Verificación de Pruebas (2026-11-11)
+
+1. **`cargo test --workspace` (desde `rust/`):**
+   - 19 pruebas en `auraline-core` pasadas, 0 fallidas. Incluye:
+     - `test_biquad_flat_pass`, `test_denormal_sanitization`, `test_lr4_complementary_sum`
+     - `test_limiter_latency`, `test_limiter_no_clipping_at_low_level`, `test_limiter_gain_reduction`
+     - `test_core_engine_pipeline`, `test_c_ffi_lifecycle`, `test_simd_equivalence`, `test_neon_available`
+   - 0 fallidas, 0 ignoradas.
+2. **Gradle Android (`./gradlew testDebugUnitTest` con JAVA_HOME=jdk):**
+   - BUILD SUCCESSFUL, 19 tareas ejecutadas, 73 idempotentes.
+   - Cobertura: `:core:domain:testDebugUnitTest`, `:core:audio:testDebugUnitTest`, `:app:testDebugUnitTest`, `:core:ui:testDebugUnitTest`.
+   - Advertencia no crítica: `DiagnosticsScreen.kt` usa constructor `AudioTrack` deprecated (Java), sin afectar funcionalidad.
+
+### Resumen de Estado Final
+
+| Componente | Estado |
+|---|---|
+| `auraline-core` (Rust tests) | ✅ 19/19 pasadas |
+| `auraline-android` (JNI bindings) | ✅ Compila e integra |
+| `auraline-wasm` (WebAssembly) | ✅ Compilación corregida |
+| Android unit tests | ✅ BUILD SUCCESSFUL |
+| Docs (14+ archivos) | ✅ Actualizados |
+

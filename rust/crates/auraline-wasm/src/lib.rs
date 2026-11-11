@@ -23,7 +23,7 @@ use auraline_core::AuraLineCoreEngine;
 static mut ENGINE: Option<AuraLineCoreEngine> = None;
 
 #[wasm_bindgen]
-pub extern "C" {
+extern "C" {
     #[wasm_bindgen(js_namespace = console)]
     fn log(s: &str);
 }
