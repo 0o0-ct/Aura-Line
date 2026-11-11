@@ -18,6 +18,17 @@ export interface ToneControls {
   subCutoffHz: number;
 }
 
+export interface EqFilters {
+  hpfEnabled: boolean;
+  hpfCutoffHz: number;
+  lpfEnabled: boolean;
+  lpfCutoffHz: number;
+  lowShelfHz: number;
+  lowShelfGainDb: number;
+  highShelfHz: number;
+  highShelfGainDb: number;
+}
+
 export interface StereoControls {
   balance: number;      // -100..100
   expansion: number;    // 1.0..2.0
@@ -69,6 +80,7 @@ export interface EqualizerState {
   gainRangeDb: number;
   preampDb: number;
   bands: EqBand[];
+  filters: EqFilters;
   tone: ToneControls;
   stereo: StereoControls;
   volume: VolumeControls;

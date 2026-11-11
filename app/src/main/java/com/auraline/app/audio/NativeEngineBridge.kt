@@ -122,6 +122,20 @@ object NativeEngineBridge {
                 }
             }
 
+            // Auxiliary EQ Filters: HPF / LPF / shelves, gobernados por el módulo de EQ y el bypass.
+            val filtersActive = state.modules.equalizer && !state.bypass
+            val fx = state.filters
+            NativeEngine.setEqFilters(
+                hpfEnabled = filtersActive && fx.hpfEnabled,
+                hpfCutoffHz = fx.hpfCutoffHz,
+                lpfEnabled = filtersActive && fx.lpfEnabled,
+                lpfCutoffHz = fx.lpfCutoffHz,
+                lowShelfHz = fx.lowShelfHz,
+                lowShelfDb = if (filtersActive) fx.lowShelfGainDb else 0f,
+                highShelfHz = fx.highShelfHz,
+                highShelfDb = if (filtersActive) fx.highShelfGainDb else 0f
+            )
+
             // Dynamics: el interruptor maestro de efectos también gobierna la cadena nativa,
             // igual que DynamicsProcessing. Sin esto, el motor de captura comprimía y abría
             // la puerta incluso con los efectos en bypass.

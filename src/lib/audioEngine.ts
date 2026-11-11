@@ -17,6 +17,10 @@ class AuraAudioEngine {
   private bassFilter: BiquadFilterNode | null = null;
   private midFilter: BiquadFilterNode | null = null;
   private trebleFilter: BiquadFilterNode | null = null;
+  private hpfFilter: BiquadFilterNode | null = null;
+  private lpfFilter: BiquadFilterNode | null = null;
+  private lowShelfFilter: BiquadFilterNode | null = null;
+  private highShelfFilter: BiquadFilterNode | null = null;
   private pannerNode: StereoPannerNode | null = null;
   private compressorNode: DynamicsCompressorNode | null = null;
   private compMakeupGain: GainNode | null = null;
@@ -75,6 +79,29 @@ class AuraAudioEngine {
 
     this.preampGain = ctx.createGain();
     this.preampGain.gain.value = 1.0;
+
+    // Auxiliary EQ Filters: HPF (elimina subgraves y vibraciones), LPF (extremo superior),
+    // y Low/High Shelf (control amplio de graves y agudos). Se procesan alrededor de la
+    // cascada de bandas; con ganancia 0 los shelves son transparentes por construcción.
+    this.hpfFilter = ctx.createBiquadFilter();
+    this.hpfFilter.type = "highpass";
+    this.hpfFilter.frequency.value = 25;
+    this.hpfFilter.Q.value = 0.7071;
+
+    this.lowShelfFilter = ctx.createBiquadFilter();
+    this.lowShelfFilter.type = "lowshelf";
+    this.lowShelfFilter.frequency.value = 100;
+    this.lowShelfFilter.gain.value = 0;
+
+    this.highShelfFilter = ctx.createBiquadFilter();
+    this.highShelfFilter.type = "highshelf";
+    this.highShelfFilter.frequency.value = 12000;
+    this.highShelfFilter.gain.value = 0;
+
+    this.lpfFilter = ctx.createBiquadFilter();
+    this.lpfFilter.type = "lowpass";
+    this.lpfFilter.frequency.value = 18000;
+    this.lpfFilter.Q.value = 0.7071;
 
     // 4-region Tone Filters
     this.subFilter = ctx.createBiquadFilter();
@@ -151,9 +178,15 @@ class AuraAudioEngine {
     }
 
     // Chain nodes:
-    // Source -> Preamp -> Tone (Sub->Bass->Mid->Treble) -> EQ Chain (0..24)
-    // -> Gate -> Panner -> Compressor -> Makeup -> Reverb (Dry+Wet) -> Limiter -> Master -> Analyser -> Destination
+    // Source -> Preamp -> HPF -> LowShelf -> Tone (Sub->Bass->Mid->Treble) -> EQ Chain (0..24)
+    // -> HighShelf -> LPF -> Gate -> Panner -> Compressor -> Makeup -> Reverb (Dry+Wet) -> Limiter -> Master -> Analyser -> Destination
     let current: AudioNode = this.preampGain;
+
+    current.connect(this.hpfFilter);
+    current = this.hpfFilter;
+
+    current.connect(this.lowShelfFilter);
+    current = this.lowShelfFilter;
 
     current.connect(this.subFilter);
     current = this.subFilter;
@@ -171,6 +204,12 @@ class AuraAudioEngine {
       current.connect(filter);
       current = filter;
     }
+
+    current.connect(this.highShelfFilter);
+    current = this.highShelfFilter;
+
+    current.connect(this.lpfFilter);
+    current = this.lpfFilter;
 
     current.connect(this.gateGain);
     current = this.gateGain;
@@ -260,6 +299,31 @@ class AuraAudioEngine {
       this.trebleFilter.gain.setTargetAtTime(toneActive ? state.tone.trebleDb : 0, ctx.currentTime, 0.02);
     }
 
+    // Update Auxiliary EQ Filters (HPF, shelves, LPF) — forman parte de la sección de EQ
+    // y quedan bajo el mismo interruptor (módulo de ecualización y bypass A/B).
+    const filters = state.filters;
+    const filtersActive = state.motorEnabled && state.modules.equalizer && !state.bypass;
+    if (this.hpfFilter) {
+      // En modo bypass, el corte queda por debajo del espectro audible.
+      const cutoff = filtersActive && filters.hpfEnabled ? filters.hpfCutoffHz : 5;
+      this.hpfFilter.frequency.setTargetAtTime(cutoff, ctx.currentTime, 0.02);
+      this.hpfFilter.Q.setTargetAtTime(0.7071, ctx.currentTime, 0.02);
+    }
+    if (this.lowShelfFilter) {
+      this.lowShelfFilter.frequency.setTargetAtTime(filters.lowShelfHz, ctx.currentTime, 0.02);
+      this.lowShelfFilter.gain.setTargetAtTime(filtersActive ? filters.lowShelfGainDb : 0, ctx.currentTime, 0.02);
+    }
+    if (this.highShelfFilter) {
+      this.highShelfFilter.frequency.setTargetAtTime(filters.highShelfHz, ctx.currentTime, 0.02);
+      this.highShelfFilter.gain.setTargetAtTime(filtersActive ? filters.highShelfGainDb : 0, ctx.currentTime, 0.02);
+    }
+    if (this.lpfFilter) {
+      // En modo bypass, el corte queda por encima del oído humano.
+      const cutoff = filtersActive && filters.lpfEnabled ? filters.lpfCutoffHz : 22050;
+      this.lpfFilter.frequency.setTargetAtTime(cutoff, ctx.currentTime, 0.02);
+      this.lpfFilter.Q.setTargetAtTime(0.7071, ctx.currentTime, 0.02);
+    }
+
     // Update Graphic EQ Bands
     const eqActive = state.motorEnabled && state.modules.equalizer && !state.bypass;
     state.bands.forEach((band, index) => {
@@ -340,6 +404,21 @@ class AuraAudioEngine {
       { name: "Preamplificador", active: isRunning && !this.currentState?.bypass && (this.currentState?.preampDb !== 0), detail: `${this.currentState?.preampDb ?? 0} dB` },
       { name: "Ecualizador gráfico", active: isRunning && (this.currentState?.modules.equalizer ?? true) && !this.currentState?.bypass, detail: `${this.currentState?.bands.length ?? 25} bandas activas` },
       { name: "Moldeador de tono", active: isRunning && (this.currentState?.modules.equalizer ?? true) && !this.currentState?.bypass, detail: "Sub, Graves, Medios, Agudos" },
+      {
+        name: "Filtros auxiliares (HPF/Shelf)",
+        active:
+          isRunning &&
+          (this.currentState?.modules.equalizer ?? true) &&
+          !this.currentState?.bypass &&
+          !!this.currentState &&
+          (this.currentState.filters.hpfEnabled ||
+            this.currentState.filters.lpfEnabled ||
+            this.currentState.filters.lowShelfGainDb !== 0 ||
+            this.currentState.filters.highShelfGainDb !== 0),
+        detail: this.currentState
+          ? `HPF ${this.currentState.filters.hpfEnabled ? `${Math.round(this.currentState.filters.hpfCutoffHz)} Hz` : "off"} · LPF ${this.currentState.filters.lpfEnabled ? `${Math.round(this.currentState.filters.lpfCutoffHz)} Hz` : "off"} · Shelf ${this.currentState.filters.lowShelfGainDb >= 0 ? "+" : ""}${this.currentState.filters.lowShelfGainDb}/${this.currentState.filters.highShelfGainDb >= 0 ? "+" : ""}${this.currentState.filters.highShelfGainDb} dB`
+          : "HPF · LPF · Shelves",
+      },
       { name: "Puerta / Expansor", active: isRunning && (this.currentState?.effectsEnabled ?? false) && (this.currentState?.modules.gate ?? false), detail: `${this.currentState?.gate.thresholdDb ?? -60} dB` },
       { name: "Compresor multibanda", active: isRunning && (this.currentState?.effectsEnabled ?? false) && (this.currentState?.modules.compressor ?? false), detail: `${this.currentState?.compressor.ratio ?? 4}:1 ratio` },
       { name: "Reverb acústica", active: isRunning && (this.currentState?.effectsEnabled ?? false) && (this.currentState?.modules.reverb ?? false), detail: `${Math.round((this.currentState?.reverb.mix ?? 0) * 100)}% mezcla` },

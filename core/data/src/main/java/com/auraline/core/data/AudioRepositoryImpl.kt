@@ -18,6 +18,7 @@ import com.auraline.core.domain.CompressorParams
 import com.auraline.core.domain.FactoryPresets
 import com.auraline.core.domain.EngineStatus
 import com.auraline.core.domain.EqualizerState
+import com.auraline.core.domain.EqFilters
 import com.auraline.core.domain.GateParams
 import com.auraline.core.domain.ModuleState
 import com.auraline.core.domain.UsageProfiles
@@ -39,6 +40,9 @@ import com.auraline.core.domain.clampReleaseMs
 import com.auraline.core.domain.clampAttackMs
 import com.auraline.core.domain.clampReverbMix
 import com.auraline.core.domain.clampStereoExpansion
+import com.auraline.core.domain.clampHpfHz
+import com.auraline.core.domain.clampLpfHz
+import com.auraline.core.domain.clampShelfDb
 import com.auraline.core.domain.clampSubCutoffHz
 import com.auraline.core.domain.clampThresholdDb
 import com.auraline.core.domain.clampToneDb
@@ -229,6 +233,14 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .putFloat("state_bass_hz", state.tone.bassFrequencyHz)
             .putFloat("state_treble_hz", state.tone.trebleFrequencyHz)
             .putFloat("state_sub_cutoff", state.tone.subCutoffHz)
+            .putBoolean("state_hpf_enabled", state.filters.hpfEnabled)
+            .putFloat("state_hpf_cutoff", state.filters.hpfCutoffHz)
+            .putBoolean("state_lpf_enabled", state.filters.lpfEnabled)
+            .putFloat("state_lpf_cutoff", state.filters.lpfCutoffHz)
+            .putFloat("state_low_shelf_hz", state.filters.lowShelfHz)
+            .putFloat("state_low_shelf_gain", state.filters.lowShelfGainDb)
+            .putFloat("state_high_shelf_hz", state.filters.highShelfHz)
+            .putFloat("state_high_shelf_gain", state.filters.highShelfGainDb)
             .putFloat("state_balance", state.stereo.balance)
             .putFloat("state_expansion", state.stereo.expansion)
             .putFloat("state_volume", state.volume.percent)
@@ -287,11 +299,31 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         val compressorDefaults = CompressorParams()
         val numBands = p.getInt("state_num_bands", 25).coerceIn(20, 25)
         val defaults = generateEqualizerBands(numBands)
-        // Acepta el formato antiguo ("g,g,g") y el nuevo ("f:g,f:g").
-        val stored = (p.getString("state_bands", "") ?: "")
+        // Acepta el formato muy antiguo ("g,g,g") y el actual ("f:g,f:g"). Al cambiar a la rejilla
+        // canónica de centros, la ganancia de cada banda antigua se conserva en la banda nueva más
+        // próxima en frecuencia.
+        val tokens = (p.getString("state_bands", "") ?: "")
             .split(",")
-            .mapNotNull { token -> token.trim().substringAfterLast(':').toFloatOrNull() }
-        val bands = defaults.mapIndexed { index, band -> band.copy(gainDb = stored.getOrElse(index) { 0f }) }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        val bands = when {
+            tokens.isEmpty() -> defaults
+            tokens.any { ':' !in it } -> {
+                val gains = tokens.mapNotNull { it.substringAfterLast(':').toFloatOrNull() }
+                defaults.mapIndexed { index, band -> band.copy(gainDb = gains.getOrElse(index) { 0f }) }
+            }
+            else -> {
+                val entries = tokens.mapNotNull { token ->
+                    val f = token.substringBefore(':').toFloatOrNull()
+                    val g = token.substringAfterLast(':').toFloatOrNull()
+                    if (f != null && g != null) f to g else null
+                }
+                defaults.map { band ->
+                    val nearest = entries.minByOrNull { kotlin.math.abs(it.first - band.frequencyHz) }
+                    band.copy(gainDb = nearest?.second ?: 0f)
+                }
+            }
+        }
 
         return EqualizerState(
             numBands = numBands,
@@ -312,6 +344,16 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
                 bassFrequencyHz = p.getFloat("state_bass_hz", 100f).coerceIn(40f, 400f),
                 trebleFrequencyHz = p.getFloat("state_treble_hz", 8000f).coerceIn(2000f, 16000f),
                 subCutoffHz = p.getFloat("state_sub_cutoff", 60f).coerceIn(20f, 100f)
+            ),
+            filters = EqFilters(
+                hpfEnabled = p.getBoolean("state_hpf_enabled", true),
+                hpfCutoffHz = p.getFloat("state_hpf_cutoff", 25f).coerceIn(5f, 500f),
+                lpfEnabled = p.getBoolean("state_lpf_enabled", false),
+                lpfCutoffHz = p.getFloat("state_lpf_cutoff", 18000f).coerceIn(4_000f, 24_000f),
+                lowShelfHz = p.getFloat("state_low_shelf_hz", 100f).coerceIn(20f, 1_000f),
+                lowShelfGainDb = p.getFloat("state_low_shelf_gain", 0f).coerceIn(-15f, 15f),
+                highShelfHz = p.getFloat("state_high_shelf_hz", 12000f).coerceIn(1_000f, 20_000f),
+                highShelfGainDb = p.getFloat("state_high_shelf_gain", 0f).coerceIn(-15f, 15f)
             ),
             stereo = StereoControls(
                 balance = p.getFloat("state_balance", 0f),
@@ -382,6 +424,60 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
     override fun setEffectsEnabled(enabled: Boolean) = saveState(_state.value.copy(effectsEnabled = enabled))
 
     override fun setPreamp(db: Float) = saveState(_state.value.copy(preampDb = clampPreampDb(db)))
+
+    override fun setHpf(enabled: Boolean, cutoffHz: Float) {
+        val current = _state.value
+        saveState(
+            current.copy(
+                filters = current.filters.copy(
+                    hpfEnabled = enabled,
+                    hpfCutoffHz = clampHpfHz(cutoffHz)
+                ),
+                presetName = "Personalizado"
+            )
+        )
+    }
+
+    override fun setLpf(enabled: Boolean, cutoffHz: Float) {
+        val current = _state.value
+        saveState(
+            current.copy(
+                filters = current.filters.copy(
+                    lpfEnabled = enabled,
+                    lpfCutoffHz = clampLpfHz(cutoffHz)
+                ),
+                presetName = "Personalizado"
+            )
+        )
+    }
+
+    override fun setLowShelf(gainDb: Float) {
+        val current = _state.value
+        saveState(
+            current.copy(
+                filters = current.filters.copy(
+                    lowShelfGainDb = clampShelfDb(kotlin.math.round(gainDb * 10f) / 10f)
+                ),
+                presetName = "Personalizado"
+            )
+        )
+    }
+
+    override fun setHighShelf(gainDb: Float) {
+        val current = _state.value
+        saveState(
+            current.copy(
+                filters = current.filters.copy(
+                    highShelfGainDb = clampShelfDb(kotlin.math.round(gainDb * 10f) / 10f)
+                ),
+                presetName = "Personalizado"
+            )
+        )
+    }
+
+    override fun resetEqFilters() {
+        saveState(_state.value.copy(filters = EqFilters(), presetName = "Personalizado"))
+    }
 
     override fun setBandGain(bandId: Int, gainDb: Float) {
         val current = _state.value
@@ -719,6 +815,7 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         saveState(
             current.copy(
                 bands = generateEqualizerBands(current.numBands),
+                filters = EqFilters(),
                 tone = ToneControls(
                     bassFrequencyHz = current.tone.bassFrequencyHz,
                     trebleFrequencyHz = current.tone.trebleFrequencyHz
@@ -789,6 +886,16 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
             .put("damping", state.reverb.damping.toDouble())
             .put("size", state.reverb.size.toDouble()))
 
+        root.put("filters", JSONObject()
+            .put("hpfEnabled", state.filters.hpfEnabled)
+            .put("hpfCutoff", state.filters.hpfCutoffHz.toDouble())
+            .put("lpfEnabled", state.filters.lpfEnabled)
+            .put("lpfCutoff", state.filters.lpfCutoffHz.toDouble())
+            .put("lowShelfHz", state.filters.lowShelfHz.toDouble())
+            .put("lowShelfGain", state.filters.lowShelfGainDb.toDouble())
+            .put("highShelfHz", state.filters.highShelfHz.toDouble())
+            .put("highShelfGain", state.filters.highShelfGainDb.toDouble()))
+
         root.put("compressor", JSONObject()
             .put("threshold", state.compressor.threshold.toDouble())
             .put("ratio", state.compressor.ratio.toDouble())
@@ -813,11 +920,23 @@ class AudioRepositoryImpl(context: Context) : AudioRepository {
         }
         val reverb = root.optJSONObject("reverb")
         val compressor = root.optJSONObject("compressor")
+        val filtersObj = root.optJSONObject("filters")
+        val filters = EqFilters(
+            hpfEnabled = filtersObj?.optBoolean("hpfEnabled", false) ?: false,
+            hpfCutoffHz = (filtersObj?.optDouble("hpfCutoff", 25.0)?.toFloat() ?: 25f).coerceIn(5f, 500f),
+            lpfEnabled = filtersObj?.optBoolean("lpfEnabled", false) ?: false,
+            lpfCutoffHz = (filtersObj?.optDouble("lpfCutoff", 18000.0)?.toFloat() ?: 18000f).coerceIn(4_000f, 24_000f),
+            lowShelfHz = (filtersObj?.optDouble("lowShelfHz", 100.0)?.toFloat() ?: 100f).coerceIn(20f, 1_000f),
+            lowShelfGainDb = (filtersObj?.optDouble("lowShelfGain", 0.0)?.toFloat() ?: 0f).coerceIn(-15f, 15f),
+            highShelfHz = (filtersObj?.optDouble("highShelfHz", 12000.0)?.toFloat() ?: 12000f).coerceIn(1_000f, 20_000f),
+            highShelfGainDb = (filtersObj?.optDouble("highShelfGain", 0.0)?.toFloat() ?: 0f).coerceIn(-15f, 15f)
+        )
 
         return EqualizerState(
             numBands = bandCount,
             preampDb = root.optDouble("preamp", 0.0).toFloat(),
             bands = bands,
+            filters = filters,
             motorEnabled = root.optBoolean("motor", false),
             effectsEnabled = root.optBoolean("effects", false),
             tone = ToneControls(

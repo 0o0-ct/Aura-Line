@@ -360,15 +360,101 @@ export function EqualizerScreen({
         </p>
       </AuraCard>
 
+      {/* Auxiliary EQ Filters */}
+      <AuraCard>
+        <div className="flex items-center justify-between mb-3">
+          <SectionTitle
+            text="Filtros auxiliares"
+            trailing="HPF · LPF · Shelf"
+            className="mb-0"
+          />
+          <button
+            type="button"
+            onClick={() => repo.resetEqFilters()}
+            className="text-xs font-semibold text-[#8E9BAE] hover:text-white transition-colors"
+          >
+            Restablecer
+          </button>
+        </div>
+        <p className="text-xs text-[#8E9BAE] mb-3">
+          Independientes de las 25 bandas. El HPF protege de vibraciones y saturación en
+          bajas frecuencias; las shelves modifican de forma amplia los extremos del espectro.
+        </p>
+
+        {/* High Pass Filter */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-white">Filtro pasa-altos</span>
+            <SelectableChip
+              text={state.filters.hpfEnabled ? "Activado" : "Apagado"}
+              selected={state.filters.hpfEnabled}
+              onClick={() => repo.setHpf(!state.filters.hpfEnabled, state.filters.hpfCutoffHz)}
+              accentColor={accentColor}
+            />
+          </div>
+          <AuraSliderRow
+            label="Corte HPF"
+            valueText={`${Math.round(state.filters.hpfCutoffHz)} Hz`}
+            value={state.filters.hpfCutoffHz}
+            valueRange={[5, 500]}
+            step={1}
+            onValueChange={(val) => repo.setHpf(state.filters.hpfEnabled, val)}
+            accentColor={accentColor}
+          />
+        </div>
+
+        {/* Low Pass Filter */}
+        <div className="space-y-1 mt-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-white">Filtro pasa-bajos</span>
+            <SelectableChip
+              text={state.filters.lpfEnabled ? "Activado" : "Apagado"}
+              selected={state.filters.lpfEnabled}
+              onClick={() => repo.setLpf(!state.filters.lpfEnabled, state.filters.lpfCutoffHz)}
+              accentColor={accentColor}
+            />
+          </div>
+          <AuraSliderRow
+            label="Corte LPF"
+            valueText={`${Math.round(state.filters.lpfCutoffHz)} Hz`}
+            value={state.filters.lpfCutoffHz}
+            valueRange={[4000, 24000]}
+            step={100}
+            onValueChange={(val) => repo.setLpf(state.filters.lpfEnabled, val)}
+            accentColor={accentColor}
+          />
+        </div>
+
+        {/* Low / High Shelves */}
+        <AuraSliderRow
+          label="Shelf de graves (100 Hz)"
+          valueText={`${formatGain(state.filters.lowShelfGainDb)} dB`}
+          value={state.filters.lowShelfGainDb}
+          valueRange={[-15, 15]}
+          step={0.5}
+          onValueChange={(val) => repo.setLowShelf(val)}
+          accentColor={accentColor}
+        />
+        <AuraSliderRow
+          label="Shelf de agudos (12 kHz)"
+          valueText={`${formatGain(state.filters.highShelfGainDb)} dB`}
+          value={state.filters.highShelfGainDb}
+          valueRange={[-15, 15]}
+          step={0.5}
+          onValueChange={(val) => repo.setHighShelf(val)}
+          accentColor={accentColor}
+        />
+      </AuraCard>
+
       {/* Dedicated Low Frequency Sources Card */}
       <AuraCard>
         <SectionTitle
-          text="Fuentes graves"
-          trailing={`${LowFrequencySources.length} instrumentos`}
+          text="Perfiles de graves"
+          trailing={`${LowFrequencySources.length} perfiles`}
         />
         <p className="text-xs text-[#8E9BAE] mb-3">
-          Cada banda grave tiene un dueño. El botón + prepara esa fuente sobre tu curva
-          actual, sin borrarla.
+          Cada instrumento es un perfil que toca varias bandas a la vez. El botón + suma su curva
+          sobre tu ecualización actual, sin borrarla.
         </p>
 
         <div className="divide-y divide-white/5">
@@ -563,7 +649,7 @@ export function EqualizerScreen({
             <div className="overflow-y-auto space-y-5 pr-2">
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-white mb-2">
-                  Mapa de graves por banda
+                  Perfiles de graves por instrumento
                 </h4>
                 <div className="space-y-3">
                   {LowFrequencyRoles.map((role, idx) => (

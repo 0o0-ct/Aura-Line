@@ -16,6 +16,16 @@ object PresetExporterImporter {
         sb.append("  \"version\": \"4.1.0\",\n")
         sb.append(String.format(Locale.US, "  \"preampDb\": %.2f,\n", state.preampDb))
         sb.append("  \"numBands\": ${state.numBands},\n")
+        sb.append("  \"filters\": {\n")
+        sb.append(String.format(Locale.US, "    \"hpfEnabled\": %s,\n", if (state.filters.hpfEnabled) "true" else "false"))
+        sb.append(String.format(Locale.US, "    \"hpfCutoff\": %.1f,\n", state.filters.hpfCutoffHz))
+        sb.append(String.format(Locale.US, "    \"lpfEnabled\": %s,\n", if (state.filters.lpfEnabled) "true" else "false"))
+        sb.append(String.format(Locale.US, "    \"lpfCutoff\": %.1f,\n", state.filters.lpfCutoffHz))
+        sb.append(String.format(Locale.US, "    \"lowShelfHz\": %.1f,\n", state.filters.lowShelfHz))
+        sb.append(String.format(Locale.US, "    \"lowShelfGain\": %.2f,\n", state.filters.lowShelfGainDb))
+        sb.append(String.format(Locale.US, "    \"highShelfHz\": %.1f,\n", state.filters.highShelfHz))
+        sb.append(String.format(Locale.US, "    \"highShelfGain\": %.2f\n", state.filters.highShelfGainDb))
+        sb.append("  },\n")
         sb.append("  \"bands\": [\n")
         state.bands.forEachIndexed { i, b ->
             sb.append(String.format(Locale.US, "    {\"freq\": %.1f, \"gain\": %.2f, \"q\": %.2f}", b.frequencyHz, b.gainDb, b.q))
@@ -53,6 +63,25 @@ object PresetExporterImporter {
             bandsList.add(EqBand(id = idx++, frequencyHz = freq, gainDb = gain, q = q))
         }
 
+        val hpfEnabledMatch = "\"hpfEnabled\":\\s*(true|false)".toRegex().find(jsonString)
+        val hpfCutoffMatch = "\"hpfCutoff\":\\s*([-+]?[\\d.]+)".toRegex().find(jsonString)
+        val lpfEnabledMatch = "\"lpfEnabled\":\\s*(true|false)".toRegex().find(jsonString)
+        val lpfCutoffMatch = "\"lpfCutoff\":\\s*([-+]?[\\d.]+)".toRegex().find(jsonString)
+        val lowShelfHzMatch = "\"lowShelfHz\":\\s*([-+]?[\\d.]+)".toRegex().find(jsonString)
+        val lowShelfGainMatch = "\"lowShelfGain\":\\s*([-+]?[\\d.]+)".toRegex().find(jsonString)
+        val highShelfHzMatch = "\"highShelfHz\":\\s*([-+]?[\\d.]+)".toRegex().find(jsonString)
+        val highShelfGainMatch = "\"highShelfGain\":\\s*([-+]?[\\d.]+)".toRegex().find(jsonString)
+        val filters = EqFilters(
+            hpfEnabled = hpfEnabledMatch?.groupValues?.get(1) == "true",
+            hpfCutoffHz = hpfCutoffMatch?.groupValues?.get(1)?.toFloatOrNull()?.coerceIn(5f, 500f) ?: 25f,
+            lpfEnabled = lpfEnabledMatch?.groupValues?.get(1) == "true",
+            lpfCutoffHz = lpfCutoffMatch?.groupValues?.get(1)?.toFloatOrNull()?.coerceIn(4_000f, 24_000f) ?: 18000f,
+            lowShelfHz = lowShelfHzMatch?.groupValues?.get(1)?.toFloatOrNull()?.coerceIn(20f, 1_000f) ?: 100f,
+            lowShelfGainDb = lowShelfGainMatch?.groupValues?.get(1)?.toFloatOrNull()?.coerceIn(-15f, 15f) ?: 0f,
+            highShelfHz = highShelfHzMatch?.groupValues?.get(1)?.toFloatOrNull()?.coerceIn(1_000f, 20_000f) ?: 12000f,
+            highShelfGainDb = highShelfGainMatch?.groupValues?.get(1)?.toFloatOrNull()?.coerceIn(-15f, 15f) ?: 0f
+        )
+
         val subMatch = "\"subDb\":\\s*([-+]?\\d*\\.?\\d+)".toRegex().find(jsonString)
         val bassMatch = "\"bassDb\":\\s*([-+]?\\d*\\.?\\d+)".toRegex().find(jsonString)
         val midMatch = "\"midDb\":\\s*([-+]?\\d*\\.?\\d+)".toRegex().find(jsonString)
@@ -69,6 +98,7 @@ object PresetExporterImporter {
             numBands = numBands,
             preampDb = preampDb,
             bands = if (bandsList.isNotEmpty()) bandsList else generateEqualizerBands(numBands),
+            filters = filters,
             tone = toneControls,
             presetName = name
         )

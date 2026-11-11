@@ -381,4 +381,66 @@ mod tests {
         assert_eq!(sanitize_denormal(-1e-16), 0.0);
         assert_ne!(sanitize_denormal(1e-3), 0.0);
     }
+
+    fn rms_gain_for(params: BiquadParams, tone_hz: f64, sample_rate: f64, frames: usize) -> f64 {
+        let mut filter = SmoothedBiquad::new();
+        filter.set_immediate(params);
+        let mut sum_in = 0.0f64;
+        let mut sum_out = 0.0f64;
+        for i in 0..frames {
+            let t = i as f64 / sample_rate;
+            let sample = (2.0 * std::f64::consts::PI * tone_hz * t).sin() as f32;
+            let y = filter.process_l(sample);
+            sum_in += (sample as f64) * (sample as f64);
+            sum_out += (y as f64) * (y as f64);
+        }
+        (sum_out / sum_in).sqrt()
+    }
+
+    #[test]
+    fn test_low_shelf_amplifies_lows_not_highs() {
+        let fs = 48000.0;
+        let boost = low_shelf(fs, 100.0, 12.0, 0.7071);
+        let flat = low_shelf(fs, 100.0, 0.0, 0.7071);
+
+        let ratio_low = rms_gain_for(boost, 50.0, fs, 24000);
+        let ratio_high = rms_gain_for(boost, 8000.0, fs, 24000);
+        let ratio_flat = rms_gain_for(flat, 50.0, fs, 24000);
+
+        assert!(ratio_low > 2.0, "Low Shelf +12 dB debe amplificar 50 Hz (ratio {ratio_low})");
+        assert!((ratio_high - 1.0).abs() < 0.05, "Low Shelf no debe tocar 8 kHz (ratio {ratio_high})");
+        assert!((ratio_flat - 1.0).abs() < 0.01, "Low Shelf a 0 dB debe ser plano (ratio {ratio_flat})");
+    }
+
+    #[test]
+    fn test_high_shelf_amplifies_highs_not_lows() {
+        let fs = 48000.0;
+        let boost = high_shelf(fs, 12000.0, 12.0, 0.7071);
+        let flat = high_shelf(fs, 12000.0, 0.0, 0.7071);
+
+        let ratio_high = rms_gain_for(boost, 15000.0, fs, 24000);
+        let ratio_low = rms_gain_for(boost, 200.0, fs, 24000);
+        let ratio_flat = rms_gain_for(flat, 15000.0, fs, 24000);
+
+        assert!(ratio_high > 2.0, "High Shelf +12 dB debe amplificar 15 kHz (ratio {ratio_high})");
+        assert!((ratio_low - 1.0).abs() < 0.05, "High Shelf no debe tocar 200 Hz (ratio {ratio_low})");
+        assert!((ratio_flat - 1.0).abs() < 0.01, "High Shelf a 0 dB debe ser plano (ratio {ratio_flat})");
+    }
+
+    #[test]
+    fn test_high_pass_and_low_pass_cut_their_sides() {
+        let fs = 48000.0;
+        let hp = high_pass(fs, 100.0, 0.7071);
+        let lp = low_pass(fs, 18000.0, 0.7071);
+
+        let below_cut = rms_gain_for(hp, 40.0, fs, 24000);
+        let above_cut = rms_gain_for(hp, 1000.0, fs, 24000);
+        let lp_high = rms_gain_for(lp, 19000.0, fs, 24000);
+        let lp_low = rms_gain_for(lp, 200.0, fs, 24000);
+
+        assert!(below_cut < 0.5, "HPF debe cortar 40 Hz (gain {below_cut})");
+        assert!(above_cut > 0.9, "HPF no debe cortar 1 kHz (gain {above_cut})");
+        assert!(lp_high < 1.0, "LPF debe empujar 19 kHz hacia abajo (gain {lp_high})");
+        assert!(lp_low > 0.9, "LPF no debe cortar 200 Hz (gain {lp_low})");
+    }
 }

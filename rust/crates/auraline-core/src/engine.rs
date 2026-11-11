@@ -11,7 +11,7 @@ use crate::analyzer::signal_generator::{GeneratorMode, SignalGenerator};
 use crate::bass::{BassEnhancement, BassMono, SubBassGenerator};
 use crate::dynamics::DynamicsSuite;
 use crate::equalizer::EqualizerCascade;
-use crate::filters::biquad::{high_pass, AtomicF64, SmoothedBiquad};
+use crate::filters::biquad::{high_pass, high_shelf, low_pass, low_shelf, AtomicF64, SmoothedBiquad};
 use crate::limiter::true_peak::LookaheadTruePeakLimiter;
 use crate::presets::LowInstrumentEnhancer;
 use crate::reverb::fdn::StereoFDNReverb;
@@ -27,6 +27,15 @@ pub struct AuraLineCoreEngine {
     pub subsonic_enabled: AtomicBool,
     pub subsonic_hp_l: SmoothedBiquad,
     pub subsonic_hp_r: SmoothedBiquad,
+
+    // Auxiliary EQ Filters: LPF (extremo superior) y shelves (control amplio de extremos)
+    pub lpf_enabled: AtomicBool,
+    pub lpf_l: SmoothedBiquad,
+    pub lpf_r: SmoothedBiquad,
+    pub low_shelf_l: SmoothedBiquad,
+    pub low_shelf_r: SmoothedBiquad,
+    pub high_shelf_l: SmoothedBiquad,
+    pub high_shelf_r: SmoothedBiquad,
 
     // Modules
     pub eq_cascade: EqualizerCascade,
@@ -56,6 +65,13 @@ impl AuraLineCoreEngine {
             subsonic_enabled: AtomicBool::new(true),
             subsonic_hp_l: SmoothedBiquad::new(),
             subsonic_hp_r: SmoothedBiquad::new(),
+            lpf_enabled: AtomicBool::new(false),
+            lpf_l: SmoothedBiquad::new(),
+            lpf_r: SmoothedBiquad::new(),
+            low_shelf_l: SmoothedBiquad::new(),
+            low_shelf_r: SmoothedBiquad::new(),
+            high_shelf_l: SmoothedBiquad::new(),
+            high_shelf_r: SmoothedBiquad::new(),
             eq_cascade: EqualizerCascade::new(),
             generator: SignalGenerator::new(fs),
             limiter: LookaheadTruePeakLimiter::new(fs_f32),
@@ -75,6 +91,18 @@ impl AuraLineCoreEngine {
         engine.subsonic_hp_l.set_immediate(hp_params);
         engine.subsonic_hp_r.set_immediate(hp_params);
 
+        // Initialize auxiliary filters: LPF por encima del espectro audible (deshabilitado),
+        // shelves planas (ganancia 0 = transparentes).
+        let lp_params = low_pass(fs, 22050.0, 0.7071);
+        engine.lpf_l.set_immediate(lp_params);
+        engine.lpf_r.set_immediate(lp_params);
+        let flat_low_shelf = low_shelf(fs, 100.0, 0.0, 0.7071);
+        engine.low_shelf_l.set_immediate(flat_low_shelf);
+        engine.low_shelf_r.set_immediate(flat_low_shelf);
+        let flat_high_shelf = high_shelf(fs, 12000.0, 0.0, 0.7071);
+        engine.high_shelf_l.set_immediate(flat_high_shelf);
+        engine.high_shelf_r.set_immediate(flat_high_shelf);
+
         engine
     }
 
@@ -86,6 +114,46 @@ impl AuraLineCoreEngine {
         let clamped = gain_db.clamp(-36.0, 36.0);
         let lin = 10.0f64.powf((clamped as f64) / 20.0);
         self.preamp_gain.store(lin, Ordering::Relaxed);
+    }
+
+    /// Configura los filtros auxiliares del ecualizador (HPF, LPF y shelves).
+    /// El HPF reutiliza la etapa subsónica; ganancia 0 en los shelves los deja planos.
+    pub fn set_eq_filters(
+        &self,
+        hpf_enabled: bool,
+        hpf_cutoff_hz: f32,
+        lpf_enabled: bool,
+        lpf_cutoff_hz: f32,
+        low_shelf_hz: f32,
+        low_shelf_db: f32,
+        high_shelf_hz: f32,
+        high_shelf_db: f32,
+    ) {
+        let fs = self.sample_rate;
+
+        let hp_hz = (hpf_cutoff_hz as f64).clamp(5.0, 500.0);
+        self.subsonic_enabled.store(hpf_enabled, Ordering::Relaxed);
+        let hp = high_pass(fs, hp_hz, 0.7071);
+        self.subsonic_hp_l.set_target(hp);
+        self.subsonic_hp_r.set_target(hp);
+
+        let lp_hz = (lpf_cutoff_hz as f64).clamp(4000.0, 24000.0);
+        self.lpf_enabled.store(lpf_enabled, Ordering::Relaxed);
+        let lp = low_pass(fs, lp_hz, 0.7071);
+        self.lpf_l.set_target(lp);
+        self.lpf_r.set_target(lp);
+
+        let ls_hz = (low_shelf_hz as f64).clamp(20.0, 1000.0);
+        let ls_db = (low_shelf_db as f64).clamp(-15.0, 15.0);
+        let ls = low_shelf(fs, ls_hz, ls_db, 0.7071);
+        self.low_shelf_l.set_target(ls);
+        self.low_shelf_r.set_target(ls);
+
+        let hs_hz = (high_shelf_hz as f64).clamp(1000.0, 20000.0);
+        let hs_db = (high_shelf_db as f64).clamp(-15.0, 15.0);
+        let hs = high_shelf(fs, hs_hz, hs_db, 0.7071);
+        self.high_shelf_l.set_target(hs);
+        self.high_shelf_r.set_target(hs);
     }
 
     #[inline(always)]
@@ -100,6 +168,7 @@ impl AuraLineCoreEngine {
         let preamp = self.preamp_gain.load(Ordering::Relaxed) as f32;
         let gen_mode = self.generator.get_mode();
         let subsonic_active = self.subsonic_enabled.load(Ordering::Relaxed);
+        let lpf_active = self.lpf_enabled.load(Ordering::Relaxed);
 
         let mut sum_sq_l = 0.0f32;
         let mut sum_sq_r = 0.0f32;
@@ -128,8 +197,21 @@ impl AuraLineCoreEngine {
                     cur_r = self.subsonic_hp_r.process_r(cur_r);
                 }
 
+                // Low Shelf (ganancia 0 = plano)
+                cur_l = self.low_shelf_l.process_l(cur_l);
+                cur_r = self.low_shelf_r.process_r(cur_r);
+
                 // 25-Band EQ
                 self.eq_cascade.process(&mut cur_l, &mut cur_r);
+
+                // High Shelf (ganancia 0 = plano)
+                cur_l = self.high_shelf_l.process_l(cur_l);
+                cur_r = self.high_shelf_r.process_r(cur_r);
+
+                if lpf_active {
+                    cur_l = self.lpf_l.process_l(cur_l);
+                    cur_r = self.lpf_r.process_r(cur_r);
+                }
 
                 // Bass Processing (before dynamics for proper level control)
                 self.bass_mono.process(&mut cur_l, &mut cur_r);

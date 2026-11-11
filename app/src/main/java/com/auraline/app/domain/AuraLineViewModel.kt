@@ -49,6 +49,11 @@ class AuraLineViewModel(private val repository: AudioRepository) : ViewModel() {
     fun toggleMotor(enabled: Boolean) = repository.toggleMotor(enabled)
     fun setEffectsEnabled(enabled: Boolean) = repository.setEffectsEnabled(enabled)
     fun setPreamp(db: Float) = repository.setPreamp(db)
+    fun setHpf(enabled: Boolean, cutoffHz: Float) = repository.setHpf(enabled, cutoffHz)
+    fun setLpf(enabled: Boolean, cutoffHz: Float) = repository.setLpf(enabled, cutoffHz)
+    fun setLowShelf(gainDb: Float) = repository.setLowShelf(gainDb)
+    fun setHighShelf(gainDb: Float) = repository.setHighShelf(gainDb)
+    fun resetEqFilters() = repository.resetEqFilters()
     fun setBandGain(bandId: Int, gainDb: Float) = repository.setBandGain(bandId, gainDb)
     fun setBandEnabled(bandId: Int, enabled: Boolean) = repository.setBandEnabled(bandId, enabled)
     fun setBandGroupGainOffset(region: com.auraline.core.domain.AcousticRegion, deltaDb: Float) =

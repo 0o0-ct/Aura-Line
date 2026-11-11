@@ -853,9 +853,54 @@ object AuraLineEngine {
     }
 
     /**
-     * Ganancia final de una banda del PreEq: banda + tono + sub-bajo, aplicada una sola vez.
-     * Cuando el módulo de ecualización está en bypass se conservan tono y sub-bajo, que son
-     * controles independientes de la curva gráfica.
+     * Filtros auxiliares del ecualizador (HPF, LPF y estanterías) aplicados sobre la rejilla
+     * de bandas del PreEq, siguiendo el mismo patrón con el que este motor sintetiza tono y
+     * sub-bajo. El camino nativo (Rust) y el web aplican estos filtros como biquads reales;
+     * en el PreEq se reflejan como ganancia por banda.
+     */
+    private fun auxiliaryFilterGainDb(state: EqualizerState, centerHz: Float): Float {
+        if (centerHz <= 0f) return 0f
+        val f = state.filters
+        var gain = 0f
+
+        // Low Shelf: refuerzo amplio en graves, con caída suave hacia medios.
+        if (f.lowShelfGainDb != 0f) {
+            val f0 = f.lowShelfHz.coerceIn(20f, 1000f)
+            gain += if (centerHz <= f0) {
+                f.lowShelfGainDb
+            } else {
+                val ratio = centerHz / f0
+                f.lowShelfGainDb / (1f + (ratio - 1f) * (ratio - 1f) * 2f)
+            }
+        }
+
+        // High Shelf: refuerzo amplio en agudos, con caída suave hacia medios.
+        if (f.highShelfGainDb != 0f) {
+            val f0 = f.highShelfHz.coerceIn(1000f, 20000f)
+            gain += if (centerHz >= f0) {
+                f.highShelfGainDb
+            } else {
+                val ratio = f0 / centerHz.coerceAtLeast(10f)
+                f.highShelfGainDb / (1f + (ratio - 1f) * (ratio - 1f) * 2f)
+            }
+        }
+
+        // HPF: atenuación progresiva por debajo del corte (protege de vibraciones y retumbe).
+        if (f.hpfEnabled && centerHz < f.hpfCutoffHz) {
+            gain -= 12f * (1f - centerHz / f.hpfCutoffHz.coerceAtLeast(10f))
+        }
+
+        // LPF: atenuación progresiva por encima del corte (controla el extremo superior).
+        if (f.lpfEnabled && centerHz > f.lpfCutoffHz) {
+            gain -= 12f * (1f - f.lpfCutoffHz.coerceAtLeast(1000f) / centerHz)
+        }
+
+        return gain.coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+    }
+
+    /**
+     * Ganancia de tono aplicada por banda en el PreEq: tono paramétrico + refuerzo de sub-bajo.
+     * El tono no se repite en el MBC: se aplica una sola vez aquí.
      */
     private fun parametricToneGain(state: EqualizerState, centerHz: Float): Float {
         val toneBands = state.tone.bands
@@ -915,9 +960,9 @@ object AuraLineEngine {
     }
 
     /**
-     * Ganancia final de una banda del PreEq: banda + tono + sub-bajo, aplicada una sola vez.
-     * Cuando el módulo de ecualización está en bypass se conservan tono y sub-bajo, que son
-     * controles independientes de la curva gráfica.
+     * Ganancia final de una banda del PreEq: banda + filtros auxiliares + tono + sub-bajo,
+     * aplicada una sola vez. Cuando el módulo de ecualización está en bypass se conservan
+     * tono y sub-bajo, que son controles independientes de la curva gráfica.
      */
     internal fun preEqGainDb(
         state: EqualizerState,
@@ -927,8 +972,9 @@ object AuraLineEngine {
     ): Float {
         if (state.bypass) return 0f
         val tone = parametricToneGain(state, centerHz)
+        val filters = if (eqActive) auxiliaryFilterGainDb(state, centerHz) else 0f
         val base = if (eqActive) bandGainDb else 0f
-        return (base + tone).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
+        return (base + filters + tone).coerceIn(-MAX_BAND_GAIN_DB, MAX_BAND_GAIN_DB)
     }
 
     /**
@@ -969,6 +1015,15 @@ object AuraLineEngine {
         if (globalDpActive || hasActivePlayerSession) {
             stages.add(EffectStage("DynamicsProcessing", true, "Motor principal activo"))
             stages.add(EffectStage("PreEQ", desired.modules.equalizer && !desired.bypass, "${builtBandCount} bandas"))
+            stages.add(
+                EffectStage(
+                    "Filtros auxiliares",
+                    desired.modules.equalizer && !desired.bypass &&
+                        (desired.filters.hpfEnabled || desired.filters.lpfEnabled ||
+                            desired.filters.lowShelfGainDb != 0f || desired.filters.highShelfGainDb != 0f),
+                    "HPF ${if (desired.filters.hpfEnabled) "${desired.filters.hpfCutoffHz.toInt()} Hz" else "off"} · LPF ${if (desired.filters.lpfEnabled) "${desired.filters.lpfCutoffHz.toInt()} Hz" else "off"}"
+                )
+            )
             stages.add(EffectStage("MBC", desired.modules.compressor && !desired.bypass, "3 bandas"))
             stages.add(EffectStage("Limitador", desired.modules.limiter && !desired.bypass, "True-Peak Limiter"))
         } else if (globalEqActive) {

@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "app/src", "core"]
+  "exclude": ["node_modules", "app/src", "core", "src/auraline-processor.ts"]
 }

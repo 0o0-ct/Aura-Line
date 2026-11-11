@@ -133,6 +133,35 @@ pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setPreampGain(
 }
 
 #[no_mangle]
+pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setEqFilters(
+    _env: *mut std::ffi::c_void,
+    _this: *mut std::ffi::c_void,
+    hpf_enabled: u8,
+    hpf_cutoff_hz: c_float,
+    lpf_enabled: u8,
+    lpf_cutoff_hz: c_float,
+    low_shelf_hz: c_float,
+    low_shelf_db: c_float,
+    high_shelf_hz: c_float,
+    high_shelf_db: c_float,
+) {
+    if let Some(mutex) = G_ENGINE.get() {
+        if let Ok(guard) = mutex.lock() {
+            guard.set_eq_filters(
+                hpf_enabled != 0,
+                hpf_cutoff_hz,
+                lpf_enabled != 0,
+                lpf_cutoff_hz,
+                low_shelf_hz,
+                low_shelf_db,
+                high_shelf_hz,
+                high_shelf_db,
+            );
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn Java_com_auraline_app_audio_NativeEngine_setEqBand(
     _env: *mut std::ffi::c_void,
     _this: *mut std::ffi::c_void,

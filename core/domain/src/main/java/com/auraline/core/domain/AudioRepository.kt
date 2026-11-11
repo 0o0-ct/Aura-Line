@@ -19,6 +19,16 @@ interface AudioRepository {
     fun setPreamp(db: Float)
     fun setBandGain(bandId: Int, gainDb: Float)
     fun setBandEnabled(bandId: Int, enabled: Boolean)
+    /** Filtro pasa-altos (HPF): elimina subgraves y vibraciones. */
+    fun setHpf(enabled: Boolean, cutoffHz: Float)
+    /** Filtro pasa-bajos (LPF): controla el extremo superior. */
+    fun setLpf(enabled: Boolean, cutoffHz: Float)
+    /** Estantería de graves (Low Shelf): +/-15 dB en torno a los graves. */
+    fun setLowShelf(gainDb: Float)
+    /** Estantería de agudos (High Shelf): +/-15 dB en torno a los agudos. */
+    fun setHighShelf(gainDb: Float)
+    /** Restablece los filtros auxiliares a su estado neutro (HPF/LPF apagados, shelves planas). */
+    fun resetEqFilters()
     fun setBandGroupGainOffset(region: AcousticRegion, deltaDb: Float)
     fun resetBand(bandId: Int)
     fun resetBandGroup(region: AcousticRegion)

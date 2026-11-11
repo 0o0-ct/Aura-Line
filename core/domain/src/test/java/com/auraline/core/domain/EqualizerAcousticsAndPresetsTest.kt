@@ -8,6 +8,18 @@ import org.junit.Test
 class EqualizerAcousticsAndPresetsTest {
 
     @Test
+    fun testEqFiltersDefaultsArePresentAndNeutral() {
+        val state = EqualizerState()
+        assertEquals(true, state.filters.hpfEnabled)
+        assertEquals(25f, state.filters.hpfCutoffHz, 0.01f)
+        assertEquals(false, state.filters.lpfEnabled)
+        assertEquals(0f, state.filters.lowShelfGainDb, 0.01f)
+        assertEquals(0f, state.filters.highShelfGainDb, 0.01f)
+        assertEquals(100f, state.filters.lowShelfHz, 0.01f)
+        assertEquals(12000f, state.filters.highShelfHz, 0.01f)
+    }
+
+    @Test
     fun testAcousticRegionsMapping() {
         assertEquals(AcousticRegion.SUBBASS, getAcousticRegionFor(30f))
         assertEquals(AcousticRegion.DEEP_BASS, getAcousticRegionFor(100f))

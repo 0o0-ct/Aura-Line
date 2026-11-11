@@ -61,7 +61,7 @@ data class SourceFocus(
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Fuentes graves
+// Perfiles de graves (instrumentos como ajustes rápidos multi-banda)
 // ─────────────────────────────────────────────────────────────────────────────
 
 val SubBass = LowSource(
@@ -72,7 +72,7 @@ val SubBass = LowSource(
     fundamentalHz = 20..60,
     detail = "Por debajo de 60 Hz no se oye, se siente en el pecho y en la mesa. " +
         "Es la base de trap, hip-hop, dubstep y EDM.",
-    tip = "+4 dB en 50 da peso al sub sin tocar el bombo. En altavoces de móvil, -6 dB quita el retumbe."
+    tip = "+4 dB en 47 da peso al sub sin tocar el bombo. En altavoces de móvil, -6 dB quita el retumbe."
 )
 
 val OrganPedal = LowSource(
@@ -83,7 +83,7 @@ val OrganPedal = LowSource(
     fundamentalHz = 16..130,
     detail = "La pedalera llega a 16 Hz, casi infrasónica, y el manual de 8 pies ronda los 65 Hz. " +
         "Es el instrumento más grave que puede tocar una persona.",
-    tip = "+3 dB en 50 da el soplo grave del pedal; -4 dB lo hace indefinido, cuidado con el retumbe."
+    tip = "+3 dB en 47 da el soplo grave del pedal; -4 dB lo hace indefinido, cuidado con el retumbe."
 )
 
 val DrumMachine = LowSource(
@@ -94,7 +94,7 @@ val DrumMachine = LowSource(
     fundamentalHz = 40..1000,
     detail = "La Roland TR-808 mezcla percusión y línea de bajo: su bombo suena largo y grave, " +
         "y el charles y el clap aportan el borde agudo.",
-    tip = "El sub está en 50 y el charles en 848: sube ambos para que la caja pique sin embarrarse."
+    tip = "El sub está en 47 y el charles en 843: sube ambos para que la caja pique sin embarrarse."
 )
 
 val KickDrum = LowSource(
@@ -105,7 +105,7 @@ val KickDrum = LowSource(
     fundamentalHz = 50..200,
     detail = "El corazón rítmico de la música moderna. Golpe seco y contundente entre 50 y 100 Hz, " +
         "con el cuerpo entre 100 y 200 Hz.",
-    tip = "+3 dB en 141 engorda el bombo. Si suena a cartón, baja 244 y 346; el ataque va en 2,5-5 kHz."
+    tip = "+3 dB en 150 engorda el bombo. Si suena a cartón, baja 267 y 356; el ataque va en 2,5-5 kHz."
 )
 
 val FloorTom = LowSource(
@@ -116,7 +116,7 @@ val FloorTom = LowSource(
     fundamentalHz = 80..150,
     detail = "Los tambores más grandes y profundos de la batería acústica: generan frecuencias " +
         "resonantes y graves.",
-    tip = "+3 dB en 141 lo saca del bombo. Si se come a la caja, baja 244."
+    tip = "+3 dB en 150 lo saca del bombo. Si se come a la caja, baja 267."
 )
 
 val Timpani = LowSource(
@@ -127,7 +127,7 @@ val Timpani = LowSource(
     fundamentalHz = 65..120,
     detail = "Calyces de cobre afinables que producen los graves más potentes y dramáticos " +
         "de la música orquestal.",
-    tip = "Los timbales afinados en Fa grave responden sobre 100 Hz: +3 dB en 141 y +2 dB en 447."
+    tip = "Los timbales afinados en Fa grave responden sobre 150 Hz: +3 dB en 150 y +2 dB en 474."
 )
 
 val FolkDrums = LowSource(
@@ -138,7 +138,7 @@ val FolkDrums = LowSource(
     fundamentalHz = 55..150,
     detail = "Bombo legüero, tambora y taiko japonés: parches grandes diseñados para mover mucho " +
         "aire y generar frecuencias muy bajas.",
-    tip = "El golpe seco está en 50 y el cuerpo en 141: sube los dos un punto y el parche respira."
+    tip = "El golpe seco está en 47 y el cuerpo en 150: sube los dos un punto y el parche respira."
 )
 
 val SynthBass = LowSource(
@@ -149,7 +149,7 @@ val SynthBass = LowSource(
     fundamentalHz = 32..900,
     detail = "Generadores de graves puros u oscuros: senoidal, sierra o cuadrada. " +
         "El Minimoog es el estándar histórico de este sonido.",
-    tip = "El cuerpo del sinte vive en 400-700 Hz: +3 dB en 547 y +2 dB en 648 lo hacen redondo."
+    tip = "El cuerpo del sinte vive en 474-632 Hz: +3 dB en 474 y +2 dB en 632 lo hacen redondo."
 )
 
 val ElectricBass = LowSource(
@@ -160,7 +160,7 @@ val ElectricBass = LowSource(
     fundamentalHz = 41..300,
     detail = "El pilar de la música moderna (pop, rock, funk). Su fundamental ronda E1 (41 Hz) y " +
         "su cuerpo se concentra entre 200 y 300 Hz.",
-    tip = "+3 dB en 244 define el cuerpo, +2 dB en 141 refuerza el fundamental y 648-848 da la pegada."
+    tip = "+3 dB en 267 define el cuerpo, +2 dB en 150 refuerza el fundamental y 632-843 da la pegada."
 )
 
 val DoubleBass = LowSource(
@@ -170,7 +170,7 @@ val DoubleBass = LowSource(
     category = SourceCategory.STRING,
     fundamentalHz = 32..400,
     detail = "El gigante acústico del jazz, el blues y la música clásica. Su fundamental es C1 (32 Hz).",
-    tip = "Corta 244 si suena a madera hueca; sube 346 para que el arco destaque sobre el piano."
+    tip = "Corta 267 si suena a madera hueca; sube 356 para que el arco destaque sobre el piano."
 )
 
 val AcousticBass = LowSource(
@@ -181,7 +181,7 @@ val AcousticBass = LowSource(
     fundamentalHz = 41..200,
     detail = "Guitarra de caja grande afinada en octavas graves. Cubre el hueco entre el contrabajo " +
         "y la guitarra eléctrica.",
-    tip = "Comparte banda con el bajo eléctrico: +2 dB en 244 lo hace más orgánico y menos puntero."
+    tip = "Comparte banda con el bajo eléctrico: +2 dB en 267 lo hace más orgánico y menos puntero."
 )
 
 val FretlessBass = LowSource(
@@ -192,7 +192,7 @@ val FretlessBass = LowSource(
     fundamentalHz = 41..500,
     detail = "El mismo registro que el bajo eléctrico pero con un sonido melódico mucho más fluido, " +
         "sin el armónico picudo de los trastes.",
-    tip = "+3 dB en 447 le da cuerpo melódico; baja 141 si se enturbia con el bombo."
+    tip = "+3 dB en 474 le da cuerpo melódico; baja 150 si se enturbia con el bombo."
 )
 
 val Guitarrón = LowSource(
@@ -202,7 +202,7 @@ val Guitarrón = LowSource(
     category = SourceCategory.STRING,
     fundamentalHz = 40..600,
     detail = "Instrumento de cuerda grande que provee la base armónica y grave de los mariachis.",
-    tip = "El pellizco está entre 244 y 447: +3 dB en 547 lo saca del fondo de la mezcla."
+    tip = "El pellizco está entre 267 y 474: +3 dB en 474 lo saca del fondo de la mezcla."
 )
 
 val Tuba = LowSource(
@@ -213,7 +213,7 @@ val Tuba = LowSource(
     fundamentalHz = 29..700,
     detail = "Los metales más pesados y graves, encargados del soporte armónico en orquestas " +
         "y bandas de marcha.",
-    tip = "El pedal está en 50 y el cuerpo en 648: +3 dB en 648 y el metal se oye redondo."
+    tip = "El pedal está en 47 y el cuerpo en 632: +3 dB en 632 y el metal se oye redondo."
 )
 
 val LowWoodwinds = LowSource(
@@ -224,10 +224,10 @@ val LowWoodwinds = LowSource(
     fundamentalHz = 58..800,
     detail = "Los registros más profundos de las maderas. El fagot y el clarinete bajo " +
         "llegan a Bb1 (58 Hz) en los modelos extendidos.",
-    tip = "Corta 346 para quitar nasalidad y sube 748 +2 dB para darle el cuerpo de madera."
+    tip = "Corta 356 para quitar nasalidad y sube 843 +2 dB para darle el cuerpo de madera."
 )
 
-/** Las quince fuentes graves que el usuario puede manipular por separado. */
+/** Las quince fuentes graves: cada una es un perfil que toca varias bandas a la vez. */
 val LowFrequencySources: List<LowSource> = listOf(
     SubBass,
     OrganPedal,
@@ -315,12 +315,18 @@ val LowFrequencyRoles: List<BandRole> = listOf(
 /** Dueño de la banda que cae en esta frecuencia centro, si lo hay. */
 fun bandRoleFor(centerHz: Float): BandRole? {
     LowFrequencyRoles.firstOrNull { centerHz >= it.centerWindow.first && centerHz <= it.centerWindow.last }?.let { return it }
-    // Bandas fuera de las ventanas definidas (rejilla ampliada): se asigna el rol más cercano.
-    return LowFrequencyRoles.minByOrNull { role ->
+    // Bandas fuera de las ventanas definidas (rejilla ampliada): se asigna el rol más cercano,
+    // pero solo en la zona de graves a la que pertenecen los perfiles de instrumentos.
+    if (centerHz > 1500f) return null
+    val closest = LowFrequencyRoles.minByOrNull { role ->
         val window = role.centerWindow
         val distance = if (centerHz < window.first) window.first - centerHz else if (centerHz > window.last) centerHz - window.last else 0f
         distance
-    }
+    } ?: return null
+    val distance = if (centerHz < closest.centerWindow.first) closest.centerWindow.first - centerHz
+        else if (centerHz > closest.centerWindow.last) centerHz - closest.centerWindow.last
+        else 0f
+    return if (distance <= 300f) closest else null
 }
 
 /** Nombre corto del dueño de la banda, para pintar bajo el fader. */

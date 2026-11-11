@@ -31,6 +31,7 @@ object NativeEngine {
     external fun setPreampGain(gainDb: Float)
     external fun setEqBand(bandIndex: Int, freq: Float, gain: Float, q: Float)
     external fun setSubsonic(enabled: Boolean, cutoffHz: Float)
+    external fun setEqFilters(hpfEnabled: Boolean, hpfCutoffHz: Float, lpfEnabled: Boolean, lpfCutoffHz: Float, lowShelfHz: Float, lowShelfDb: Float, highShelfHz: Float, highShelfDb: Float)
     external fun setInstrumentEnhancer(enabled: Boolean, fundamentalHz: Float, bodyDb: Float, punchDb: Float, mudCutDb: Float, harmonics: Float)
     external fun setCompressor(enabled: Boolean, thresholdDb: Float, ratio: Float, attackMs: Float, releaseMs: Float, makeupGainDb: Float)
     external fun setNoiseGate(enabled: Boolean, thresholdDb: Float, ratio: Float, attackMs: Float, releaseMs: Float)

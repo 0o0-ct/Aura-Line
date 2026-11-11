@@ -3,6 +3,8 @@ import {
   AudioCheckResult,
   CompressorParams,
   EngineStatus,
+  EqBand,
+  EqFilters,
   EqualizerState,
   GateParams,
   ModuleState,
@@ -34,6 +36,53 @@ export function clampToneDb(db: number, marginDb: number): number {
   return Math.min(marginDb, Math.max(-marginDb, db));
 }
 
+export function clampHpfHz(hz: number): number {
+  return Math.min(500, Math.max(5, hz));
+}
+
+export function clampLpfHz(hz: number): number {
+  return Math.min(24000, Math.max(4000, hz));
+}
+
+export function clampShelfDb(db: number): number {
+  return Math.min(15, Math.max(-15, db));
+}
+
+// Migra bandas guardadas a la rejilla canónica (centros logarítmicos). Si el estado guardado
+// corresponde a la rejilla antigua de cortes (la primera banda estaba en 100 Hz), se conserva la
+// ganancia de la banda antigua más cercana en frecuencia; si ya usa la rejilla canónica, se
+// respetan las bandas y ganancias tal cual.
+function migrateBands(storedBands: EqBand[] | undefined, numBands: number): EqBand[] {
+  const canonical = generateEqualizerBands(numBands);
+  if (!Array.isArray(storedBands) || storedBands.length === 0) return canonical;
+
+  const firstHz = storedBands[0]?.frequencyHz ?? 0;
+  if (storedBands.length === canonical.length && firstHz > 100) {
+    return canonical.map((band) => {
+      const nearest = storedBands.reduce(
+        (best, b) =>
+          Math.abs(b.frequencyHz - band.frequencyHz) < Math.abs(best.frequencyHz - band.frequencyHz)
+            ? b
+            : best,
+        storedBands[0]
+      );
+      return { ...band, gainDb: nearest.gainDb };
+    });
+  }
+  return storedBands;
+}
+
+export const DEFAULT_EQ_FILTERS: EqFilters = {
+  hpfEnabled: true,
+  hpfCutoffHz: 25,
+  lpfEnabled: false,
+  lpfCutoffHz: 18000,
+  lowShelfHz: 100,
+  lowShelfGainDb: 0,
+  highShelfHz: 12000,
+  highShelfGainDb: 0,
+};
+
 export function clampBassCrossHz(hz: number): number {
   return Math.min(400, Math.max(40, hz));
 }
@@ -51,6 +100,7 @@ export const DEFAULT_STATE: EqualizerState = {
   gainRangeDb: 12,
   preampDb: 0,
   bands: generateEqualizerBands(25),
+  filters: { ...DEFAULT_EQ_FILTERS },
   tone: {
     subDb: 0,
     bassDb: 0,
@@ -156,12 +206,26 @@ export class AudioRepository {
         this.state = {
           ...DEFAULT_STATE,
           ...parsed,
-          bands: parsed.bands?.length ? parsed.bands : generateEqualizerBands(this.settings.numBands),
+          bands: migrateBands(parsed.bands, this.settings.numBands),
+          filters: { ...DEFAULT_EQ_FILTERS, ...parsed.filters },
         };
       }
       const storedPresets = localStorage.getItem("auraline_presets");
       if (storedPresets) {
-        this.customPresets = JSON.parse(storedPresets);
+        const parsed = JSON.parse(storedPresets) as Record<string, Partial<EqualizerState>>;
+        this.customPresets = Object.fromEntries(
+          Object.entries(parsed).map(([key, value]) => [
+            key,
+            {
+              ...DEFAULT_STATE,
+              ...value,
+              filters: { ...DEFAULT_EQ_FILTERS, ...(value as Partial<EqualizerState>).filters },
+              bands: value?.bands?.length
+                ? value.bands
+                : DEFAULT_STATE.bands.map((b) => ({ ...b })),
+            } as EqualizerState,
+          ])
+        );
       }
     } catch (e) {
       console.error("Failed to load auraline storage:", e);
@@ -214,6 +278,61 @@ export class AudioRepository {
 
   public setPreamp(db: number): void {
     this.state = { ...this.state, preampDb: clampPreampDb(db) };
+    this.notify();
+  }
+
+  public setHpf(enabled: boolean, cutoffHz: number): void {
+    const filters = this.state.filters;
+    this.state = {
+      ...this.state,
+      filters: { ...filters, hpfEnabled: enabled, hpfCutoffHz: clampHpfHz(cutoffHz) },
+      presetName: "Personalizado",
+    };
+    this.notify();
+  }
+
+  public setLpf(enabled: boolean, cutoffHz: number): void {
+    const filters = this.state.filters;
+    this.state = {
+      ...this.state,
+      filters: { ...filters, lpfEnabled: enabled, lpfCutoffHz: clampLpfHz(cutoffHz) },
+      presetName: "Personalizado",
+    };
+    this.notify();
+  }
+
+  public setLowShelf(gainDb: number): void {
+    const filters = this.state.filters;
+    this.state = {
+      ...this.state,
+      filters: {
+        ...filters,
+        lowShelfGainDb: clampShelfDb(Math.round(gainDb * 10) / 10),
+      },
+      presetName: "Personalizado",
+    };
+    this.notify();
+  }
+
+  public setHighShelf(gainDb: number): void {
+    const filters = this.state.filters;
+    this.state = {
+      ...this.state,
+      filters: {
+        ...filters,
+        highShelfGainDb: clampShelfDb(Math.round(gainDb * 10) / 10),
+      },
+      presetName: "Personalizado",
+    };
+    this.notify();
+  }
+
+  public resetEqFilters(): void {
+    this.state = {
+      ...this.state,
+      filters: { ...DEFAULT_EQ_FILTERS },
+      presetName: "Personalizado",
+    };
     this.notify();
   }
 
@@ -528,6 +647,7 @@ export class AudioRepository {
     this.state = {
       ...this.state,
       bands: generateEqualizerBands(this.state.numBands),
+      filters: { ...DEFAULT_EQ_FILTERS },
       tone: {
         subDb: 0,
         bassDb: 0,
@@ -598,7 +718,7 @@ export class AudioRepository {
   public applyPreset(name: string): boolean {
     const target = this.customPresets[name];
     if (!target) return false;
-    this.state = { ...target, presetName: name };
+    this.state = { ...DEFAULT_STATE, ...target, presetName: name };
     this.notify();
     return true;
   }

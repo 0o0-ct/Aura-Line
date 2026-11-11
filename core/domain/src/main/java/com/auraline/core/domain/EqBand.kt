@@ -38,6 +38,21 @@ data class EqBand(
     val enabled: Boolean = true
 )
 
+/**
+ * Filtros auxiliares independientes de las 25 bandas: HPF (elimina subgraves y vibraciones),
+ * LPF (controla el extremo superior) y Low/High Shelf (refuerzo o corte amplio de los extremos).
+ */
+data class EqFilters(
+    val hpfEnabled: Boolean = true,
+    val hpfCutoffHz: Float = 25f,
+    val lpfEnabled: Boolean = false,
+    val lpfCutoffHz: Float = 18000f,
+    val lowShelfHz: Float = 100f,
+    val lowShelfGainDb: Float = 0f,
+    val highShelfHz: Float = 12000f,
+    val highShelfGainDb: Float = 0f
+)
+
 data class BandAcousticInfo(
     val region: AcousticRegion,
     val primaryInstrument: String,
@@ -262,6 +277,7 @@ data class EqualizerState(
     val gainRangeDb: Float = 12f,
     val preampDb: Float = 0f,
     val bands: List<EqBand> = emptyList(),
+    val filters: EqFilters = EqFilters(),
     val tone: ToneControls = ToneControls(),
     val stereo: StereoControls = StereoControls(),
     val volume: VolumeControls = VolumeControls(),
@@ -292,6 +308,9 @@ fun clampToneDb(db: Float, marginDb: Float): Float = db.coerceIn(-marginDb, marg
 fun clampBassCrossHz(hz: Float): Float = hz.coerceIn(40f, 400f)
 fun clampTrebleCrossHz(hz: Float): Float = hz.coerceIn(2_000f, 16_000f)
 fun clampSubCutoffHz(hz: Float): Float = hz.coerceIn(20f, 100f)
+fun clampHpfHz(hz: Float): Float = hz.coerceIn(5f, 500f)
+fun clampLpfHz(hz: Float): Float = hz.coerceIn(4_000f, 24_000f)
+fun clampShelfDb(db: Float): Float = db.coerceIn(-15f, 15f)
 fun clampRatio(ratio: Float): Float = ratio.coerceIn(1f, 20f)
 fun clampThresholdDb(db: Float): Float = db.coerceIn(-60f, 0f)
 fun clampAttackMs(ms: Float): Float = ms.coerceIn(0.1f, 100f)

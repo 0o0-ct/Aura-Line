@@ -23,6 +23,38 @@ class PresetExporterImporterTest {
     }
 
     @Test
+    fun testExportImportPreservesEqFilters() {
+        val state = EqualizerState(
+            numBands = 25,
+            preampDb = 3f,
+            bands = generateEqualizerBands(25),
+            filters = EqFilters(
+                hpfEnabled = true,
+                hpfCutoffHz = 120f,
+                lpfEnabled = true,
+                lpfCutoffHz = 12000f,
+                lowShelfHz = 90f,
+                lowShelfGainDb = 6f,
+                highShelfHz = 10000f,
+                highShelfGainDb = -3f
+            ),
+            presetName = "Filtros Test"
+        )
+
+        val json = PresetExporterImporter.exportPresetToJson("Filtros Test", state)
+        val imported = PresetExporterImporter.importPresetFromJson(json)
+
+        assertEquals(true, imported.state.filters.hpfEnabled)
+        assertEquals(120f, imported.state.filters.hpfCutoffHz, 0.01f)
+        assertEquals(true, imported.state.filters.lpfEnabled)
+        assertEquals(12000f, imported.state.filters.lpfCutoffHz, 0.01f)
+        assertEquals(90f, imported.state.filters.lowShelfHz, 0.01f)
+        assertEquals(6f, imported.state.filters.lowShelfGainDb, 0.01f)
+        assertEquals(10000f, imported.state.filters.highShelfHz, 0.01f)
+        assertEquals(-3f, imported.state.filters.highShelfGainDb, 0.01f)
+    }
+
+    @Test
     fun testParseAutoEqTextFormat() {
         val autoEqText = """
             Preamp: -3.0 dB

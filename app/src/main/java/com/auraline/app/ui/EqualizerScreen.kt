@@ -541,7 +541,7 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             }
         }
 
-        // FUENTES GRAVES (15 FUENTES)
+        // PERFILES DE GRAVES (15 PERFILES)
         LowSourcesCard(
             bands = bands,
             range = range,
@@ -552,6 +552,101 @@ fun EqualizerScreen(viewModel: AuraLineViewModel) {
             onBandGain = { bandId, gain -> viewModel.setBandGain(bandId, gain) },
             onFocus = { viewModel.focusLowSource(it) }
         )
+
+        // FILTROS AUXILIARES (HPF / LPF / SHELVES)
+        AuraCard(modifier = Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(
+                    text = "Filtros auxiliares",
+                    trailing = if (state.filters.hpfEnabled) "HPF ${state.filters.hpfCutoffHz.toInt()} Hz" else "Shelves",
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    onClick = {
+                        haptic()
+                        viewModel.resetEqFilters()
+                    },
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    Text("Restablecer", color = colors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            Text(
+                text = "HPF elimina subgraves y vibraciones; las shelves modifican ampliamente los extremos del espectro.",
+                color = colors.textSecondary,
+                fontSize = 11.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Filtro pasa-altos
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Filtro pasa-altos (HPF)",
+                    color = colors.textPrimary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                SelectableChip(
+                    text = if (state.filters.hpfEnabled) "Activado" else "Apagado",
+                    selected = state.filters.hpfEnabled,
+                    onClick = {
+                        haptic()
+                        viewModel.setHpf(!state.filters.hpfEnabled, state.filters.hpfCutoffHz)
+                    }
+                )
+            }
+            AuraSliderRow(
+                label = "Corte HPF",
+                valueText = "${state.filters.hpfCutoffHz.toInt()} Hz",
+                value = state.filters.hpfCutoffHz,
+                valueRange = 5f..500f,
+                onValueChange = { viewModel.setHpf(state.filters.hpfEnabled, it) }
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Filtro pasa-bajos
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Filtro pasa-bajos (LPF)",
+                    color = colors.textPrimary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                SelectableChip(
+                    text = if (state.filters.lpfEnabled) "Activado" else "Apagado",
+                    selected = state.filters.lpfEnabled,
+                    onClick = {
+                        haptic()
+                        viewModel.setLpf(!state.filters.lpfEnabled, state.filters.lpfCutoffHz)
+                    }
+                )
+            }
+            AuraSliderRow(
+                label = "Corte LPF",
+                valueText = "${state.filters.lpfCutoffHz.toInt()} Hz",
+                value = state.filters.lpfCutoffHz,
+                valueRange = 4000f..24000f,
+                onValueChange = { viewModel.setLpf(state.filters.lpfEnabled, it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Estanterías de extremos
+            AuraSliderRow(
+                label = "Shelf de graves (100 Hz)",
+                valueText = "${formatGain(state.filters.lowShelfGainDb)} dB",
+                value = state.filters.lowShelfGainDb,
+                valueRange = -15f..15f,
+                onValueChange = { viewModel.setLowShelf(it) }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            AuraSliderRow(
+                label = "Shelf de agudos (12 kHz)",
+                valueText = "${formatGain(state.filters.highShelfGainDb)} dB",
+                value = state.filters.highShelfGainDb,
+                valueRange = -15f..15f,
+                onValueChange = { viewModel.setHighShelf(it) }
+            )
+        }
 
         // PREAMPLIFICACIÓN Y COMPARACIÓN A/B
         AuraCard(modifier = Modifier.fillMaxWidth()) {
@@ -1076,7 +1171,7 @@ private fun LowSourcesCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "FUENTES GRAVES",
+                text = "PERFILES DE GRAVES",
                 color = colors.textSecondary,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
@@ -1091,7 +1186,7 @@ private fun LowSourcesCard(
                 contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
                 Text(
-                    text = if (expanded) "Ocultar" else "Ver 15 fuentes (${LowFrequencySources.size})",
+                    text = if (expanded) "Ocultar" else "Ver ${LowFrequencySources.size} perfiles",
                     color = colors.accent,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
@@ -1100,7 +1195,7 @@ private fun LowSourcesCard(
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Herramienta especializada para moldear el sonido de instrumentos de baja frecuencia.",
+            text = "Cada instrumento es un perfil que toca varias bandas a la vez: el botón + suma su curva sobre tu curva actual, sin borrarla.",
             color = colors.textSecondary,
             fontSize = 11.sp
         )
@@ -1112,7 +1207,7 @@ private fun LowSourcesCard(
                     .padding(top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Filtros de categoría de fuentes graves
+                // Filtros de categoría de perfiles de graves
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

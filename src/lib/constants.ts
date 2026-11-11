@@ -241,7 +241,7 @@ export const SubBass: LowSource = {
   category: SourceCategory.ELECTRONIC,
   fundamentalHz: [20, 60],
   detail: "Por debajo de 60 Hz no se oye, se siente en el pecho y en la mesa. Es la base de trap, hip-hop, dubstep y EDM.",
-  tip: "+4 dB en 50 da peso al sub sin tocar el bombo. En altavoces de móvil, -6 dB quita el retumbe.",
+  tip: "+4 dB en 47 da peso al sub sin tocar el bombo. En altavoces de móvil, -6 dB quita el retumbe.",
 };
 
 export const OrganPedal: LowSource = {
@@ -251,7 +251,7 @@ export const OrganPedal: LowSource = {
   category: SourceCategory.WIND,
   fundamentalHz: [16, 130],
   detail: "La pedalera llega a 16 Hz, casi infrasónica, y el manual de 8 pies ronda los 65 Hz. Es el instrumento más grave que puede tocar una persona.",
-  tip: "+3 dB en 50 da el soplo grave del pedal; -4 dB lo hace indefinido, cuidado con el retumbe.",
+  tip: "+3 dB en 47 da el soplo grave del pedal; -4 dB lo hace indefinido, cuidado con el retumbe.",
 };
 
 export const DrumMachine: LowSource = {
@@ -261,7 +261,7 @@ export const DrumMachine: LowSource = {
   category: SourceCategory.ELECTRONIC,
   fundamentalHz: [40, 1000],
   detail: "La Roland TR-808 mezcla percusión y línea de bajo: su bombo suena largo y grave, y el charles y el clap aportan el borde agudo.",
-  tip: "El sub está en 50 y el charles en 848: sube ambos para que la caja pique sin embarrarse.",
+  tip: "El sub está en 47 y el charles en 843: sube ambos para que la caja pique sin embarrarse.",
 };
 
 export const KickDrum: LowSource = {
@@ -271,7 +271,7 @@ export const KickDrum: LowSource = {
   category: SourceCategory.PERCUSION,
   fundamentalHz: [50, 200],
   detail: "El corazón rítmico de la música moderna. Golpe seco y contundente entre 50 y 100 Hz, con el cuerpo entre 100 y 200 Hz.",
-  tip: "+3 dB en 141 engorda el bombo. Si suena a cartón, baja 244 y 346; el ataque va en 2,5-5 kHz.",
+  tip: "+3 dB en 150 engorda el bombo. Si suena a cartón, baja 267 y 356; el ataque va en 2,5-5 kHz.",
 };
 
 export const FloorTom: LowSource = {
@@ -281,7 +281,7 @@ export const FloorTom: LowSource = {
   category: SourceCategory.PERCUSION,
   fundamentalHz: [80, 150],
   detail: "Los tambores más grandes y profundos de la batería acústica: generan frecuencias resonantes y graves.",
-  tip: "+3 dB en 141 lo saca del bombo. Si se come a la caja, baja 244.",
+  tip: "+3 dB en 150 lo saca del bombo. Si se come a la caja, baja 267.",
 };
 
 export const Timpani: LowSource = {
@@ -291,7 +291,7 @@ export const Timpani: LowSource = {
   category: SourceCategory.PERCUSION,
   fundamentalHz: [65, 120],
   detail: "Calyces de cobre afinables que producen los graves más potentes y dramáticos de la música orquestal.",
-  tip: "Los timbales afinados en Fa grave responden sobre 100 Hz: +3 dB en 141 y +2 dB en 447.",
+  tip: "Los timbales afinados en Fa grave responden sobre 150 Hz: +3 dB en 150 y +2 dB en 474.",
 };
 
 export const FolkDrums: LowSource = {
@@ -301,7 +301,7 @@ export const FolkDrums: LowSource = {
   category: SourceCategory.PERCUSION,
   fundamentalHz: [55, 150],
   detail: "Bombo legüero, tambora y taiko japonés: parches grandes diseñados para mover mucho aire y generar frecuencias muy bajas.",
-  tip: "El golpe seco está en 50 y el cuerpo en 141: sube los dos un punto y el parche respira.",
+  tip: "El golpe seco está en 47 y el cuerpo en 150: sube los dos un punto y el parche respira.",
 };
 
 export const SynthBass: LowSource = {
@@ -311,7 +311,7 @@ export const SynthBass: LowSource = {
   category: SourceCategory.ELECTRONIC,
   fundamentalHz: [32, 900],
   detail: "Generadores de graves puros u oscuros: senoidal, sierra o cuadrada. El Minimoog es el estándar histórico de este sonido.",
-  tip: "El cuerpo del sinte vive en 400-700 Hz: +3 dB en 547 y +2 dB en 648 lo hacen redondo.",
+  tip: "El cuerpo del sinte vive en 474-632 Hz: +3 dB en 474 y +2 dB en 632 lo hacen redondo.",
 };
 
 export const ElectricBass: LowSource = {
@@ -321,7 +321,7 @@ export const ElectricBass: LowSource = {
   category: SourceCategory.STRING,
   fundamentalHz: [41, 300],
   detail: "El pilar de la música moderna (pop, rock, funk). Su fundamental ronda E1 (41 Hz) y su cuerpo se concentra entre 200 y 300 Hz.",
-  tip: "+3 dB en 244 define el cuerpo, +2 dB en 141 refuerza el fundamental y 648-848 da la pegada.",
+  tip: "+3 dB en 267 define el cuerpo, +2 dB en 150 refuerza el fundamental y 632-843 da la pegada.",
 };
 
 export const DoubleBass: LowSource = {
@@ -331,7 +331,7 @@ export const DoubleBass: LowSource = {
   category: SourceCategory.STRING,
   fundamentalHz: [32, 400],
   detail: "El gigante acústico del jazz, el blues y la música clásica. Su fundamental es C1 (32 Hz).",
-  tip: "Corta 244 si suena a madera hueca; sube 346 para que el arco destaque sobre el piano.",
+  tip: "Corta 267 si suena a madera hueca; sube 356 para que el arco destaque sobre el piano.",
 };
 
 export const AcousticBass: LowSource = {
@@ -341,7 +341,7 @@ export const AcousticBass: LowSource = {
   category: SourceCategory.STRING,
   fundamentalHz: [41, 200],
   detail: "Guitarra de caja grande afinada en octavas graves. Cubre el hueco entre el contrabajo y la guitarra eléctrica.",
-  tip: "Comparte banda con el bajo eléctrico: +2 dB en 244 lo hace más orgánico y menos puntero.",
+  tip: "Comparte banda con el bajo eléctrico: +2 dB en 267 lo hace más orgánico y menos puntero.",
 };
 
 export const FretlessBass: LowSource = {
@@ -351,7 +351,7 @@ export const FretlessBass: LowSource = {
   category: SourceCategory.STRING,
   fundamentalHz: [41, 500],
   detail: "El mismo registro que el bajo eléctrico pero con un sonido melódico mucho más fluido, sin el armónico picudo de los trastes.",
-  tip: "+3 dB en 447 le da cuerpo melódico; baja 141 si se enturbia con el bombo.",
+  tip: "+3 dB en 474 le da cuerpo melódico; baja 150 si se enturbia con el bombo.",
 };
 
 export const Guitarrón: LowSource = {
@@ -361,7 +361,7 @@ export const Guitarrón: LowSource = {
   category: SourceCategory.STRING,
   fundamentalHz: [40, 600],
   detail: "Instrumento de cuerda grande que provee la base armónica y grave de los mariachis.",
-  tip: "El pellizco está entre 244 y 447: +3 dB en 547 lo saca del fondo de la mezcla.",
+  tip: "El pellizco está entre 267 y 474: +3 dB en 474 lo saca del fondo de la mezcla.",
 };
 
 export const Tuba: LowSource = {
@@ -371,7 +371,7 @@ export const Tuba: LowSource = {
   category: SourceCategory.WIND,
   fundamentalHz: [29, 700],
   detail: "Los metales más pesados y graves, encargados del soporte armónico en orquestas y bandas de marcha.",
-  tip: "El pedal está en 50 y el cuerpo en 648: +3 dB en 648 y el metal se oye redondo.",
+  tip: "El pedal está en 47 y el cuerpo en 632: +3 dB en 632 y el metal se oye redondo.",
 };
 
 export const LowWoodwinds: LowSource = {
@@ -381,7 +381,7 @@ export const LowWoodwinds: LowSource = {
   category: SourceCategory.WIND,
   fundamentalHz: [58, 800],
   detail: "Los registros más profundos de las maderas. El fagot y el clarinete bajo llegan a Bb1 (58 Hz) en los modelos extendidos.",
-  tip: "Corta 346 para quitar nasalidad y sube 748 +2 dB para darle el cuerpo de madera.",
+  tip: "Corta 356 para quitar nasalidad y sube 843 +2 dB para darle el cuerpo de madera.",
 };
 
 export const LowFrequencySources: LowSource[] = [
@@ -421,11 +421,13 @@ export function bandRoleFor(centerHz: number): BandRole | undefined {
     (role) => centerHz >= role.centerWindow[0] && centerHz <= role.centerWindow[1]
   );
   if (exact) return exact;
-  // Bandas fuera de las ventanas definidas (rejilla ampliada): se asigna el rol más cercano.
+  // Bandas fuera de las ventanas definidas (rejilla ampliada): se asigna el rol más cercano,
+  // pero solo en la zona de graves a la que pertenecen los perfiles de instrumentos.
+  if (centerHz > 1500) return undefined;
   const distanceTo = (start: number, end: number) =>
     centerHz < start ? start - centerHz : centerHz > end ? centerHz - end : 0;
-  let best = LowFrequencyRoles[0];
-  let bestDistance = distanceTo(best.centerWindow[0], best.centerWindow[1]);
+  let best: BandRole | undefined;
+  let bestDistance = Infinity;
   for (const role of LowFrequencyRoles) {
     const d = distanceTo(role.centerWindow[0], role.centerWindow[1]);
     if (d < bestDistance) {
@@ -433,7 +435,7 @@ export function bandRoleFor(centerHz: number): BandRole | undefined {
       bestDistance = d;
     }
   }
-  return best;
+  return bestDistance <= 300 ? best : undefined;
 }
 
 export function ownerShortNameFor(centerHz: number): string | undefined {
